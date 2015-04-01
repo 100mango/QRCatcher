@@ -8,8 +8,10 @@
 
 #import "QRCatchViewController.h"
 @import AVFoundation;
+#import "NSString+Tools.h"
 
 @interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
+@property (weak, nonatomic) IBOutlet UILabel *stringLabel;
 
 @end
 
@@ -63,7 +65,14 @@
         if ([metadata.type isEqualToString:AVMetadataObjectTypeQRCode]) {
             
             NSLog(@"%@",metadata.stringValue);
-            
+            if ([metadata.stringValue isURL])
+            {
+                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:metadata.stringValue]];
+            }
+            else
+            {
+                self.stringLabel.text = metadata.stringValue;
+            }
         }
     }
 }
