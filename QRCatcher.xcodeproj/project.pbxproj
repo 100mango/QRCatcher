@@ -14,6 +14,7 @@
 		DBF3398E1ACC0D3800759534 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DBF3398D1ACC0D3800759534 /* Images.xcassets */; };
 		DBF339911ACC0D3800759534 /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = DBF3398F1ACC0D3800759534 /* LaunchScreen.xib */; };
 		DBF3399D1ACC0D3800759534 /* QRCatcherTests.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF3399C1ACC0D3800759534 /* QRCatcherTests.m */; };
+		DBF339A91ACC177700759534 /* NSString+Tools.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339A81ACC177700759534 /* NSString+Tools.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,6 +41,8 @@
 		DBF339961ACC0D3800759534 /* QRCatcherTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QRCatcherTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBF3399B1ACC0D3800759534 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DBF3399C1ACC0D3800759534 /* QRCatcherTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = QRCatcherTests.m; sourceTree = "<group>"; };
+		DBF339A71ACC177700759534 /* NSString+Tools.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+Tools.h"; sourceTree = "<group>"; };
+		DBF339A81ACC177700759534 /* NSString+Tools.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+Tools.m"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +84,7 @@
 		DBF3397F1ACC0D3800759534 /* QRCatcher */ = {
 			isa = PBXGroup;
 			children = (
+				DBF339A61ACC176B00759534 /* Tools */,
 				DBF339841ACC0D3800759534 /* AppDelegate.h */,
 				DBF339851ACC0D3800759534 /* AppDelegate.m */,
 				DBF339871ACC0D3800759534 /* QRCatchViewController.h */,
@@ -117,6 +121,15 @@
 				DBF3399B1ACC0D3800759534 /* Info.plist */,
 			);
 			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		DBF339A61ACC176B00759534 /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				DBF339A71ACC177700759534 /* NSString+Tools.h */,
+				DBF339A81ACC177700759534 /* NSString+Tools.m */,
+			);
+			name = Tools;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -222,6 +235,7 @@
 				DBF339891ACC0D3800759534 /* QRCatchViewController.m in Sources */,
 				DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */,
 				DBF339831ACC0D3800759534 /* main.m in Sources */,
+				DBF339A91ACC177700759534 /* NSString+Tools.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
