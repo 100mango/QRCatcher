@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = DB17C7F61AD3C67600927C73 /* QR.xcdatamodeld */; };
+		DB17C7FB1AD3D66D00927C73 /* QRURLViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DB17C7FA1AD3D66D00927C73 /* QRURLViewController.m */; };
 		DBF339831ACC0D3800759534 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339821ACC0D3800759534 /* main.m */; };
 		DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339851ACC0D3800759534 /* AppDelegate.m */; };
 		DBF339891ACC0D3800759534 /* QRCatchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339881ACC0D3800759534 /* QRCatchViewController.m */; };
@@ -30,6 +31,8 @@
 
 /* Begin PBXFileReference section */
 		DB17C7F71AD3C67600927C73 /* QR.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = QR.xcdatamodel; sourceTree = "<group>"; };
+		DB17C7F91AD3D66D00927C73 /* QRURLViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = QRURLViewController.h; sourceTree = "<group>"; };
+		DB17C7FA1AD3D66D00927C73 /* QRURLViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = QRURLViewController.m; sourceTree = "<group>"; };
 		DBF3397D1ACC0D3800759534 /* QRCatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QRCatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBF339811ACC0D3800759534 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DBF339821ACC0D3800759534 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
@@ -100,6 +103,8 @@
 				DBF339851ACC0D3800759534 /* AppDelegate.m */,
 				DBF339871ACC0D3800759534 /* QRCatchViewController.h */,
 				DBF339881ACC0D3800759534 /* QRCatchViewController.m */,
+				DB17C7F91AD3D66D00927C73 /* QRURLViewController.h */,
+				DB17C7FA1AD3D66D00927C73 /* QRURLViewController.m */,
 				DBF3398A1ACC0D3800759534 /* Main.storyboard */,
 				DBF3398D1ACC0D3800759534 /* Images.xcassets */,
 				DBF3398F1ACC0D3800759534 /* LaunchScreen.xib */,
@@ -246,6 +251,7 @@
 				DBF339891ACC0D3800759534 /* QRCatchViewController.m in Sources */,
 				DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */,
 				DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */,
+				DB17C7FB1AD3D66D00927C73 /* QRURLViewController.m in Sources */,
 				DBF339831ACC0D3800759534 /* main.m in Sources */,
 				DBF339A91ACC177700759534 /* NSString+Tools.m in Sources */,
 			);
