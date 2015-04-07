@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = DB17C7F61AD3C67600927C73 /* QR.xcdatamodeld */; };
 		DBF339831ACC0D3800759534 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339821ACC0D3800759534 /* main.m */; };
 		DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339851ACC0D3800759534 /* AppDelegate.m */; };
 		DBF339891ACC0D3800759534 /* QRCatchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DBF339881ACC0D3800759534 /* QRCatchViewController.m */; };
@@ -28,6 +29,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		DB17C7F71AD3C67600927C73 /* QR.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = QR.xcdatamodel; sourceTree = "<group>"; };
 		DBF3397D1ACC0D3800759534 /* QRCatcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QRCatcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBF339811ACC0D3800759534 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DBF339821ACC0D3800759534 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
@@ -63,6 +65,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		DB17C7F51AD3C65C00927C73 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				DB17C7F61AD3C67600927C73 /* QR.xcdatamodeld */,
+			);
+			name = Model;
+			sourceTree = "<group>";
+		};
 		DBF339741ACC0D3800759534 = {
 			isa = PBXGroup;
 			children = (
@@ -84,6 +94,7 @@
 		DBF3397F1ACC0D3800759534 /* QRCatcher */ = {
 			isa = PBXGroup;
 			children = (
+				DB17C7F51AD3C65C00927C73 /* Model */,
 				DBF339A61ACC176B00759534 /* Tools */,
 				DBF339841ACC0D3800759534 /* AppDelegate.h */,
 				DBF339851ACC0D3800759534 /* AppDelegate.m */,
@@ -234,6 +245,7 @@
 			files = (
 				DBF339891ACC0D3800759534 /* QRCatchViewController.m in Sources */,
 				DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */,
+				DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */,
 				DBF339831ACC0D3800759534 /* main.m in Sources */,
 				DBF339A91ACC177700759534 /* NSString+Tools.m in Sources */,
 			);
@@ -426,6 +438,7 @@
 				DBF339A21ACC0D3800759534 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		DBF339A31ACC0D3800759534 /* Build configuration list for PBXNativeTarget "QRCatcherTests" */ = {
 			isa = XCConfigurationList;
@@ -434,8 +447,22 @@
 				DBF339A51ACC0D3800759534 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+		DB17C7F61AD3C67600927C73 /* QR.xcdatamodeld */ = {
+			isa = XCVersionGroup;
+			children = (
+				DB17C7F71AD3C67600927C73 /* QR.xcdatamodel */,
+			);
+			currentVersion = DB17C7F71AD3C67600927C73 /* QR.xcdatamodel */;
+			path = QR.xcdatamodeld;
+			sourceTree = "<group>";
+			versionGroupType = wrapper.xcdatamodel;
+		};
+/* End XCVersionGroup section */
 	};
 	rootObject = DBF339751ACC0D3800759534 /* Project object */;
 }
