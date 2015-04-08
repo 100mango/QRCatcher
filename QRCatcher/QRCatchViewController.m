@@ -9,9 +9,12 @@
 #import "QRCatchViewController.h"
 @import AVFoundation;
 #import "NSString+Tools.h"
+#import "AppDelegate.h"
+#import "URLEntity.h"
 
 @interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
 @property (weak, nonatomic) IBOutlet UILabel *stringLabel;
+@property (weak, nonatomic) IBOutlet UIView *preview;
 
 @end
 
@@ -37,14 +40,17 @@
     }
     //output
     AVCaptureMetadataOutput *output = [[AVCaptureMetadataOutput alloc] init];
+    [session addOutput:output];
     [output setMetadataObjectTypes:@[AVMetadataObjectTypeQRCode]];
     [output setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
-    [session addOutput:output];
     
     //add preview layer
     AVCaptureVideoPreviewLayer *previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:session];
-    previewLayer.frame = self.view.bounds;
-    [self.view.layer addSublayer:previewLayer];
+    previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    previewLayer.bounds = self.preview.bounds;
+    previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
+    NSLog(@"%@",NSStringFromCGRect(self.preview.bounds));
+    [self.preview.layer addSublayer:previewLayer];
     
     //start
     [session startRunning];
@@ -56,6 +62,12 @@
     // Dispose of any resources that can be recreated.
 }
 
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    NSLog(@"%@",NSStringFromCGRect(self.preview.bounds));
+    
+}
 
 
 #pragma mark - AVCaptureMetadataOutputObjectsDelegate
@@ -64,10 +76,10 @@
     for (AVMetadataMachineReadableCodeObject *metadata in metadataObjects) {
         if ([metadata.type isEqualToString:AVMetadataObjectTypeQRCode]) {
             
-            NSLog(@"%@",metadata.stringValue);
             if ([metadata.stringValue isURL])
             {
                 [[UIApplication sharedApplication] openURL:[NSURL URLWithString:metadata.stringValue]];
+                [self insertURLEntityWithURL:metadata.stringValue];
             }
             else
             {
@@ -77,5 +89,43 @@
     }
 }
 
+#pragma mark - core data
+- (void)insertURLEntityWithURL:(NSString*)URL
+{
+    NSManagedObjectContext *context = [[AppDelegate appDelegate] managedObjectContext];
+    
+    //确保插入不重复URL
+    if ([self getURLEntityWithURL:URL] == nil)
+    {
+        URLEntity *object = [NSEntityDescription insertNewObjectForEntityForName:@"URLEntity" inManagedObjectContext:context];
+        object.url = URL;
+    }
+}
+
+- (URLEntity*)getURLEntityWithURL:(NSString*)URL
+{
+    NSManagedObjectContext *context = [[AppDelegate appDelegate] managedObjectContext];
+
+    NSFetchRequest *requset = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"@K == %@",@"url",URL];
+    requset.predicate = predicate;
+    
+    NSError *error = nil;
+    NSArray *result = [context executeFetchRequest:requset error:&error];
+    if (error) {
+        NSLog(@"%@",error);
+        return nil;
+    }
+    else
+    {
+        if (result && result.count > 0) {
+            return result.firstObject;
+        }
+        else
+        {
+            return nil;
+        }
+    }
+}
 
 @end
