@@ -4,10 +4,10 @@
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="6736"/>
     </dependencies>
     <scenes>
-        <!--Item 2-->
+        <!--URL-->
         <scene sceneID="S0d-K9-LNM">
             <objects>
-                <viewController id="tLp-OF-DMW" customClass="QRURLViewController" sceneMemberID="viewController">
+                <viewController title="URL" id="tLp-OF-DMW" customClass="QRURLViewController" sceneMemberID="viewController">
                     <layoutGuides>
                         <viewControllerLayoutGuide type="top" id="aVG-X8-ap0"/>
                         <viewControllerLayoutGuide type="bottom" id="1jC-g8-Vry"/>
@@ -15,9 +15,28 @@
                     <view key="view" contentMode="scaleToFill" id="3EE-mB-aNd">
                         <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="44" sectionHeaderHeight="22" sectionFooterHeight="22" translatesAutoresizingMaskIntoConstraints="NO" id="ObY-vt-qiC">
+                                <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                                <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                                <connections>
+                                    <outlet property="dataSource" destination="tLp-OF-DMW" id="94c-DG-9PU"/>
+                                    <outlet property="delegate" destination="tLp-OF-DMW" id="INH-Fw-Yns"/>
+                                </connections>
+                            </tableView>
+                        </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
+                        <constraints>
+                            <constraint firstAttribute="bottom" secondItem="ObY-vt-qiC" secondAttribute="bottom" id="5a7-lz-O6y"/>
+                            <constraint firstAttribute="trailing" secondItem="ObY-vt-qiC" secondAttribute="trailing" id="76C-hM-o4V"/>
+                            <constraint firstItem="ObY-vt-qiC" firstAttribute="top" secondItem="3EE-mB-aNd" secondAttribute="top" id="NHx-RI-Jkd"/>
+                            <constraint firstItem="ObY-vt-qiC" firstAttribute="leading" secondItem="3EE-mB-aNd" secondAttribute="leading" id="RPL-sC-aH8"/>
+                        </constraints>
                     </view>
                     <tabBarItem key="tabBarItem" title="Item 2" id="Nhe-Mq-UOZ"/>
+                    <connections>
+                        <outlet property="tableView" destination="ObY-vt-qiC" id="bma-3G-Xq5"/>
+                    </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="7TF-Vs-bMd" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
@@ -42,10 +61,10 @@
             </objects>
             <point key="canvasLocation" x="-720" y="-183"/>
         </scene>
-        <!--Item-->
+        <!--QRView-->
         <scene sceneID="ufC-wZ-h7g">
             <objects>
-                <viewController id="vXZ-lx-hvc" customClass="QRCatchViewController" sceneMemberID="viewController">
+                <viewController title="QRView" id="vXZ-lx-hvc" customClass="QRCatchViewController" sceneMemberID="viewController">
                     <layoutGuides>
                         <viewControllerLayoutGuide type="top" id="jyV-Pf-zRb"/>
                         <viewControllerLayoutGuide type="bottom" id="2fi-mo-0CV"/>
