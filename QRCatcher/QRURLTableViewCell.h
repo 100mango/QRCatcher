@@ -1,17 +1,13 @@
 //
-//  URLEntity.m
+//  QRURLTableViewCell.h
 //  QRCatcher
 //
 //  Created by Mango on 15/4/8.
 //  Copyright (c) 2015年 Mango. All rights reserved.
 //
 
-#import "URLEntity.h"
+#import <UIKit/UIKit.h>
 
-
-@implementation URLEntity
-
-@dynamic url;
-@dynamic createDate;
+@interface QRURLTableViewCell : UITableViewCell
 
 @end

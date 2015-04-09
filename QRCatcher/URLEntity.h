@@ -13,5 +13,6 @@
 @interface URLEntity : NSManagedObject
 
 @property (nonatomic, retain) NSString * url;
+@property (nonatomic, retain) NSDate * createDate;
 
 @end

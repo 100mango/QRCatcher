@@ -99,6 +99,7 @@
     {
         URLEntity *object = [NSEntityDescription insertNewObjectForEntityForName:@"URLEntity" inManagedObjectContext:context];
         object.url = URL;
+        object.createDate = [NSDate date];
     }
 }
 

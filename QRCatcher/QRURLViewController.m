@@ -8,6 +8,8 @@
 
 #import "QRURLViewController.h"
 #import "AppDelegate.h"
+#import "QRURLTableViewCell.h"
+#import "URLEntity.h"
 
 @interface QRURLViewController ()<UITableViewDataSource,UITableViewDelegate,NSFetchedResultsControllerDelegate>
 
@@ -16,6 +18,8 @@
 
 @end
 
+static NSString *urlCell = @"urlCell";
+
 @implementation QRURLViewController
 
 - (void)viewDidLoad {
@@ -23,8 +27,11 @@
     
     
     //fetched results controller set up
+    NSSortDescriptor *sortDescriptor = [NSSortDescriptor sortDescriptorWithKey:@"createDate" ascending:YES];
     NSFetchRequest *requst = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
+    requst.sortDescriptors = @[sortDescriptor];
     NSManagedObjectContext *cotext = [[AppDelegate appDelegate] managedObjectContext];
+    
     
     self.fetchedResultsController = [[NSFetchedResultsController alloc]initWithFetchRequest:requst managedObjectContext:cotext sectionNameKeyPath:nil cacheName:nil];
     self.fetchedResultsController.delegate = self;
@@ -59,17 +66,37 @@
         return 0;
 }
 
-/*
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     
-    //UITableViewCell *cell = <#Get the cell#>;
-    //NSManagedObject *managedObject = [<#Fetched results controller#> objectAtIndexPath:indexPath];
-    // Configure the cell with data from the managed object.
-    //return cell;
+    QRURLTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:urlCell];
+    [self configureCell:cell atIndexPath:indexPath];
+    return cell;
 }
- */
+
+- (void)configureCell:(QRURLTableViewCell *)cell atIndexPath:(NSIndexPath *)indexPath {
+    // Fetch Record
+    URLEntity *record = [self.fetchedResultsController objectAtIndexPath:indexPath];
+    
+    // Update Cell
+    cell.textLabel.text = record.url;
+}
 
 #pragma mark - Table view delegate
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return YES;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (editingStyle == UITableViewCellEditingStyleDelete)
+    {
+        NSManagedObjectContext *context = [[AppDelegate appDelegate]managedObjectContext];
+        URLEntity *entity = [self.fetchedResultsController objectAtIndexPath:indexPath];
+        [context deleteObject:entity];
+    }
+}
 
 #pragma mark - NSFetchedResultsController delegate
 
@@ -102,8 +129,8 @@
             break;
             
         case NSFetchedResultsChangeUpdate:
-            //[self configureCell:[tableView cellForRowAtIndexPath:indexPath]
-                    //atIndexPath:indexPath];
+            [self configureCell:(QRURLTableViewCell*)[tableView cellForRowAtIndexPath:indexPath]
+                    atIndexPath:indexPath];
             break;
             
         case NSFetchedResultsChangeMove:
