@@ -11,10 +11,15 @@
 #import "NSString+Tools.h"
 #import "AppDelegate.h"
 #import "URLEntity.h"
+#import "Masonry.h"
 
 @interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
 @property (weak, nonatomic) IBOutlet UILabel *stringLabel;
 @property (weak, nonatomic) IBOutlet UIView *preview;
+
+//AVFoundation
+@property (strong,nonatomic) AVCaptureSession *session;
+@property (strong,nonatomic) AVCaptureVideoPreviewLayer *previewLayer;
 
 @end
 
@@ -26,35 +31,42 @@
     [super viewDidLoad];
     
     //session
-    AVCaptureSession *session = [[AVCaptureSession alloc] init];
+    self.session = [[AVCaptureSession alloc] init];
     //device
     AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
     NSError *error = nil;
     //input
     AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&error];
     if(input) {
-        [session addInput:input];
+        [self.session addInput:input];
     } else {
         NSLog(@"%@", error);
         return;
     }
     //output
     AVCaptureMetadataOutput *output = [[AVCaptureMetadataOutput alloc] init];
-    [session addOutput:output];
+    [self.session addOutput:output];
     [output setMetadataObjectTypes:@[AVMetadataObjectTypeQRCode]];
     [output setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
     
     //add preview layer
-    AVCaptureVideoPreviewLayer *previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:session];
-    previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    previewLayer.bounds = self.preview.bounds;
-    previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
-    NSLog(@"%@",NSStringFromCGRect(self.preview.bounds));
-    [self.preview.layer addSublayer:previewLayer];
+    self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
+    [self.preview.layer addSublayer:self.previewLayer];
+
     
     //start
-    [session startRunning];
+    [self.session startRunning];
 
+}
+
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    
+    //previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    self.previewLayer.bounds = self.preview.bounds;
+    self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
+    
 }
 
 - (void)didReceiveMemoryWarning {
@@ -62,12 +74,6 @@
     // Dispose of any resources that can be recreated.
 }
 
-- (void)viewDidLayoutSubviews
-{
-    [super viewDidLayoutSubviews];
-    NSLog(@"%@",NSStringFromCGRect(self.preview.bounds));
-    
-}
 
 
 #pragma mark - AVCaptureMetadataOutputObjectsDelegate
