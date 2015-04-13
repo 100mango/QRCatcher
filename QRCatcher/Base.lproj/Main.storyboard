@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="6751" systemVersion="14C1514" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7531" systemVersion="14D131" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="6736"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="7520"/>
     </dependencies>
     <scenes>
         <!--URL-->
@@ -95,19 +95,32 @@
                                 <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
                                 <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
                             </view>
+                            <visualEffectView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="yXD-3W-lwI">
+                                <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                                <view key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" id="tzd-Wp-3FU">
+                                    <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                                    <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                </view>
+                                <blurEffect style="light"/>
+                            </visualEffectView>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                         <constraints>
                             <constraint firstAttribute="centerY" secondItem="5Fh-fy-mHE" secondAttribute="centerY" id="1hT-IY-4af"/>
+                            <constraint firstItem="yXD-3W-lwI" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="4NH-9f-rtz"/>
                             <constraint firstAttribute="trailing" secondItem="NoD-Kz-pKD" secondAttribute="trailing" id="FyM-24-fel"/>
+                            <constraint firstItem="yXD-3W-lwI" firstAttribute="top" secondItem="kh9-bI-dsS" secondAttribute="top" id="Jay-w1-U9X"/>
                             <constraint firstItem="NoD-Kz-pKD" firstAttribute="top" secondItem="kh9-bI-dsS" secondAttribute="top" id="K0C-or-2AA"/>
                             <constraint firstItem="NoD-Kz-pKD" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="Pen-Fm-cRl"/>
                             <constraint firstAttribute="bottom" secondItem="NoD-Kz-pKD" secondAttribute="bottom" id="Psu-XR-nMe"/>
+                            <constraint firstAttribute="bottom" secondItem="yXD-3W-lwI" secondAttribute="bottom" id="V2o-qX-UXc"/>
+                            <constraint firstAttribute="trailing" secondItem="yXD-3W-lwI" secondAttribute="trailing" id="db0-5u-oN2"/>
                             <constraint firstAttribute="centerX" secondItem="5Fh-fy-mHE" secondAttribute="centerX" id="hAl-Dr-RuX"/>
                         </constraints>
                     </view>
                     <tabBarItem key="tabBarItem" title="Item" id="itY-Sn-T4D"/>
                     <connections>
+                        <outlet property="blurView" destination="yXD-3W-lwI" id="bus-PX-ze0"/>
                         <outlet property="preview" destination="NoD-Kz-pKD" id="E5K-wI-ep8"/>
                         <outlet property="stringLabel" destination="5Fh-fy-mHE" id="Q59-U6-HAa"/>
                     </connections>

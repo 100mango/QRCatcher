@@ -8,6 +8,8 @@
 
 #import "QRCatchViewController.h"
 @import AVFoundation;
+@import QuartzCore;
+
 #import "NSString+Tools.h"
 #import "AppDelegate.h"
 #import "URLEntity.h"
@@ -16,6 +18,8 @@
 @interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
 @property (weak, nonatomic) IBOutlet UILabel *stringLabel;
 @property (weak, nonatomic) IBOutlet UIView *preview;
+@property (weak, nonatomic) IBOutlet UIVisualEffectView *blurView;
+@property (strong,nonatomic) CAShapeLayer *mask;
 
 //AVFoundation
 @property (strong,nonatomic) AVCaptureSession *session;
@@ -30,6 +34,46 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    [self setupAVFoundation];
+    
+    //add blur view mask
+    self.mask = [CAShapeLayer layer];
+    self.mask.fillRule = kCAFillRuleEvenOdd;
+    self.blurView.layer.mask = self.mask;
+}
+
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    
+    //layout preview layer
+    //previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    self.previewLayer.bounds = self.preview.bounds;
+    self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
+    
+    //configure blur view mask layer
+    self.mask.frame = self.blurView.bounds;
+
+    UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
+    
+    CGFloat width = 200;
+    CGFloat x = (self.blurView.frame.size.width - width)/2;
+    CGFloat y = (self.blurView.frame.size.height - width)/2;
+    UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:CGRectMake(x, y, width, width)];
+    
+    [outRectangle appendPath:inRectangle];
+    outRectangle.usesEvenOddFillRule = YES;
+    self.mask.path = outRectangle.CGPath;
+}
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+#pragma mark -  view did load setup
+- (void)setupAVFoundation
+{
     //session
     self.session = [[AVCaptureSession alloc] init];
     //device
@@ -52,28 +96,10 @@
     //add preview layer
     self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
     [self.preview.layer addSublayer:self.previewLayer];
-
     
     //start
     [self.session startRunning];
-
 }
-
-- (void)viewDidLayoutSubviews
-{
-    [super viewDidLayoutSubviews];
-    
-    //previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    self.previewLayer.bounds = self.preview.bounds;
-    self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
-    
-}
-
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
-}
-
 
 
 #pragma mark - AVCaptureMetadataOutputObjectsDelegate
