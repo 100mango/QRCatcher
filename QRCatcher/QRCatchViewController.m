@@ -110,7 +110,7 @@
             
             if ([metadata.stringValue isURL])
             {
-                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:metadata.stringValue]];
+                [[UIApplication sharedApplication] openURL:[NSString HTTPURLFromString:metadata.stringValue]];
                 [self insertURLEntityWithURL:metadata.stringValue];
             }
             else
@@ -140,7 +140,7 @@
     NSManagedObjectContext *context = [[AppDelegate appDelegate] managedObjectContext];
 
     NSFetchRequest *requset = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"@K == %@",@"url",URL];
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"%K == %@",@"url",URL];
     requset.predicate = predicate;
     
     NSError *error = nil;

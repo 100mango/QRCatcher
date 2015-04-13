@@ -69,6 +69,7 @@
 - (BOOL)isURL
 {
     NSURL *url = [NSURL URLWithString:self];
+    NSLog(@"%@",url);
     if (url) {
         return YES;
     }
@@ -76,6 +77,18 @@
     {
         return NO;
     }
+}
+
++(NSURL *)HTTPURLFromString:(NSString *)string
+{
+    NSString *searchString = @"http";
+    NSRange prefixRange = [string rangeOfString:searchString options:(NSCaseInsensitiveSearch | NSAnchoredSearch)];
+    
+    if (prefixRange.length == 4) {
+        return [NSURL URLWithString:string];
+    }
+    return [NSURL URLWithString:[NSString stringWithFormat:@"http://%@", string]];
+    
 }
 
 @end

@@ -18,4 +18,6 @@
 //检查是否字符串为网址
 - (BOOL)isURL;
 
+//构造URL,如果没有http前缀,则添加
++(NSURL *)HTTPURLFromString:(NSString *)string;
 @end
