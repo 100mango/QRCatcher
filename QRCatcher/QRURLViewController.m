@@ -10,6 +10,7 @@
 #import "AppDelegate.h"
 #import "QRURLTableViewCell.h"
 #import "URLEntity.h"
+#import "NSString+Tools.h"
 
 @interface QRURLViewController ()<UITableViewDataSource,UITableViewDelegate,NSFetchedResultsControllerDelegate>
 
@@ -82,6 +83,13 @@ static NSString *urlCell = @"urlCell";
 }
 
 #pragma mark - Table view delegate
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    URLEntity *record = [self.fetchedResultsController objectAtIndexPath:indexPath];
+    [[UIApplication sharedApplication] openURL:[NSString HTTPURLFromString:record.url]];
+}
+
+
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath
 {
@@ -97,6 +105,7 @@ static NSString *urlCell = @"urlCell";
         [context deleteObject:entity];
     }
 }
+
 
 #pragma mark - NSFetchedResultsController delegate
 
