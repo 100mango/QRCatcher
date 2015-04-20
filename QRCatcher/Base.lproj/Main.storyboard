@@ -42,18 +42,14 @@
                             <constraint firstItem="ObY-vt-qiC" firstAttribute="leading" secondItem="3EE-mB-aNd" secondAttribute="leading" id="RPL-sC-aH8"/>
                         </constraints>
                     </view>
-                    <tabBarItem key="tabBarItem" title="历史" image="catcher6_0001_history_white_2x" selectedImage="catcher6_0002_history_blue_2x" id="Nhe-Mq-UOZ">
-                        <userDefinedRuntimeAttributes>
-                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0002_history_blue_2x"/>
-                        </userDefinedRuntimeAttributes>
-                    </tabBarItem>
+                    <navigationItem key="navigationItem" id="4nH-73-Dis"/>
                     <connections>
                         <outlet property="tableView" destination="ObY-vt-qiC" id="bma-3G-Xq5"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="7TF-Vs-bMd" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="100" y="148"/>
+            <point key="canvasLocation" x="912" y="148"/>
         </scene>
         <!--Tab Bar Controller-->
         <scene sceneID="98x-AD-eGX">
@@ -67,8 +63,8 @@
                         <color key="barTintColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                     </tabBar>
                     <connections>
-                        <segue destination="vXZ-lx-hvc" kind="relationship" relationship="viewControllers" id="WQG-dt-JsQ"/>
-                        <segue destination="tLp-OF-DMW" kind="relationship" relationship="viewControllers" id="UHw-GS-yO6"/>
+                        <segue destination="PGK-eo-rwT" kind="relationship" relationship="viewControllers" id="WQG-dt-JsQ"/>
+                        <segue destination="UpW-cw-l69" kind="relationship" relationship="viewControllers" id="UHw-GS-yO6"/>
                     </connections>
                 </tabBarController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="GD0-Xz-fgW" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -97,15 +93,28 @@
                                     <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5Fh-fy-mHE">
-                                            <rect key="frame" x="279" y="502" width="42" height="21"/>
-                                            <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                            <color key="textColor" red="1" green="1" blue="1" alpha="1" colorSpace="calibratedRGB"/>
-                                            <nil key="highlightedColor"/>
-                                        </label>
+                                        <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="QbV-bR-jwC" userLabel="layer border view">
+                                            <rect key="frame" x="275" y="499" width="50" height="29"/>
+                                            <subviews>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" placeholderIntrinsicWidth="42" placeholderIntrinsicHeight="21" text="" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5Fh-fy-mHE">
+                                                    <rect key="frame" x="4" y="4" width="42" height="21"/>
+                                                    <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                                    <color key="textColor" red="0.11764705882352941" green="0.4823529411764706" blue="0.80784313725490198" alpha="1" colorSpace="calibratedRGB"/>
+                                                    <nil key="highlightedColor"/>
+                                                </label>
+                                            </subviews>
+                                            <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                            <constraints>
+                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="top" secondItem="QbV-bR-jwC" secondAttribute="top" constant="4" id="FT8-Xn-7ON"/>
+                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="leading" secondItem="QbV-bR-jwC" secondAttribute="leading" constant="4" id="TUm-RN-JAN"/>
+                                                <constraint firstAttribute="trailing" secondItem="5Fh-fy-mHE" secondAttribute="trailing" constant="4" id="Y59-i8-NdE"/>
+                                                <constraint firstAttribute="bottom" secondItem="5Fh-fy-mHE" secondAttribute="bottom" constant="4" id="kuo-Qn-nsC"/>
+                                            </constraints>
+                                        </view>
                                     </subviews>
                                     <constraints>
-                                        <constraint firstAttribute="centerX" secondItem="5Fh-fy-mHE" secondAttribute="centerX" id="Wgp-iA-Eri"/>
+                                        <constraint firstAttribute="bottom" secondItem="QbV-bR-jwC" secondAttribute="bottom" constant="72" id="2V6-Zu-qW3"/>
+                                        <constraint firstAttribute="centerX" secondItem="QbV-bR-jwC" secondAttribute="centerX" id="MwI-Kc-7kM"/>
                                     </constraints>
                                 </view>
                                 <blurEffect style="dark"/>
@@ -120,28 +129,84 @@
                             <constraint firstAttribute="centerX" secondItem="XZT-HD-RB0" secondAttribute="centerX" id="2kK-Y8-nAM"/>
                             <constraint firstItem="yXD-3W-lwI" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="4NH-9f-rtz"/>
                             <constraint firstAttribute="trailing" secondItem="NoD-Kz-pKD" secondAttribute="trailing" id="FyM-24-fel"/>
-                            <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="5Fh-fy-mHE" secondAttribute="bottom" constant="28" id="HYh-36-3t6"/>
                             <constraint firstItem="yXD-3W-lwI" firstAttribute="top" secondItem="kh9-bI-dsS" secondAttribute="top" id="Jay-w1-U9X"/>
                             <constraint firstItem="NoD-Kz-pKD" firstAttribute="top" secondItem="kh9-bI-dsS" secondAttribute="top" id="K0C-or-2AA"/>
                             <constraint firstItem="NoD-Kz-pKD" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="Pen-Fm-cRl"/>
                             <constraint firstAttribute="bottom" secondItem="NoD-Kz-pKD" secondAttribute="bottom" id="Psu-XR-nMe"/>
+                            <constraint firstItem="XZT-HD-RB0" firstAttribute="top" secondItem="QbV-bR-jwC" secondAttribute="top" constant="-296" id="TDI-as-nrT"/>
                             <constraint firstAttribute="bottom" secondItem="yXD-3W-lwI" secondAttribute="bottom" id="V2o-qX-UXc"/>
                             <constraint firstAttribute="trailing" secondItem="yXD-3W-lwI" secondAttribute="trailing" id="db0-5u-oN2"/>
+                            <constraint firstItem="QbV-bR-jwC" firstAttribute="leading" secondItem="2fi-mo-0CV" secondAttribute="trailing" constant="-325" id="kBv-td-6jR"/>
                         </constraints>
+                        <variation key="default">
+                            <mask key="constraints">
+                                <exclude reference="TDI-as-nrT"/>
+                                <exclude reference="kBv-td-6jR"/>
+                            </mask>
+                        </variation>
                     </view>
-                    <tabBarItem key="tabBarItem" title="扫描" image="catcher6_0003_scan_white_2x" selectedImage="catcher6_0004_scan_blue_2x" id="itY-Sn-T4D">
-                        <userDefinedRuntimeAttributes>
-                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0004_scan_blue_2x"/>
-                        </userDefinedRuntimeAttributes>
-                    </tabBarItem>
+                    <navigationItem key="navigationItem" title="QR Catcher" id="yjW-YH-Iam"/>
                     <connections>
-                        <outlet property="blurView" destination="yXD-3W-lwI" id="bus-PX-ze0"/>
+                        <outlet property="blurView" destination="yXD-3W-lwI" id="4iG-oB-fHO"/>
+                        <outlet property="borderView" destination="QbV-bR-jwC" id="zsH-lT-YEZ"/>
                         <outlet property="catcherIndicator" destination="XZT-HD-RB0" id="7Zf-Rk-5Ld"/>
                         <outlet property="preview" destination="NoD-Kz-pKD" id="E5K-wI-ep8"/>
                         <outlet property="stringLabel" destination="5Fh-fy-mHE" id="Q59-U6-HAa"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="x5A-6p-PRh" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="988" y="-588"/>
+        </scene>
+        <!--历史-->
+        <scene sceneID="cN2-Os-9cB">
+            <objects>
+                <navigationController automaticallyAdjustsScrollViewInsets="NO" id="UpW-cw-l69" sceneMemberID="viewController">
+                    <tabBarItem key="tabBarItem" title="历史" image="catcher6_0001_history_white_2x" selectedImage="catcher6_0002_history_blue_2x" id="Nhe-Mq-UOZ">
+                        <userDefinedRuntimeAttributes>
+                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0002_history_blue_2x"/>
+                        </userDefinedRuntimeAttributes>
+                    </tabBarItem>
+                    <toolbarItems/>
+                    <navigationBar key="navigationBar" contentMode="scaleToFill" barStyle="black" id="rTl-iR-b5W">
+                        <rect key="frame" x="0.0" y="0.0" width="320" height="44"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <textAttributes key="titleTextAttributes">
+                            <color key="textColor" red="0.0" green="0.56862745100000001" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        </textAttributes>
+                    </navigationBar>
+                    <nil name="viewControllers"/>
+                    <connections>
+                        <segue destination="tLp-OF-DMW" kind="relationship" relationship="rootViewController" id="Bjz-HA-JSH"/>
+                    </connections>
+                </navigationController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="j1c-VG-RO1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="100" y="148"/>
+        </scene>
+        <!--扫描-->
+        <scene sceneID="ihf-Q9-nwE">
+            <objects>
+                <navigationController automaticallyAdjustsScrollViewInsets="NO" id="PGK-eo-rwT" sceneMemberID="viewController">
+                    <tabBarItem key="tabBarItem" title="扫描" image="catcher6_0003_scan_white_2x" selectedImage="catcher6_0004_scan_blue_2x" id="itY-Sn-T4D">
+                        <userDefinedRuntimeAttributes>
+                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0004_scan_blue_2x"/>
+                        </userDefinedRuntimeAttributes>
+                    </tabBarItem>
+                    <toolbarItems/>
+                    <navigationBar key="navigationBar" contentMode="scaleToFill" barStyle="black" id="NxL-8P-mNF">
+                        <rect key="frame" x="0.0" y="0.0" width="320" height="44"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                        <textAttributes key="titleTextAttributes">
+                            <color key="textColor" red="0.0" green="0.56862745098039214" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        </textAttributes>
+                    </navigationBar>
+                    <nil name="viewControllers"/>
+                    <connections>
+                        <segue destination="vXZ-lx-hvc" kind="relationship" relationship="rootViewController" id="1bQ-af-Nwm"/>
+                    </connections>
+                </navigationController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="9Dr-eg-YmB" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
             <point key="canvasLocation" x="176" y="-588"/>
         </scene>

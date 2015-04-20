@@ -20,6 +20,7 @@
 @property (weak, nonatomic) IBOutlet UIView *preview;
 @property (weak, nonatomic) IBOutlet UIVisualEffectView *blurView;
 @property (weak, nonatomic) IBOutlet UIImageView *catcherIndicator;
+@property (weak, nonatomic) IBOutlet UIView *borderView;
 @property (strong,nonatomic) CAShapeLayer *mask;
 
 //AVFoundation
@@ -36,11 +37,13 @@
     [super viewDidLoad];
     
     [self setupAVFoundation];
+    [self setupLabelBorder];
     
     //add blur view mask
     self.mask = [CAShapeLayer layer];
     self.mask.fillRule = kCAFillRuleEvenOdd;
     self.blurView.layer.mask = self.mask;
+    
 }
 
 - (void)viewDidLayoutSubviews
@@ -48,7 +51,6 @@
     [super viewDidLayoutSubviews];
     
     //layout preview layer
-    //previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     self.previewLayer.bounds = self.preview.bounds;
     self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
     
@@ -58,11 +60,6 @@
     UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
     
     CGRect inRect = [self.catcherIndicator convertRect:CGRectMake(44, 38, 234, 234) toView:self.blurView];
-    
-    CGFloat width = 234;
-    CGFloat x = (self.blurView.frame.size.width - width)/2;
-    CGFloat y = (self.blurView.frame.size.height - width)/2;
-    //UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:CGRectMake(x, y, width, width)];
     UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:inRect];
     
     [outRectangle appendPath:inRectangle];
@@ -105,6 +102,14 @@
     [self.session startRunning];
 }
 
+- (void)setupLabelBorder
+{
+    self.borderView.layer.borderWidth = 1;
+    self.borderView.layer.borderColor = [[UIColor colorWithRed:65/225.0 green:182/255.0 blue:251 alpha:1] CGColor];
+    self.borderView.backgroundColor = [UIColor colorWithRed:23/255.0 green:133/255.0 blue:251/255.0 alpha:0.3];
+    self.borderView.hidden = YES;
+}
+
 
 #pragma mark - AVCaptureMetadataOutputObjectsDelegate
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection
@@ -112,10 +117,12 @@
     for (AVMetadataMachineReadableCodeObject *metadata in metadataObjects) {
         if ([metadata.type isEqualToString:AVMetadataObjectTypeQRCode]) {
             
+            self.borderView.hidden = NO;
             if ([metadata.stringValue isURL])
             {
                 [[UIApplication sharedApplication] openURL:[NSString HTTPURLFromString:metadata.stringValue]];
                 [self insertURLEntityWithURL:metadata.stringValue];
+                self.stringLabel.text = metadata.stringValue;
             }
             else
             {
