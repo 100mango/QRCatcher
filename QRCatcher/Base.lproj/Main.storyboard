@@ -42,7 +42,11 @@
                             <constraint firstItem="ObY-vt-qiC" firstAttribute="leading" secondItem="3EE-mB-aNd" secondAttribute="leading" id="RPL-sC-aH8"/>
                         </constraints>
                     </view>
-                    <tabBarItem key="tabBarItem" title="Item 2" id="Nhe-Mq-UOZ"/>
+                    <tabBarItem key="tabBarItem" title="历史" image="catcher6_0001_history_white_2x" selectedImage="catcher6_0002_history_blue_2x" id="Nhe-Mq-UOZ">
+                        <userDefinedRuntimeAttributes>
+                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0002_history_blue_2x"/>
+                        </userDefinedRuntimeAttributes>
+                    </tabBarItem>
                     <connections>
                         <outlet property="tableView" destination="ObY-vt-qiC" id="bma-3G-Xq5"/>
                     </connections>
@@ -60,10 +64,11 @@
                         <rect key="frame" x="0.0" y="0.0" width="320" height="49"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>
+                        <color key="barTintColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
                     </tabBar>
                     <connections>
-                        <segue destination="tLp-OF-DMW" kind="relationship" relationship="viewControllers" id="UHw-GS-yO6"/>
                         <segue destination="vXZ-lx-hvc" kind="relationship" relationship="viewControllers" id="WQG-dt-JsQ"/>
+                        <segue destination="tLp-OF-DMW" kind="relationship" relationship="viewControllers" id="UHw-GS-yO6"/>
                     </connections>
                 </tabBarController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="GD0-Xz-fgW" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -124,7 +129,11 @@
                             <constraint firstAttribute="trailing" secondItem="yXD-3W-lwI" secondAttribute="trailing" id="db0-5u-oN2"/>
                         </constraints>
                     </view>
-                    <tabBarItem key="tabBarItem" title="Item" id="itY-Sn-T4D"/>
+                    <tabBarItem key="tabBarItem" title="扫描" image="catcher6_0003_scan_white_2x" selectedImage="catcher6_0004_scan_blue_2x" id="itY-Sn-T4D">
+                        <userDefinedRuntimeAttributes>
+                            <userDefinedRuntimeAttribute type="image" keyPath="selectedImage" value="catcher6_0004_scan_blue_2x"/>
+                        </userDefinedRuntimeAttributes>
+                    </tabBarItem>
                     <connections>
                         <outlet property="blurView" destination="yXD-3W-lwI" id="bus-PX-ze0"/>
                         <outlet property="catcherIndicator" destination="XZT-HD-RB0" id="7Zf-Rk-5Ld"/>
@@ -139,5 +148,9 @@
     </scenes>
     <resources>
         <image name="catcher6_0000_scanning2x" width="320" height="293"/>
+        <image name="catcher6_0001_history_white_2x" width="39" height="30"/>
+        <image name="catcher6_0002_history_blue_2x" width="39" height="30"/>
+        <image name="catcher6_0003_scan_white_2x" width="39" height="30"/>
+        <image name="catcher6_0004_scan_blue_2x" width="39" height="30"/>
     </resources>
 </document>
