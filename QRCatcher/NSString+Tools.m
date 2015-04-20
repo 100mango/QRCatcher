@@ -70,7 +70,8 @@
 {
     NSURL *url = [NSURL URLWithString:self];
     NSLog(@"%@",url);
-    if (url) {
+    NSLog(@"%@",url.host);
+    if (url && url.host) {
         return YES;
     }
     else
