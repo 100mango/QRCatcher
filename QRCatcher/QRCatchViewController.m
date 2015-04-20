@@ -19,6 +19,7 @@
 @property (weak, nonatomic) IBOutlet UILabel *stringLabel;
 @property (weak, nonatomic) IBOutlet UIView *preview;
 @property (weak, nonatomic) IBOutlet UIVisualEffectView *blurView;
+@property (weak, nonatomic) IBOutlet UIImageView *catcherIndicator;
 @property (strong,nonatomic) CAShapeLayer *mask;
 
 //AVFoundation
@@ -56,10 +57,13 @@
 
     UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
     
-    CGFloat width = 200;
+    CGRect inRect = [self.catcherIndicator convertRect:CGRectMake(44, 38, 234, 234) toView:self.blurView];
+    
+    CGFloat width = 234;
     CGFloat x = (self.blurView.frame.size.width - width)/2;
     CGFloat y = (self.blurView.frame.size.height - width)/2;
-    UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:CGRectMake(x, y, width, width)];
+    //UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:CGRectMake(x, y, width, width)];
+    UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:inRect];
     
     [outRectangle appendPath:inRectangle];
     outRectangle.usesEvenOddFillRule = YES;

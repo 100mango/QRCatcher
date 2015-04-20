@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7531" systemVersion="14D131" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7531" systemVersion="14D136" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
     <dependencies>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="7520"/>
     </dependencies>
@@ -105,9 +105,14 @@
                                 </view>
                                 <blurEffect style="dark"/>
                             </visualEffectView>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="catcher6_0000_scanning2x" translatesAutoresizingMaskIntoConstraints="NO" id="XZT-HD-RB0" userLabel="catcherIndicator">
+                                <rect key="frame" x="140" y="154" width="320" height="293"/>
+                            </imageView>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                         <constraints>
+                            <constraint firstAttribute="centerY" secondItem="XZT-HD-RB0" secondAttribute="centerY" id="0h1-Ox-6Nh"/>
+                            <constraint firstAttribute="centerX" secondItem="XZT-HD-RB0" secondAttribute="centerX" id="2kK-Y8-nAM"/>
                             <constraint firstItem="yXD-3W-lwI" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" id="4NH-9f-rtz"/>
                             <constraint firstAttribute="trailing" secondItem="NoD-Kz-pKD" secondAttribute="trailing" id="FyM-24-fel"/>
                             <constraint firstItem="2fi-mo-0CV" firstAttribute="top" secondItem="5Fh-fy-mHE" secondAttribute="bottom" constant="28" id="HYh-36-3t6"/>
@@ -122,6 +127,7 @@
                     <tabBarItem key="tabBarItem" title="Item" id="itY-Sn-T4D"/>
                     <connections>
                         <outlet property="blurView" destination="yXD-3W-lwI" id="bus-PX-ze0"/>
+                        <outlet property="catcherIndicator" destination="XZT-HD-RB0" id="7Zf-Rk-5Ld"/>
                         <outlet property="preview" destination="NoD-Kz-pKD" id="E5K-wI-ep8"/>
                         <outlet property="stringLabel" destination="5Fh-fy-mHE" id="Q59-U6-HAa"/>
                     </connections>
@@ -131,4 +137,7 @@
             <point key="canvasLocation" x="176" y="-588"/>
         </scene>
     </scenes>
+    <resources>
+        <image name="catcher6_0000_scanning2x" width="320" height="293"/>
+    </resources>
 </document>
