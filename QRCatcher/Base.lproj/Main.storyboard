@@ -56,7 +56,7 @@
             <objects>
                 <tabBarController id="jki-8W-NlY" sceneMemberID="viewController">
                     <nil key="simulatedBottomBarMetrics"/>
-                    <tabBar key="tabBar" contentMode="scaleToFill" id="8s2-FV-V9F">
+                    <tabBar key="tabBar" contentMode="scaleToFill" id="8s2-FV-V9F" customClass="QRTabBar">
                         <rect key="frame" x="0.0" y="0.0" width="320" height="49"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="calibratedWhite"/>

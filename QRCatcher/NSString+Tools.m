@@ -69,8 +69,6 @@
 - (BOOL)isURL
 {
     NSURL *url = [NSURL URLWithString:self];
-    NSLog(@"%@",url);
-    NSLog(@"%@",url.host);
     if (url && url.host) {
         return YES;
     }
