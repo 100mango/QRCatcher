@@ -38,6 +38,7 @@
     
     [self setupAVFoundation];
     [self setupLabelBorder];
+    [self setupRippleAnimation];
     
     //add blur view mask
     self.mask = [CAShapeLayer layer];
@@ -110,6 +111,39 @@
     self.borderView.hidden = YES;
 }
 
+- (void)setupRippleAnimation
+{
+    CGFloat width = 4;
+    CGRect pathFrame = CGRectMake(0,0, width, width);
+    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:pathFrame cornerRadius:width/2];
+    
+    CAShapeLayer *shapeLayer = [CAShapeLayer layer];
+    shapeLayer.position = self.view.center;
+    shapeLayer.bounds = path.bounds;
+    shapeLayer.path = [path CGPath];
+    shapeLayer.strokeColor = [[UIColor colorWithRed:65/225.0 green:182/255.0 blue:251 alpha:1] CGColor];
+    shapeLayer.fillColor = [[UIColor clearColor] CGColor];
+    shapeLayer.lineWidth = 0.2;
+    [self.view.layer addSublayer:shapeLayer];
+    
+    CABasicAnimation *scaleAnimation = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scaleAnimation.fromValue = [NSValue valueWithCATransform3D:CATransform3DIdentity];
+    scaleAnimation.toValue = [NSValue valueWithCATransform3D:CATransform3DMakeScale(60, 60, 1)];
+    
+    CABasicAnimation *alphaAnimation = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    alphaAnimation.fromValue = @1;
+    alphaAnimation.toValue = @0;
+    
+    CAAnimationGroup *animation = [CAAnimationGroup animation];
+    animation.animations = @[scaleAnimation, alphaAnimation];
+    animation.duration = 1;
+    animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    animation.repeatCount =  HUGE_VALF;
+    [shapeLayer addAnimation:animation forKey:nil];
+    
+    NSLog(@"%@",NSStringFromCGRect(shapeLayer.frame));
+    
+}
 
 #pragma mark - AVCaptureMetadataOutputObjectsDelegate
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection

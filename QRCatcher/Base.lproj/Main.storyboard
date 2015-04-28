@@ -42,14 +42,14 @@
                             <constraint firstItem="ObY-vt-qiC" firstAttribute="leading" secondItem="3EE-mB-aNd" secondAttribute="leading" id="RPL-sC-aH8"/>
                         </constraints>
                     </view>
-                    <navigationItem key="navigationItem" id="4nH-73-Dis"/>
+                    <navigationItem key="navigationItem" title="QR Catcher" id="4nH-73-Dis"/>
                     <connections>
                         <outlet property="tableView" destination="ObY-vt-qiC" id="bma-3G-Xq5"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="7TF-Vs-bMd" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="912" y="148"/>
+            <point key="canvasLocation" x="1024" y="164"/>
         </scene>
         <!--Tab Bar Controller-->
         <scene sceneID="98x-AD-eGX">
@@ -94,10 +94,10 @@
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="QbV-bR-jwC" userLabel="layer border view">
-                                            <rect key="frame" x="275" y="499" width="50" height="29"/>
+                                            <rect key="frame" x="273" y="495" width="54" height="33"/>
                                             <subviews>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" placeholderIntrinsicWidth="42" placeholderIntrinsicHeight="21" text="" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5Fh-fy-mHE">
-                                                    <rect key="frame" x="4" y="4" width="42" height="21"/>
+                                                    <rect key="frame" x="6" y="6" width="42" height="21"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                                     <color key="textColor" red="0.11764705882352941" green="0.4823529411764706" blue="0.80784313725490198" alpha="1" colorSpace="calibratedRGB"/>
                                                     <nil key="highlightedColor"/>
@@ -105,10 +105,10 @@
                                             </subviews>
                                             <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                             <constraints>
-                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="top" secondItem="QbV-bR-jwC" secondAttribute="top" constant="4" id="FT8-Xn-7ON"/>
-                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="leading" secondItem="QbV-bR-jwC" secondAttribute="leading" constant="4" id="TUm-RN-JAN"/>
-                                                <constraint firstAttribute="trailing" secondItem="5Fh-fy-mHE" secondAttribute="trailing" constant="4" id="Y59-i8-NdE"/>
-                                                <constraint firstAttribute="bottom" secondItem="5Fh-fy-mHE" secondAttribute="bottom" constant="4" id="kuo-Qn-nsC"/>
+                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="top" secondItem="QbV-bR-jwC" secondAttribute="top" constant="6" id="FT8-Xn-7ON"/>
+                                                <constraint firstItem="5Fh-fy-mHE" firstAttribute="leading" secondItem="QbV-bR-jwC" secondAttribute="leading" constant="6" id="TUm-RN-JAN"/>
+                                                <constraint firstAttribute="trailing" secondItem="5Fh-fy-mHE" secondAttribute="trailing" constant="6" id="Y59-i8-NdE"/>
+                                                <constraint firstAttribute="bottom" secondItem="5Fh-fy-mHE" secondAttribute="bottom" constant="6" id="kuo-Qn-nsC"/>
                                             </constraints>
                                         </view>
                                     </subviews>

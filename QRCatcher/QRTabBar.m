@@ -14,7 +14,7 @@
 -(CGSize)sizeThatFits:(CGSize)size
 {
     CGSize sizeThatFits = [super sizeThatFits:size];
-    sizeThatFits.height = 51;
+    sizeThatFits.height = 60;
     
     return sizeThatFits;
 }
