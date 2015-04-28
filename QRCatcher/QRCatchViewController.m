@@ -139,6 +139,7 @@
     animation.duration = 1;
     animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
     animation.repeatCount =  HUGE_VALF;
+    animation.removedOnCompletion = NO;
     [shapeLayer addAnimation:animation forKey:nil];
     
     NSLog(@"%@",NSStringFromCGRect(shapeLayer.frame));
