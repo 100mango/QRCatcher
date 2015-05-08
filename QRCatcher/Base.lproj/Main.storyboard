@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7531" systemVersion="14D136" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="7702" systemVersion="14D136" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" initialViewController="jki-8W-NlY">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="7520"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="7701"/>
     </dependencies>
     <scenes>
         <!--URL-->
@@ -120,7 +120,7 @@
                                 <blurEffect style="dark"/>
                             </visualEffectView>
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="catcher6_0000_scanning2x" translatesAutoresizingMaskIntoConstraints="NO" id="XZT-HD-RB0" userLabel="catcherIndicator">
-                                <rect key="frame" x="140" y="154" width="320" height="293"/>
+                                <rect key="frame" x="113" y="113" width="375" height="375"/>
                             </imageView>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
@@ -212,7 +212,7 @@
         </scene>
     </scenes>
     <resources>
-        <image name="catcher6_0000_scanning2x" width="320" height="293"/>
+        <image name="catcher6_0000_scanning2x" width="375" height="375"/>
         <image name="catcher6_0001_history_white_2x" width="39" height="30"/>
         <image name="catcher6_0002_history_blue_2x" width="39" height="30"/>
         <image name="catcher6_0003_scan_white_2x" width="39" height="30"/>
