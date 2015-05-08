@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		332B6BDDDB42629A47CE74A5 /* libPods.a in Frameworks */ = {isa = PBXBuildFile; fileRef = CA5258FC6C49294281A591BF /* libPods.a */; };
+		DB092DC81AFCE47C00122E2F /* NSObject+Macro.m in Sources */ = {isa = PBXBuildFile; fileRef = DB092DC71AFCE47C00122E2F /* NSObject+Macro.m */; };
 		DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = DB17C7F61AD3C67600927C73 /* QR.xcdatamodeld */; };
 		DB17C7FB1AD3D66D00927C73 /* QRURLViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DB17C7FA1AD3D66D00927C73 /* QRURLViewController.m */; };
 		DB17C8031AD5599700927C73 /* QRURLTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = DB17C8021AD5599700927C73 /* QRURLTableViewCell.m */; };
@@ -37,6 +38,8 @@
 		078476E85F6E3CAB13228FAC /* Pods.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Pods.debug.xcconfig; path = "Pods/Target Support Files/Pods/Pods.debug.xcconfig"; sourceTree = "<group>"; };
 		91E596DEBB584AB6FB28BE8D /* Pods.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = Pods.release.xcconfig; path = "Pods/Target Support Files/Pods/Pods.release.xcconfig"; sourceTree = "<group>"; };
 		CA5258FC6C49294281A591BF /* libPods.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libPods.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB092DC61AFCE47C00122E2F /* NSObject+Macro.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSObject+Macro.h"; sourceTree = "<group>"; };
+		DB092DC71AFCE47C00122E2F /* NSObject+Macro.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSObject+Macro.m"; sourceTree = "<group>"; };
 		DB17C7F71AD3C67600927C73 /* QR.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = QR.xcdatamodel; sourceTree = "<group>"; };
 		DB17C7F91AD3D66D00927C73 /* QRURLViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = QRURLViewController.h; sourceTree = "<group>"; };
 		DB17C7FA1AD3D66D00927C73 /* QRURLViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = QRURLViewController.m; sourceTree = "<group>"; };
@@ -199,6 +202,8 @@
 			children = (
 				DBF339A71ACC177700759534 /* NSString+Tools.h */,
 				DBF339A81ACC177700759534 /* NSString+Tools.m */,
+				DB092DC61AFCE47C00122E2F /* NSObject+Macro.h */,
+				DB092DC71AFCE47C00122E2F /* NSObject+Macro.m */,
 			);
 			name = Tools;
 			sourceTree = "<group>";
@@ -344,6 +349,7 @@
 				DBF339861ACC0D3800759534 /* AppDelegate.m in Sources */,
 				DB17C7F81AD3C67600927C73 /* QR.xcdatamodeld in Sources */,
 				DB17C7FB1AD3D66D00927C73 /* QRURLViewController.m in Sources */,
+				DB092DC81AFCE47C00122E2F /* NSObject+Macro.m in Sources */,
 				DBF339831ACC0D3800759534 /* main.m in Sources */,
 				DB17C8061AD55E3600927C73 /* URLEntity.m in Sources */,
 				DBF339A91ACC177700759534 /* NSString+Tools.m in Sources */,

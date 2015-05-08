@@ -7,6 +7,7 @@
 //
 
 #import "QRCatchViewController.h"
+#import "NSObject+Macro.h"
 @import AVFoundation;
 @import QuartzCore;
 
@@ -38,7 +39,7 @@
     
     [self setupAVFoundation];
     [self setupLabelBorder];
-    [self setupRippleAnimation];
+    //[self setupRippleAnimation];
     
     //add blur view mask
     self.mask = [CAShapeLayer layer];
@@ -51,6 +52,8 @@
 {
     [super viewDidLayoutSubviews];
     
+    [self setupRippleAnimation];
+    
     //layout preview layer
     self.previewLayer.bounds = self.preview.bounds;
     self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
@@ -59,8 +62,15 @@
     self.mask.frame = self.blurView.bounds;
 
     UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
-    
-    CGRect inRect = [self.catcherIndicator convertRect:CGRectMake(51, 60, 272, 272) toView:self.blurView];
+    CGRect inRect;
+    if (IS_IPHONE_6P)
+    {
+        inRect = [self.catcherIndicator convertRect:CGRectMake(72, 72, 272, 272) toView:self.blurView];
+    }
+    else
+    {
+        inRect = [self.catcherIndicator convertRect:CGRectMake(52, 52, 272, 272) toView:self.blurView];
+    }
     UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:inRect];
     
     [outRectangle appendPath:inRectangle];
