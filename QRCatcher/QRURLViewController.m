@@ -26,8 +26,17 @@ static NSString *urlCell = @"urlCell";
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    
-    //fetched results controller set up
+    [self setupNSFetchedResultsController];
+}
+
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+#pragma mark - view did load setup
+- (void)setupNSFetchedResultsController
+{
     NSSortDescriptor *sortDescriptor = [NSSortDescriptor sortDescriptorWithKey:@"createDate" ascending:YES];
     NSFetchRequest *requst = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
     requst.sortDescriptors = @[sortDescriptor];
@@ -43,11 +52,6 @@ static NSString *urlCell = @"urlCell";
         NSLog(@"Unable to perform fetch.");
         NSLog(@"%@, %@", error, error.localizedDescription);
     }
-}
-
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
 }
 
 #pragma mark - Table view data source
@@ -75,6 +79,12 @@ static NSString *urlCell = @"urlCell";
 }
 
 - (void)configureCell:(QRURLTableViewCell *)cell atIndexPath:(NSIndexPath *)indexPath {
+    
+    //setup cell
+    cell.textLabel.textColor = [UIColor colorWithRed:65/225.0 green:182/255.0 blue:251 alpha:1];
+    cell.imageView.image = [UIImage imageNamed:@"website2x"];
+    cell.backgroundColor = [UIColor blackColor];
+
     // Fetch Record
     URLEntity *record = [self.fetchedResultsController objectAtIndexPath:indexPath];
     

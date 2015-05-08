@@ -19,8 +19,12 @@
     return (AppDelegate *)[[UIApplication sharedApplication] delegate];
 }
 
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    // Override point for customization after application launch.
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+    //setup global UI settings
+    //magic 防止没有内容时 出现多余的separator
+    [[UITableView appearance] setTableFooterView:[[UIView alloc] initWithFrame:CGRectZero]];
+    
     return YES;
 }
 

@@ -60,7 +60,7 @@
 
     UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
     
-    CGRect inRect = [self.catcherIndicator convertRect:CGRectMake(44, 38, 234, 234) toView:self.blurView];
+    CGRect inRect = [self.catcherIndicator convertRect:CGRectMake(51, 60, 272, 272) toView:self.blurView];
     UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:inRect];
     
     [outRectangle appendPath:inRectangle];

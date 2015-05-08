@@ -161,8 +161,8 @@
 				DBF339841ACC0D3800759534 /* AppDelegate.h */,
 				DBF339851ACC0D3800759534 /* AppDelegate.m */,
 				DBF3398A1ACC0D3800759534 /* Main.storyboard */,
-				DBF3398D1ACC0D3800759534 /* Images.xcassets */,
 				DBF3398F1ACC0D3800759534 /* LaunchScreen.xib */,
+				DBF3398D1ACC0D3800759534 /* Images.xcassets */,
 				DBF339801ACC0D3800759534 /* Supporting Files */,
 			);
 			path = QRCatcher;
