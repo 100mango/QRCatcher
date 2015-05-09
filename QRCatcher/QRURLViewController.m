@@ -8,8 +8,11 @@
 
 #import "QRURLViewController.h"
 #import "AppDelegate.h"
+//view
 #import "QRURLTableViewCell.h"
+//model
 #import "URLEntity.h"
+//tools
 #import "NSString+Tools.h"
 
 @interface QRURLViewController ()<UITableViewDataSource,UITableViewDelegate,NSFetchedResultsControllerDelegate>

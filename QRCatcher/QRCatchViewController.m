@@ -7,14 +7,17 @@
 //
 
 #import "QRCatchViewController.h"
-#import "NSObject+Macro.h"
+#import "AppDelegate.h"
+//cocoa
 @import AVFoundation;
 @import QuartzCore;
-
+//tools
+#import "NSObject+Macro.h"
 #import "NSString+Tools.h"
-#import "AppDelegate.h"
-#import "URLEntity.h"
 #import "Masonry.h"
+//model
+#import "URLEntity.h"
+
 
 @interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
 @property (weak, nonatomic) IBOutlet UILabel *stringLabel;
@@ -39,7 +42,7 @@
     
     [self setupAVFoundation];
     [self setupLabelBorder];
-    //[self setupRippleAnimation];
+    [self setupRippleAnimation];
     
     //add blur view mask
     self.mask = [CAShapeLayer layer];
@@ -48,11 +51,10 @@
     
 }
 
+//使用Autolayout布局,我们在viewDidLayoutSubviews才能获取布局后的正确frame
 - (void)viewDidLayoutSubviews
 {
     [super viewDidLayoutSubviews];
-    
-    [self setupRippleAnimation];
     
     //layout preview layer
     self.previewLayer.bounds = self.preview.bounds;
