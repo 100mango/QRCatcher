@@ -1,6 +1,6 @@
 # QRCatcher
 
-已于AppStore上架  [Apple Store 链接](https://itunes.apple.com/cn/app/qrcatcher/id993170818?mt=8)
+已于AppStore上架  [AppStore 链接](https://itunes.apple.com/cn/app/qrcatcher/id993170818?mt=8)
 
 
 一个简洁美观的二维码扫描应用
