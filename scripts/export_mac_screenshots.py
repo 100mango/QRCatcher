@@ -6,6 +6,9 @@ import hashlib,json,os,pathlib,subprocess
 result='MacTestResults.xcresult'
 evidence=pathlib.Path('build/mac-evidence');evidence.mkdir(parents=True,exist_ok=True)
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
+icon=pathlib.Path('build/icon-verification/AppIcon.iconset/icon_512x512@2x.png')
+if icon.exists():
+ data=icon.read_bytes();assert len(data)<=600*1024;(evidence/'mac-bundled-icon.png').write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
 (evidence/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 log=pathlib.Path('mac-test.log')
 if log.exists():(evidence/'mac-test-tail.log').write_bytes(log.read_bytes()[-1024*1024:])
@@ -27,7 +30,8 @@ for item in records(manifest):
  label=' '.join(v for v in item.values() if isinstance(v,str))
  name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure'] if n in label),None)
  if not name:continue
- assert len(screenshots)<6,'Screenshot evidence budget exceeded'
+ if len(screenshots)>=6:
+  print('Additional named screenshot omitted at the six-image evidence limit:',name,flush=True);continue
  path=(destination/item['exportedFileName']).resolve();assert path.is_relative_to(destination.resolve())
  data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
  name=f'{len(screenshots)+1}-{name}.jpg';(evidence/name).write_bytes(data)

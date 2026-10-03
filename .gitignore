@@ -34,3 +34,5 @@ __pycache__/
 test.log
 
 Tests/Fixtures/*.png
+
+QRCatcherMac/Assets.xcassets/AppIcon.appiconset/*.png

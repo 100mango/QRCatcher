@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import CryptoKit
 
 @MainActor
 final class QRCatcherMacUITests: XCTestCase {
@@ -11,15 +12,40 @@ final class QRCatcherMacUITests: XCTestCase {
         continueAfterFailure = false
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcherUITest-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        app = XCUIApplication()
+        app = XCUIApplication(url: expectedApplicationURL)
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path
-        app.launch()
+        app.launch(); verifyRunningApplication()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
     }
     override func tearDownWithError() throws {
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); try? screenshot("mac-failure") }
         app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }
+    }
+
+    private var expectedApplicationURL: URL {
+        var runner = Bundle(for: Self.self).bundleURL
+        while runner.pathExtension != "app", runner.pathComponents.count > 1 { runner.deleteLastPathComponent() }
+        return runner.deletingLastPathComponent().appendingPathComponent("QRCatcherMac.app")
+    }
+
+    private func verifyRunningApplication() {
+        XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
+        let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "100mango.QRCatcher").filter { !$0.isTerminated }
+        XCTAssertEqual(candidates.count, 1, "Exactly one target process must be running")
+        guard let running = candidates.first, let actual = running.bundleURL, let executable = running.executableURL else { XCTFail("Target process has no bundle/executable identity"); return }
+        let expected = expectedApplicationURL
+        XCTAssertEqual(actual.resolvingSymlinksInPath().standardizedFileURL, expected.resolvingSymlinksInPath().standardizedFileURL,
+                       "XCTest must launch the intended adjacent Debug product, never the same-bundle Release product")
+        XCTAssertTrue(app.debugDescription.contains("pid: \(running.processIdentifier)"))
+        let bytes = (try? Data(contentsOf: executable)) ?? Data()
+        XCTAssertFalse(bytes.isEmpty)
+        let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        let provenance: [String: Any] = ["pid": running.processIdentifier, "actual_bundle": actual.path, "actual_executable": executable.path,
+                                        "expected_bundle": expected.path, "executable_sha256": hash]
+        if let data = try? JSONSerialization.data(withJSONObject: provenance, options: .sortedKeys) {
+            print("RUNNING_APP_PROVENANCE:", String(decoding: data, as: UTF8.self))
+        }
     }
 
     private func fileDialog(path: String, button: String) {
@@ -41,6 +67,16 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(confirm.isEnabled, app.debugDescription)
         confirm.click()
+        if button == "Save" {
+            let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in FileManager.default.fileExists(atPath: url.path) }, object: nil)
+            let outcome = XCTWaiter.wait(for: [finished], timeout: 8)
+            if outcome != .completed {
+                print("EXPORT_FOLDER_CONTENTS:", (try? FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)) ?? [])
+                print("EXPORT_UI:", app.debugDescription)
+                try? screenshot("mac-failure")
+            }
+            XCTAssertEqual(outcome, .completed, "The native Save action must produce the requested file before readback")
+        }
     }
     private func importImage(_ name: String) {
         app.buttons["mac.import"].click()
@@ -73,7 +109,7 @@ final class QRCatcherMacUITests: XCTestCase {
         fileDialog(path: json.path, button: "Save")
         let export = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: json)) as? [String: Any])
         XCTAssertEqual((export["records"] as? [[String:Any]])?.first?["payload"] as? String, "QRCatcher 你好 🌈 123")
-        app.terminate(); app.launch()
+        app.terminate(); app.launch(); verifyRunningApplication()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
         let row = app.staticTexts.containing(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "QRCatcher 你好", "QRCatcher 你好")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.click()
@@ -106,7 +142,7 @@ final class QRCatcherMacUITests: XCTestCase {
     func testChineseCriticalFlow() throws {
         app.terminate()
         app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
-        app.launch()
+        app.launch(); verifyRunningApplication()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
         importImage("unicode")
         XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
@@ -116,7 +152,7 @@ final class QRCatcherMacUITests: XCTestCase {
         let png = folder.appendingPathComponent("chinese-result.png")
         app.buttons["mac.exportQR"].click(); fileDialog(path: png.path, button: "Save")
         XCTAssertTrue(FileManager.default.fileExists(atPath: png.path))
-        app.terminate(); app.launch()
+        app.terminate(); app.launch(); verifyRunningApplication()
         let row = app.staticTexts.matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "QRCatcher 你好", "QRCatcher 你好")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.click()
         XCTAssertTrue(app.buttons["mac.copy"].waitForExistence(timeout: 5))

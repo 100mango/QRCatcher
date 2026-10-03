@@ -35,6 +35,7 @@ jobs:
           xcodebuild -version | grep '27A266a'
           test "$(uname -m)" = arm64
           python3 scripts/materialize_qr_fixtures.py
+          python3 scripts/materialize_mac_icons.py
           python3 scripts/generate_project.py
           git diff --exit-code -- QRCatcher.xcodeproj
           plutil -lint QRCatcherMac/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
@@ -50,6 +51,14 @@ jobs:
           echo "Verified native slices: $ARCHITECTURES"
           [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]]
           xcrun lipo -info "$APP/Contents/MacOS/QRCatcherMac"
+          ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")
+          test -n "$ICON"
+          ICON_PATH="$APP/Contents/Resources/${ICON%.icns}.icns"
+          test -s "$ICON_PATH"
+          shasum -a 256 "$ICON_PATH"
+          mkdir -p build/icon-verification
+          iconutil -c iconset "$ICON_PATH" -o build/icon-verification/AppIcon.iconset
+          test -s build/icon-verification/AppIcon.iconset/icon_512x512@2x.png
           strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
           if grep -E -- 'QRCATCHER_TEST_STORE|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
       - name: Execute native Mac unit and UI tests
