@@ -1,0 +1,43 @@
+name: Oldest iOS XCTest harness feasibility
+on:
+  push:
+    branches: [codex/oldest-runtime-harness]
+permissions:
+  contents: read
+concurrency:
+  group: oldest-runtime-harness
+  cancel-in-progress: false
+jobs:
+  harness-only:
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify isolated source and test host
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/oldest-runtime-harness
+          test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          sw_vers
+          xcodebuild -version
+          python3 .github/oldest-harness/generate_project.py
+          git diff --exit-code HEAD --
+          echo "HARNESS_ONLY_SOURCE commit=$GITHUB_SHA tree=$(git rev-parse 'HEAD^{tree}') product_app_tests=0"
+      - name: Verify official runtime and actual oldest XCTest behavior
+        timeout-minutes: 31
+        run: python3 -u .github/oldest-harness/probe_harness.py
+      - name: Verify source unchanged and report boundary
+        if: always()
+        timeout-minutes: 1
+        run: |
+          git diff --exit-code HEAD --
+          echo 'This is only test-runner feasibility. No product app compatibility pass is claimed.' >> "$GITHUB_STEP_SUMMARY"
