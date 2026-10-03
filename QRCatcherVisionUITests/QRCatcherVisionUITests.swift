@@ -23,7 +23,7 @@ final class QRCatcherVisionUITests: XCTestCase {
     func testRealPhotosImportCopyAndReopen() {
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
         app.buttons["vision.photos"].tap()
-        let asset = app.collectionViews.cells.firstMatch
+        let asset = app.images["PXGGridLayout-Info"].firstMatch
         XCTAssertTrue(asset.waitForExistence(timeout: 20), app.debugDescription)
         asset.tap()
         XCTAssertTrue(app.staticTexts["vision.payload"].waitForExistence(timeout: 20), app.debugDescription)

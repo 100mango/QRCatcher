@@ -2,7 +2,7 @@
 
 ## Baseline and current milestone
 
-The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. The native iPad split workflow is implemented in this branch and is under validation. Vision has an initial import-first executable slice awaiting compiler/runtime proof. Watch and TV remain staged and are not implemented.
+The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. The native iPad split workflow is implemented in this branch and is under validation. Vision has an initial import-first executable slice awaiting compiler/runtime proof. TV now has an initial PhotoKit/limited-metadata slice awaiting compiler/runtime proof. Watch remains staged and is not implemented.
 
 Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. Release verification remains unsigned. A separate local ad-hoc Debug sandbox test is described below; no Store records, Apple-account signing resources or registered persistent capabilities are created.
 
@@ -73,9 +73,12 @@ user-selected file read/write, and its existing camera feature. The independent
 `QRCatcherMacSandbox` scheme uses an ephemeral ad-hoc Debug signature on the same
 standard cloud runner. It does not create certificates, profiles, App IDs, teams,
 keychain items, accounts, App Groups or system security exceptions. The pipeline
-verifies the actual signature and entitlements before its own hosted container
-persistence/legacy selection/denied-write tests and the real Open/Save/paste UI
-suite. Any normal Xcode-injected `get-task-allow` is Debug-only test support; this
+verifies the actual signature and entitlements before an external XCUI suite exercises real Open/Save/paste, container persistence,
+legacy selection, and unselected read/write denial. The app is re-signed with
+only the minimal source entitlements plus Debug attach support after building;
+Xcode-injected broad hosted-test exceptions are not accepted. Synthetic legacy
+input and own-container diagnostic export fields are DEBUG-only and excluded
+from Release. Any normal Xcode-injected `get-task-allow` is Debug-only test support; this
 is not a distribution signature or evidence of prior App Store container handover.
 No network, general Documents/Pictures or Photos-library entitlement is granted.
 A genuine Photos-picker import from a disposable Mac Photos library is a separate
@@ -93,3 +96,21 @@ Final combined validation must re-enable `RUN_EXTENDED_IOS_MATRIX` and pass the
 same head on Pro Max, SE3, iPad Pro 13-inch and iPad mini. Focused repair runs do
 not fulfill those final gates. The genuine iOS 15.5 launch and physical capture,
 Watch pairing, TV library availability and Vision interaction gates remain distinct.
+
+
+## First native TV slice
+
+`QRCatcherTV` has native PhotoKit browsing, explicitly requested Photos access,
+40-asset pagination, cancellable streamed resource loading (50 MiB / 45-second
+bounds), shared QR decoding, a focus-based result/history UI, and real PNG save
+through PhotoKit. Save is reported as verified only after fetching the created
+asset, reading its image resource, checking dimensions, and decoding its payload.
+A QR can be displayed for an explicit phone scan; no TV clipboard or unrestricted
+browser is assumed. Its own versioned history metadata is limited to a conservative
+256 KiB total encoded defaults-domain budget. A failed batch leaves all earlier
+records intact; no quota-driven eviction, phone-store rewrite or silent truncation
+occurs. The unit suite includes duplicate/date/order/reopen, corrupt-value retention,
+and a quota case accounting for other preferences. Native unit/UI execution, Photos
+permission/focus behavior, export/refetch and relaunch are required CI gates, not
+inferred from the SDK. TV artwork packaging, Chinese critical-flow review, optional
+physical Continuity Camera and further accessibility audits remain separate gates.

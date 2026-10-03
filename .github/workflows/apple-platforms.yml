@@ -64,7 +64,7 @@ jobs:
           mkdir -p build/icon-verification
           xcrun swift scripts/verify_mac_icon.swift "$ICON_PATH" build/icon-verification/mac-bundled-icon.png
           strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
-          if grep -E -- 'QRCATCHER_TEST_STORE|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
+          if grep -E -- 'QRCATCHER_TEST_STORE|QRCATCHER_SANDBOX_|sandboxDiagnostics|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
       - name: Execute native Mac unit and UI tests
         if: ${{ !cancelled() }}
         timeout-minutes: 20
@@ -89,6 +89,7 @@ jobs:
           compression-level: 9
           if-no-files-found: error
       - name: Probe installed visionOS runtime on the standard runner
+        if: ${{ !cancelled() }}
         timeout-minutes: 12
         run: python3 -u scripts/probe_vision_runtime.py
       - name: Compile the native Vision test bundles
@@ -98,13 +99,19 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination 'generic/platform=visionOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee vision-test-build.log
-      - name: Execute first native Vision import and persistence slice
+      - name: Execute native Vision hosted decode and persistence
         if: ${{ !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' }}
         timeout-minutes: 10
         run: |
           set -o pipefail
           xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
-          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath VisionTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-test.log
+          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -only-testing:QRCatcherVisionTests -resultBundlePath VisionTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-test.log
+      - name: Execute native Vision system-picker UI flow
+        if: ${{ !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -only-testing:QRCatcherVisionUITests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath VisionUIResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-ui-test.log
       - name: Stop the Vision simulator before other platform tests
         if: ${{ always() && env.VISION_SIMULATOR_ID != '' }}
         timeout-minutes: 1
@@ -113,6 +120,21 @@ jobs:
         if: always()
         timeout-minutes: 1
         run: python3 -u scripts/summarize_vision_runtime_crash.py
+      - name: Compile native TV PhotoKit and bounded-history tests
+        id: tv_test_build
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Debug -derivedDataPath build/TVTests -destination 'generic/platform=tvOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee tv-test-build.log
+      - name: Execute real TV Photos decode export and reopen workflows
+        if: ${{ !cancelled() && steps.tv_test_build.outcome == 'success' }}
+        timeout-minutes: 12
+        run: bash scripts/run_tv_platform_tests.sh
+      - name: Stop TV simulator before phone and iPad tests
+        if: ${{ always() && env.TV_SIMULATOR_ID != '' }}
+        timeout-minutes: 1
+        run: xcrun simctl shutdown "$TV_SIMULATOR_ID"
       - name: Verify iOS release and unchanged store model
         if: ${{ !cancelled() }}
         timeout-minutes: 8
@@ -175,7 +197,7 @@ jobs:
         if: always()
         timeout-minutes: 3
         run: |
-          for RESULT in VisionTestResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
+          for RESULT in TVTestResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
             if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
           done
           echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect, signed sandbox, distribution and other platform targets remain separate gates.' >> "$GITHUB_STEP_SUMMARY"

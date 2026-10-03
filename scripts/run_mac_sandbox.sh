@@ -4,6 +4,18 @@ set -euo pipefail
 # profile, certificate, keychain or system-security setting is created/changed.
 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherMacSandbox -configuration Debug -derivedDataPath build/MacSandbox -destination 'platform=macOS,arch=arm64' ARCHS=arm64 CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= | tee mac-sandbox-build.log
 APP=build/MacSandbox/Build/Products/Debug/QRCatcherMac.app
+# XCTest's hosted unit instrumentation injects broad read/Mach exceptions. The
+# sandbox gate uses external XCUI only, and re-signs this app with exactly the
+# source entitlements plus Debug attach support. This removes those exceptions.
+python3 - <<'PYCODE'
+import plistlib
+from pathlib import Path
+values=plistlib.loads(Path('QRCatcherMac/QRCatcherMac.entitlements').read_bytes())
+values['com.apple.security.get-task-allow']=True
+Path('build/mac-sandbox-runtime.entitlements').write_bytes(plistlib.dumps(values))
+Path('build/MacSandbox/Build/Products/Debug/qrcatcher-unselected-read.txt').write_text('synthetic sandbox read sentinel')
+PYCODE
+codesign --force --sign - --timestamp=none --entitlements build/mac-sandbox-runtime.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
 codesign -d --entitlements - --xml "$APP" > build/mac-sandbox-entitlements.plist
 codesign -dv "$APP" 2> build/mac-sandbox-signature.txt

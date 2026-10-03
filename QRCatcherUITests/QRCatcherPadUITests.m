@@ -54,7 +54,9 @@
     if (!import.hittable) { [self.app.scrollViews.firstMatch swipeUp]; [self.app.scrollViews.firstMatch swipeUp]; }
     XCTAssertTrue(import.hittable); [import tap];
     [self.app.buttons[@"Photo Library"] tap];
-    XCUIElement *photo = self.app.collectionViews.cells.firstMatch;
+    // The iPad picker has a sidebar collection before its actual asset grid.
+    // Use the real photo-image AX identifier observed in run 37121579198.
+    XCUIElement *photo = self.app.images[@"PXGGridLayout-Info"].firstMatch;
     XCTAssertTrue([photo waitForExistenceWithTimeout:15], @"%@", self.app.debugDescription);
     [photo tap];
     NSPredicate *decoded = [NSPredicate predicateWithFormat:@"label == %@", @"QRCatcher 你好 🌈 123"];

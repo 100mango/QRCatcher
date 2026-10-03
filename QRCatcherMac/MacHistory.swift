@@ -43,7 +43,12 @@ final class MacHistory: ObservableObject {
     }
 
     static func applicationHistory() -> MacHistory {
-        do { return MacHistory(url: try defaultURL()) }
+        do {
+            #if DEBUG && os(macOS)
+            try MacSandboxDiagnostics.prepareLegacyFixtureIfRequested()
+            #endif
+            return MacHistory(url: try defaultURL())
+        }
         catch QRHistoryLocationError.conflict(let locations) { return MacHistory(conflict: locations) }
         catch { return MacHistory(loadFailure: error.localizedDescription) }
     }
@@ -140,7 +145,12 @@ final class MacHistory: ObservableObject {
             throw NSError(domain: "QRCatcher.History", code: 2, userInfo: [NSLocalizedDescriptionKey: QRL("History is unavailable. Export the current QR result instead; your saved data has not been erased.")])
         }
         // Export all records in displayed order, including null legacy values, without deduplication.
-        return try JSONSerialization.data(withJSONObject: ["format": "QRCatcher.history", "version": 1,
-            "records": items.map(\.exportValue)], options: [.prettyPrinted, .sortedKeys])
+        var document: [String: Any] = ["format": "QRCatcher.history", "version": 1, "records": items.map(\.exportValue)]
+        #if DEBUG && os(macOS)
+        if MacSandboxDiagnostics.requested {
+            document["sandboxDiagnostics"] = MacSandboxDiagnostics.evidence(actualStoreURL: store?.context?.persistentStoreCoordinator?.persistentStores.first?.url)
+        }
+        #endif
+        return try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
     }
 }

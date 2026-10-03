@@ -45,6 +45,8 @@
     button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
     button.titleLabel.adjustsFontForContentSizeCategory = YES;
     button.titleLabel.numberOfLines = 0;
+    button.titleLabel.adjustsFontSizeToFitWidth = NO;
+    [button setContentCompressionResistancePriority:UILayoutPriorityRequired - 1 forAxis:UILayoutConstraintAxisVertical];
     button.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
     button.titleLabel.textAlignment = NSTextAlignmentCenter;
     button.accessibilityIdentifier = identifier;

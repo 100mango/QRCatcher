@@ -19,6 +19,7 @@ final class QRCatcherMacUITests: XCTestCase {
             // The actual sandbox app chooses its OS-provided Application Support
             // container. No absolute /tmp override or broad file grant is used.
             app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
+            app.launchEnvironment["QRCATCHER_SANDBOX_PROOF"] = "1"
         } else { app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path }
         dismissObservedRealityWidgetsCrash()
         app.launch(); verifyRunningApplication()
@@ -72,7 +73,16 @@ final class QRCatcherMacUITests: XCTestCase {
         let bytes = (try? Data(contentsOf: executable)) ?? Data()
         XCTAssertFalse(bytes.isEmpty)
         let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
-        let provenance: [String: Any] = ["pid": running.processIdentifier, "actual_bundle": actual.path, "actual_executable": executable.path,
+        // Modern Xcode Debug executables can be stable launch stubs; hash the
+        // actual debug dylib payload too, not just the launcher filename.
+        var codeHashes: [String: String] = [:]
+        if let files = try? FileManager.default.contentsOfDirectory(at: executable.deletingLastPathComponent(), includingPropertiesForKeys: nil) {
+            for file in files where file.lastPathComponent == executable.lastPathComponent || file.pathExtension == "dylib" {
+                if let data = try? Data(contentsOf: file) { codeHashes[file.lastPathComponent] = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+            }
+        }
+        XCTAssertNotNil(codeHashes["QRCatcherMac.debug.dylib"])
+        let provenance: [String: Any] = ["code_payload_sha256": codeHashes, "pid": running.processIdentifier, "actual_bundle": actual.path, "actual_executable": executable.path,
                                         "expected_bundle": expected.path, "executable_sha256": hash, "product_app_sandbox": isSandboxedProduct]
         if let data = try? JSONSerialization.data(withJSONObject: provenance, options: .sortedKeys) {
             print("RUNNING_APP_PROVENANCE:", String(decoding: data, as: UTF8.self))
@@ -169,6 +179,39 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.copy"].click()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
         try screenshot("mac-pasted-url")
+    }
+
+    func testSandboxActualContainerLegacyHistoryAndUnselectedFileBoundary() throws {
+        try XCTSkipUnless(isSandboxedProduct, "This gate executes in the separate minimal-entitlement sandbox lane")
+        app.terminate()
+        app.launchEnvironment.removeValue(forKey: "QRCATCHER_TEST_STORE_NAME")
+        app.launchEnvironment["QRCATCHER_SANDBOX_FIXTURE"] = UUID().uuidString
+        app.launch(); verifyRunningApplication()
+        let row = app.staticTexts.matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "Sandbox legacy duplicate", "Sandbox legacy duplicate")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); row.click()
+        let first = folder.appendingPathComponent("sandbox-before.json")
+        app.buttons["mac.exportHistory"].click(); fileDialog(path: first.path, button: "Save")
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: first)) as? [String: Any])
+        let proof = try XCTUnwrap(saved["sandboxDiagnostics"] as? [String: Any])
+        XCTAssertEqual(proof["sandboxed"] as? Bool, true)
+        XCTAssertEqual(proof["unselectedReadRejected"] as? Bool, true, "The app must not have Xcode's broad root-read exception: \(proof)")
+        XCTAssertEqual(proof["unselectedWriteRejected"] as? Bool, true, "The process must be constrained by the actual sandbox: \(proof)")
+        let home = try XCTUnwrap(proof["home"] as? String)
+        XCTAssertEqual(proof["actualStoreURL"] as? String, home + "/Documents/coredata.sqlite")
+        let rows = try XCTUnwrap(saved["records"] as? [[String: Any]])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows.compactMap { $0["payload"] as? String }, ["Sandbox legacy duplicate", "Sandbox legacy duplicate"])
+        XCTAssertEqual(rows.compactMap { $0["createdAtUnixSeconds"] as? Double }, [1431993600,1431993500])
+        app.terminate(); app.launch(); verifyRunningApplication()
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        importImage("unicode")
+        XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
+        let after = folder.appendingPathComponent("sandbox-after.json")
+        app.buttons["mac.exportHistory"].click(); fileDialog(path: after.path, button: "Save")
+        let final = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: after)) as? [String: Any])
+        XCTAssertEqual((final["records"] as? [[String: Any]])?.count, 3)
+        print("ACTUAL_SANDBOX_E2E_PROOF:", proof)
+        try screenshot("mac-sandbox-legacy-reopened")
     }
 
     func testChineseCriticalFlow() throws {

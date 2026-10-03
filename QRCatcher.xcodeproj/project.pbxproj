@@ -827,6 +827,16 @@
 "isa" = "PBXBuildFile";
 "fileRef" = "CCAE3FEF80AB87C9C9D01450";
 };
+"95429112C65D6BF1C3E884B8" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherMac/MacSandboxDiagnostics.swift";
+"sourceTree" = "<group>";
+};
+"ABD54C3BEFA94C1D9144113E" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "95429112C65D6BF1C3E884B8";
+};
 "6A69186CF15960F05C2CAB5C" = {
 "isa" = "PBXFileReference";
 "lastKnownFileType" = "sourcecode.swift";
@@ -893,7 +903,7 @@
 };
 "0D069BD07DDE7BEE712E9AFD" = {
 "isa" = "PBXGroup";
-"children" = ("3F0F64C36D736D3143CC40CE","CCAE3FEF80AB87C9C9D01450","6A69186CF15960F05C2CAB5C","AF2CF6477AE94F75A3D40BD6","AC39840EF4D7C81145778D8A","FEA19A73DDDF85DFC85F47C9","960D8D4FBEAD12671A81084A");
+"children" = ("3F0F64C36D736D3143CC40CE","CCAE3FEF80AB87C9C9D01450","95429112C65D6BF1C3E884B8","6A69186CF15960F05C2CAB5C","AF2CF6477AE94F75A3D40BD6","AC39840EF4D7C81145778D8A","FEA19A73DDDF85DFC85F47C9","960D8D4FBEAD12671A81084A");
 "name" = "QRCatcherMac";
 "sourceTree" = "<group>";
 };
@@ -963,7 +973,7 @@
 "EB058EA1A3046EF3757FC407" = {
 "isa" = "PBXSourcesBuildPhase";
 "buildActionMask" = 2147483647;
-"files" = ("8E32D4C73271D3998869B56B","D73C10694522D43D26B759C8","0000E00D492245F3D87B5911","AF57C3A7B3D90DC8116CAE7D","8B512853F1B60F94309608EF","535AACE02ADC5D9F5473D10A","4E491B841D544FD9B037C269","9B800BA5FDFFBACCA8FB989A","FD0F6C684C129199F6E167D3","FF552536EE8CC4ED22FDA606","02A42306E88B5ACA3343004A","B629EC0139F2224428AB3864","951B841214A878ABBE70B631","271326F45D34CF1DF1ED1F53","E845CA8D4126BB948EA24CED");
+"files" = ("8E32D4C73271D3998869B56B","D73C10694522D43D26B759C8","0000E00D492245F3D87B5911","AF57C3A7B3D90DC8116CAE7D","ABD54C3BEFA94C1D9144113E","8B512853F1B60F94309608EF","535AACE02ADC5D9F5473D10A","4E491B841D544FD9B037C269","9B800BA5FDFFBACCA8FB989A","FD0F6C684C129199F6E167D3","FF552536EE8CC4ED22FDA606","02A42306E88B5ACA3343004A","B629EC0139F2224428AB3864","951B841214A878ABBE70B631","271326F45D34CF1DF1ED1F53","E845CA8D4126BB948EA24CED");
 "runOnlyForDeploymentPostprocessing" = 0;
 };
 "AE6B80E7E080D3852FD3EA4A" = {
@@ -1234,125 +1244,6 @@
 "productName" = "QRCatcherMacUITests";
 "productReference" = "DFC126E48459EB542015F60E";
 "productType" = "com.apple.product-type.bundle.ui-testing";
-};
-"8D75C697CDC63D0DAE4C206A" = {
-"isa" = "PBXFileReference";
-"explicitFileType" = "wrapper.cfbundle";
-"includeInIndex" = 0;
-"path" = "QRCatcherMacSandboxTests.xctest";
-"sourceTree" = "BUILT_PRODUCTS_DIR";
-};
-"17275DD3827822B6A7188BD5" = {
-"isa" = "PBXFileReference";
-"lastKnownFileType" = "sourcecode.swift";
-"path" = "QRCatcherMacSandboxTests/QRCatcherMacSandboxTests.swift";
-"sourceTree" = "<group>";
-};
-"542B520918304A8B691FD7D5" = {
-"isa" = "PBXBuildFile";
-"fileRef" = "17275DD3827822B6A7188BD5";
-};
-"69255A1DAF73E3DCAE3AA475" = {
-"isa" = "PBXContainerItemProxy";
-"containerPortal" = "98F54143AB4E86B28C3AFEE0";
-"proxyType" = 1;
-"remoteGlobalIDString" = "347EAD6348E936507920C15D";
-"remoteInfo" = "QRCatcherMac";
-};
-"936FA1D1E02241C90669C55E" = {
-"isa" = "PBXTargetDependency";
-"target" = "347EAD6348E936507920C15D";
-"targetProxy" = "69255A1DAF73E3DCAE3AA475";
-};
-"E7C61558C5D9D7C77FD230A1" = {
-"isa" = "PBXGroup";
-"children" = ("17275DD3827822B6A7188BD5");
-"name" = "QRCatcherMacSandboxTests";
-"sourceTree" = "<group>";
-};
-"111BF00E16FD2ABC3DCF9099" = {
-"isa" = "XCBuildConfiguration";
-"buildSettings" = {
-"PRODUCT_NAME" = "$(TARGET_NAME)";
-"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherMacSandboxTests";
-"SDKROOT" = "macosx";
-"SUPPORTED_PLATFORMS" = "macosx";
-"MACOSX_DEPLOYMENT_TARGET" = "14.0";
-"SWIFT_VERSION" = "5.0";
-"SWIFT_STRICT_CONCURRENCY" = "targeted";
-"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
-"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
-"CODE_SIGN_STYLE" = "Automatic";
-"ENABLE_HARDENED_RUNTIME" = "NO";
-"GENERATE_INFOPLIST_FILE" = "YES";
-"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac";
-"BUNDLE_LOADER" = "$(TEST_HOST)";
-"GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
-"GCC_OPTIMIZATION_LEVEL" = "0";
-"ONLY_ACTIVE_ARCH" = "YES";
-"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
-"ENABLE_TESTABILITY" = "YES";
-"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
-"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
-};
-"name" = "Debug";
-};
-"EA559B589EF640689A36403E" = {
-"isa" = "XCBuildConfiguration";
-"buildSettings" = {
-"PRODUCT_NAME" = "$(TARGET_NAME)";
-"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherMacSandboxTests";
-"SDKROOT" = "macosx";
-"SUPPORTED_PLATFORMS" = "macosx";
-"MACOSX_DEPLOYMENT_TARGET" = "14.0";
-"SWIFT_VERSION" = "5.0";
-"SWIFT_STRICT_CONCURRENCY" = "targeted";
-"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
-"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
-"CODE_SIGN_STYLE" = "Automatic";
-"ENABLE_HARDENED_RUNTIME" = "NO";
-"GENERATE_INFOPLIST_FILE" = "YES";
-"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac";
-"BUNDLE_LOADER" = "$(TEST_HOST)";
-"GCC_OPTIMIZATION_LEVEL" = "s";
-"VALIDATE_PRODUCT" = "YES";
-};
-"name" = "Release";
-};
-"10822A347933E45987CF5A20" = {
-"isa" = "XCConfigurationList";
-"buildConfigurations" = ("111BF00E16FD2ABC3DCF9099","EA559B589EF640689A36403E");
-"defaultConfigurationIsVisible" = 0;
-"defaultConfigurationName" = "Release";
-};
-"53F622B30562663B999551C4" = {
-"isa" = "PBXSourcesBuildPhase";
-"buildActionMask" = 2147483647;
-"files" = ("542B520918304A8B691FD7D5","904A292EB4282D9003A0739B");
-"runOnlyForDeploymentPostprocessing" = 0;
-};
-"2808909C66C4B07F7B2BA022" = {
-"isa" = "PBXFrameworksBuildPhase";
-"buildActionMask" = 2147483647;
-"files" = ();
-"runOnlyForDeploymentPostprocessing" = 0;
-};
-"0B0B77C783D070436FF0DA78" = {
-"isa" = "PBXResourcesBuildPhase";
-"buildActionMask" = 2147483647;
-"files" = ("5BCF4405E5C253C0C524FA17","6AB2806891D90E2AEB3F3FDF","3B61A36BDB83DCCB0B1BBEF2","D296BA950C5A541FA5F60206","CEDA059AEEDAB7A4CCFBC7F9","20324BAB48E3A235279CE40F","1A09D93917AEF2634982D338");
-"runOnlyForDeploymentPostprocessing" = 0;
-};
-"8A1F13EEB6306358E895F227" = {
-"isa" = "PBXNativeTarget";
-"buildConfigurationList" = "10822A347933E45987CF5A20";
-"buildPhases" = ("53F622B30562663B999551C4","2808909C66C4B07F7B2BA022","0B0B77C783D070436FF0DA78");
-"buildRules" = ();
-"dependencies" = ("936FA1D1E02241C90669C55E");
-"name" = "QRCatcherMacSandboxTests";
-"productName" = "QRCatcherMacSandboxTests";
-"productReference" = "8D75C697CDC63D0DAE4C206A";
-"productType" = "com.apple.product-type.bundle.unit-test";
 };
 "B6C194F1C3F6CD291D67C9DE" = {
 "isa" = "PBXFileReference";
@@ -1746,6 +1637,408 @@
 "productReference" = "1CF92F20AF34411459E0E5BF";
 "productType" = "com.apple.product-type.bundle.ui-testing";
 };
+"CCCF709AAE10A98399855416" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.application";
+"includeInIndex" = 0;
+"path" = "QRCatcherTV.app";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+};
+"72BD48BD1F11CA1AC7E369B1" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTV/QRCatcherTVApp.swift";
+"sourceTree" = "<group>";
+};
+"7E923A10DA34E30B6F907954" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "72BD48BD1F11CA1AC7E369B1";
+};
+"0C3F4EA65E3FC00E7607DD80" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTV/TVHistory.swift";
+"sourceTree" = "<group>";
+};
+"E0681BBD7EB0ECAF3EF6D206" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "0C3F4EA65E3FC00E7607DD80";
+};
+"33FB827BB507DC30E7A6C660" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTV/TVMainView.swift";
+"sourceTree" = "<group>";
+};
+"4B348F1437F62FFFE6FD736F" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "33FB827BB507DC30E7A6C660";
+};
+"52CD8F330F711E3A65C39CF8" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTV/TVPhotoLibrary.swift";
+"sourceTree" = "<group>";
+};
+"99BC4EC3CF8A66AD5AC836F7" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "52CD8F330F711E3A65C39CF8";
+};
+"A7A6C35797E17C98BD4341CC" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTV/TVReadSession.swift";
+"sourceTree" = "<group>";
+};
+"A8AFB31AD8AAF2759792DAF2" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "A7A6C35797E17C98BD4341CC";
+};
+"E1789E0DEC043D007F454D1B" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "text.plist.strings";
+"name" = "zh-Hans";
+"path" = "QRCatcherMac/zh-Hans.lproj/Localizable.strings";
+"sourceTree" = "<group>";
+};
+"A18308A7AE17429FF7E632DA" = {
+"isa" = "PBXVariantGroup";
+"children" = ("E1789E0DEC043D007F454D1B");
+"name" = "Localizable.strings";
+"sourceTree" = "<group>";
+};
+"7456C840D84806B15861FA80" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "A18308A7AE17429FF7E632DA";
+};
+"10BBA79D7C58D3E9F104BA3F" = {
+"isa" = "PBXGroup";
+"children" = ("72BD48BD1F11CA1AC7E369B1","0C3F4EA65E3FC00E7607DD80","33FB827BB507DC30E7A6C660","52CD8F330F711E3A65C39CF8","A7A6C35797E17C98BD4341CC","A18308A7AE17429FF7E632DA");
+"name" = "QRCatcherTV";
+"sourceTree" = "<group>";
+};
+"439EF660FC684808016E43F3" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcher";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"INFOPLIST_FILE" = "QRCatcherTV/Info.plist";
+"SWIFT_OBJC_BRIDGING_HEADER" = "QRCatcherTV/QRCatcherTV-Bridging-Header.h";
+"MARKETING_VERSION" = "1.1";
+"CURRENT_PROJECT_VERSION" = "2";
+"GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
+"GCC_OPTIMIZATION_LEVEL" = "0";
+"ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+};
+"name" = "Debug";
+};
+"3533D8FB696F1E3AFBDE2989" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcher";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"INFOPLIST_FILE" = "QRCatcherTV/Info.plist";
+"SWIFT_OBJC_BRIDGING_HEADER" = "QRCatcherTV/QRCatcherTV-Bridging-Header.h";
+"MARKETING_VERSION" = "1.1";
+"CURRENT_PROJECT_VERSION" = "2";
+"GCC_OPTIMIZATION_LEVEL" = "s";
+"VALIDATE_PRODUCT" = "YES";
+};
+"name" = "Release";
+};
+"F40C9E7435C6A639790AD09D" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("439EF660FC684808016E43F3","3533D8FB696F1E3AFBDE2989");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"FB0C8C6F1E169E63849F7E97" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("7E923A10DA34E30B6F907954","E0681BBD7EB0ECAF3EF6D206","4B348F1437F62FFFE6FD736F","99BC4EC3CF8A66AD5AC836F7","A8AFB31AD8AAF2759792DAF2","4E491B841D544FD9B037C269","9B800BA5FDFFBACCA8FB989A","FD0F6C684C129199F6E167D3","FF552536EE8CC4ED22FDA606","02A42306E88B5ACA3343004A","B629EC0139F2224428AB3864","0000E00D492245F3D87B5911");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"DB4C61A05B3006237108EE40" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ();
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"20B76DE2C26BBBD8617EB488" = {
+"isa" = "PBXResourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("1B04573B35B1E9AC13531FBF","7456C840D84806B15861FA80");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"FF0DC9BA250002871F7AABBA" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "F40C9E7435C6A639790AD09D";
+"buildPhases" = ("FB0C8C6F1E169E63849F7E97","DB4C61A05B3006237108EE40","20B76DE2C26BBBD8617EB488");
+"buildRules" = ();
+"dependencies" = ();
+"name" = "QRCatcherTV";
+"productName" = "QRCatcherTV";
+"productReference" = "CCCF709AAE10A98399855416";
+"productType" = "com.apple.product-type.application";
+};
+"F4E42113417B729E8BCCAB9B" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.cfbundle";
+"includeInIndex" = 0;
+"path" = "QRCatcherTVTests.xctest";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+};
+"3ACC04042F34206ABFAA6C98" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTVTests/QRCatcherTVTests.swift";
+"sourceTree" = "<group>";
+};
+"E788964F773F2BCD61CECCE8" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "3ACC04042F34206ABFAA6C98";
+};
+"3591B4A533008096C545D645" = {
+"isa" = "PBXContainerItemProxy";
+"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+"proxyType" = 1;
+"remoteGlobalIDString" = "FF0DC9BA250002871F7AABBA";
+"remoteInfo" = "QRCatcherTV";
+};
+"58C3D4AB22234F4450C25699" = {
+"isa" = "PBXTargetDependency";
+"target" = "FF0DC9BA250002871F7AABBA";
+"targetProxy" = "3591B4A533008096C545D645";
+};
+"EA4CB8758465B41EC84B701B" = {
+"isa" = "PBXGroup";
+"children" = ("3ACC04042F34206ABFAA6C98");
+"name" = "QRCatcherTVTests";
+"sourceTree" = "<group>";
+};
+"4A0D024041C26704008390F4" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherTVTests";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcherTV.app/QRCatcherTV";
+"BUNDLE_LOADER" = "$(TEST_HOST)";
+"GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
+"GCC_OPTIMIZATION_LEVEL" = "0";
+"ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+};
+"name" = "Debug";
+};
+"634552CB6BF5FA2823D599F9" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherTVTests";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcherTV.app/QRCatcherTV";
+"BUNDLE_LOADER" = "$(TEST_HOST)";
+"GCC_OPTIMIZATION_LEVEL" = "s";
+"VALIDATE_PRODUCT" = "YES";
+};
+"name" = "Release";
+};
+"88CFC4E4BF20EFAE7661D9EF" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("4A0D024041C26704008390F4","634552CB6BF5FA2823D599F9");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"3EED53705905907C5D46F4B5" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("E788964F773F2BCD61CECCE8");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"A0475776893E01EB0DBE6A54" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ();
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"58A059DCC59FC823302932CE" = {
+"isa" = "PBXResourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("5BCF4405E5C253C0C524FA17","6AB2806891D90E2AEB3F3FDF","3B61A36BDB83DCCB0B1BBEF2","D296BA950C5A541FA5F60206","CEDA059AEEDAB7A4CCFBC7F9","20324BAB48E3A235279CE40F","1A09D93917AEF2634982D338");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"F1E77D70148607775A35DA3B" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "88CFC4E4BF20EFAE7661D9EF";
+"buildPhases" = ("3EED53705905907C5D46F4B5","A0475776893E01EB0DBE6A54","58A059DCC59FC823302932CE");
+"buildRules" = ();
+"dependencies" = ("58C3D4AB22234F4450C25699");
+"name" = "QRCatcherTVTests";
+"productName" = "QRCatcherTVTests";
+"productReference" = "F4E42113417B729E8BCCAB9B";
+"productType" = "com.apple.product-type.bundle.unit-test";
+};
+"41038D20B1C362B229C50216" = {
+"isa" = "PBXFileReference";
+"explicitFileType" = "wrapper.cfbundle";
+"includeInIndex" = 0;
+"path" = "QRCatcherTVUITests.xctest";
+"sourceTree" = "BUILT_PRODUCTS_DIR";
+};
+"60E09D74E8DCFDC20544687B" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherTVUITests/QRCatcherTVUITests.swift";
+"sourceTree" = "<group>";
+};
+"DAC1BD2CB18A080F886234A9" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "60E09D74E8DCFDC20544687B";
+};
+"32789FB1595CC754ACA303E7" = {
+"isa" = "PBXContainerItemProxy";
+"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+"proxyType" = 1;
+"remoteGlobalIDString" = "FF0DC9BA250002871F7AABBA";
+"remoteInfo" = "QRCatcherTV";
+};
+"3818F37CE9277D2E6B3F38F7" = {
+"isa" = "PBXTargetDependency";
+"target" = "FF0DC9BA250002871F7AABBA";
+"targetProxy" = "32789FB1595CC754ACA303E7";
+};
+"6BD070F60C70D3515B7C830B" = {
+"isa" = "PBXGroup";
+"children" = ("60E09D74E8DCFDC20544687B");
+"name" = "QRCatcherTVUITests";
+"sourceTree" = "<group>";
+};
+"EB67F5295D757CA30672793B" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherTVUITests";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_TARGET_NAME" = "QRCatcherTV";
+"GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
+"GCC_OPTIMIZATION_LEVEL" = "0";
+"ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
+"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+};
+"name" = "Debug";
+};
+"0C7F9C6CC576E5761D8A6DA1" = {
+"isa" = "XCBuildConfiguration";
+"buildSettings" = {
+"PRODUCT_NAME" = "$(TARGET_NAME)";
+"PRODUCT_BUNDLE_IDENTIFIER" = "100mango.QRCatcherTVUITests";
+"SDKROOT" = "appletvos";
+"SUPPORTED_PLATFORMS" = "appletvos appletvsimulator";
+"TARGETED_DEVICE_FAMILY" = "3";
+"TVOS_DEPLOYMENT_TARGET" = "17.0";
+"SWIFT_VERSION" = "5.0";
+"SWIFT_STRICT_CONCURRENCY" = "targeted";
+"HEADER_SEARCH_PATHS" = ("$(SRCROOT)/QRCatcher","$(SRCROOT)/Shared/Domain","$(SRCROOT)/Shared/Image");
+"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+"CODE_SIGN_STYLE" = "Automatic";
+"GENERATE_INFOPLIST_FILE" = "YES";
+"TEST_TARGET_NAME" = "QRCatcherTV";
+"GCC_OPTIMIZATION_LEVEL" = "s";
+"VALIDATE_PRODUCT" = "YES";
+};
+"name" = "Release";
+};
+"E386A6121EFBB982693702CF" = {
+"isa" = "XCConfigurationList";
+"buildConfigurations" = ("EB67F5295D757CA30672793B","0C7F9C6CC576E5761D8A6DA1");
+"defaultConfigurationIsVisible" = 0;
+"defaultConfigurationName" = "Release";
+};
+"2D0870A3753F97269292732F" = {
+"isa" = "PBXSourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ("DAC1BD2CB18A080F886234A9");
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"F61F048221B9E3C953B6EDF9" = {
+"isa" = "PBXFrameworksBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ();
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"34EA4F2FCEFD28FF7C6F8C01" = {
+"isa" = "PBXResourcesBuildPhase";
+"buildActionMask" = 2147483647;
+"files" = ();
+"runOnlyForDeploymentPostprocessing" = 0;
+};
+"8A78D78D4B02E8028B0F5BC7" = {
+"isa" = "PBXNativeTarget";
+"buildConfigurationList" = "E386A6121EFBB982693702CF";
+"buildPhases" = ("2D0870A3753F97269292732F","F61F048221B9E3C953B6EDF9","34EA4F2FCEFD28FF7C6F8C01");
+"buildRules" = ();
+"dependencies" = ("3818F37CE9277D2E6B3F38F7");
+"name" = "QRCatcherTVUITests";
+"productName" = "QRCatcherTVUITests";
+"productReference" = "41038D20B1C362B229C50216";
+"productType" = "com.apple.product-type.bundle.ui-testing";
+};
 "A51B995684AEC2DD04AF0056" = {
 "isa" = "PBXGroup";
 "children" = ("3F7FE6D81FE1D4F4E799A850","8BB039E5BB6A661CA5324D6D","63A16FE19ADC1BF5FE7BB9C1","01C646F0E5AF845D09D8CA90","6CB481FD30A5283ED0ED6756","63E59C82CD05204687BB042C","DD4A437A43B7B87B21CD1BCC","EB43B61DB5507E17B74C7D07","621B765F72F302A8A52785DA","218C042A865DFC754A67EFC0","A8C5DBBEA6D0633F14A6EB7D","50203320B98AC268A604A143","25DF5EBDD75C418828E50F3B","B3AF088BDD30B4EF1E7D585E","A264F23D1FC6F121534F2DD8","2E65A41D8ECA22C72392C430","1A35FE6FD4E93A0C46DE0FC8","D35798B414237512D8BA4BF0","0ADEE6BD9C641DD592878806","37132CF9D3E5BE31201ED554","F4E535FB1A7F08BA622DA860","72EA1010F30CBBB0DBCCF27A","58B580F8E99AD60233733A00");
@@ -1754,13 +2047,13 @@
 };
 "FBDC4F23F93125BBEEAE800C" = {
 "isa" = "PBXGroup";
-"children" = ("E6FC57C251E9E1BEC1D3C0D2","D54C51E99C8E7070FDC374D9","B58968AD397FA1A20599C9F3","7732347C4E6FB5542BA05AC9","76D4016F6F8E867FCF0ED634","DFC126E48459EB542015F60E","8D75C697CDC63D0DAE4C206A","B6C194F1C3F6CD291D67C9DE","8CD7B1ED5E75F98A1896627B","1CF92F20AF34411459E0E5BF");
+"children" = ("E6FC57C251E9E1BEC1D3C0D2","D54C51E99C8E7070FDC374D9","B58968AD397FA1A20599C9F3","7732347C4E6FB5542BA05AC9","76D4016F6F8E867FCF0ED634","DFC126E48459EB542015F60E","B6C194F1C3F6CD291D67C9DE","8CD7B1ED5E75F98A1896627B","1CF92F20AF34411459E0E5BF","CCCF709AAE10A98399855416","F4E42113417B729E8BCCAB9B","41038D20B1C362B229C50216");
 "name" = "Products";
 "sourceTree" = "<group>";
 };
 "B28B7AF69320201D1CF206EB" = {
 "isa" = "PBXGroup";
-"children" = ("3A2A88DEEFF3D1D23E496597","51650DEF7695728F6DA78822","16678A1132D56F73C968CC5A","0D069BD07DDE7BEE712E9AFD","0F83F19DDE23A5191CDA9A6A","7DE1C2D5DAAD1FDA57F5CE43","E7C61558C5D9D7C77FD230A1","D7760A5FB30FEA0A99650261","DE4CFB18C81E3C8758C5B26E","3941D63FD14289E2F83F88B8","A51B995684AEC2DD04AF0056","FBDC4F23F93125BBEEAE800C");
+"children" = ("3A2A88DEEFF3D1D23E496597","51650DEF7695728F6DA78822","16678A1132D56F73C968CC5A","0D069BD07DDE7BEE712E9AFD","0F83F19DDE23A5191CDA9A6A","7DE1C2D5DAAD1FDA57F5CE43","D7760A5FB30FEA0A99650261","DE4CFB18C81E3C8758C5B26E","3941D63FD14289E2F83F88B8","10BBA79D7C58D3E9F104BA3F","EA4CB8758465B41EC84B701B","6BD070F60C70D3515B7C830B","A51B995684AEC2DD04AF0056","FBDC4F23F93125BBEEAE800C");
 "sourceTree" = "<group>";
 };
 "89E1FD6268CC0F221A2BE178" = {
@@ -1844,7 +2137,7 @@
 "productRefGroup" = "FBDC4F23F93125BBEEAE800C";
 "projectDirPath" = "";
 "projectRoot" = "";
-"targets" = ("7D1043473D55BFA90E8530D3","0DF9EEA0BAD5A55395DB9EC2","636117B25F17DA7E91194E09","347EAD6348E936507920C15D","3C81F7C6893D3FEC9F7E9CD0","7CBE88B41D2B8EF802405470","8A1F13EEB6306358E895F227","625F139D6CCD7576EF3ABD9D","1957662D664C5F6F230ACA31","ADFE9AED13406CAC1A896CA9");
+"targets" = ("7D1043473D55BFA90E8530D3","0DF9EEA0BAD5A55395DB9EC2","636117B25F17DA7E91194E09","347EAD6348E936507920C15D","3C81F7C6893D3FEC9F7E9CD0","7CBE88B41D2B8EF802405470","625F139D6CCD7576EF3ABD9D","1957662D664C5F6F230ACA31","ADFE9AED13406CAC1A896CA9","FF0DC9BA250002871F7AABBA","F1E77D70148607775A35DA3B","8A78D78D4B02E8028B0F5BC7");
 };
 };
 "rootObject" = "98F54143AB4E86B28C3AFEE0";

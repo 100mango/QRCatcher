@@ -135,6 +135,7 @@
             UIButton *button = (UIButton *)control;
             [button layoutIfNeeded];
             CGSize fullTitle = [button.titleLabel sizeThatFits:CGSizeMake(button.titleLabel.bounds.size.width, CGFLOAT_MAX)];
+            NSLog(@"FULL_BUTTON_TITLE_GEOMETRY %@ button=%@ title=%@ measured=%@ font=%f line=%f", identifier, NSStringFromCGRect(button.bounds), NSStringFromCGRect(button.titleLabel.frame), NSStringFromCGSize(fullTitle), button.titleLabel.font.pointSize, button.titleLabel.font.lineHeight);
             XCTAssertGreaterThanOrEqual(button.titleLabel.bounds.size.height + 0.5, fullTitle.height, @"The entire title must fit vertically: %@", button.currentTitle);
             XCTAssertGreaterThanOrEqual(button.titleLabel.bounds.size.width + 0.5, fullTitle.width, @"The entire title must fit horizontally: %@", button.currentTitle);
             XCTAssertTrue(CGRectContainsRect(CGRectInset(button.bounds, -0.5, -0.5), [button.titleLabel convertRect:button.titleLabel.bounds toView:button]), @"Title escaped button bounds: %@", button.currentTitle);

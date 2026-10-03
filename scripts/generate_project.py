@@ -64,7 +64,7 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 # Native macOS executable and supported hosted XCTest/UI routes, independent of the iOS target.
 macID=uid('mac')
-for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing'),('macsandboxunit','QRCatcherMacSandboxTests','bundle.unit-test')]:
+for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing')]:
     app=key=='mac';ext='app' if app else 'xctest'
     product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
     files=[];src=[];res=[];deps=[]
@@ -83,7 +83,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
             variant=add('macvariant:'+localizedName,'PBXVariantGroup',children=[localized],name=localizedName,sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES',MACOSX_DEPLOYMENT_TARGET='14.0')
-        if key in ['macunit','macsandboxunit']:
+        if key=='macunit':
             r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
@@ -122,6 +122,34 @@ for key,name,kind in [('vision','QRCatcherVision','application'),('visionunit','
         deps=[add(key+'dependency','PBXTargetDependency',target=visionID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# Native TV uses PhotoKit and bounded metadata, never the phone SQLite store.
+tvID=uid('tv')
+for key,name,kind in [('tv','QRCatcherTV','application'),('tvunit','QRCatcherTVTests','bundle.unit-test'),('tvui','QRCatcherTVUITests','bundle.ui-testing')]:
+    app=key=='tv';ext='app' if app else 'xctest'
+    product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
+    files=[];src=[];res=[];deps=[]
+    for path in sorted((root/name).glob('*.swift')):
+        r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
+    common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'appletvos','SUPPORTED_PLATFORMS':'appletvos appletvsimulator','TARGETED_DEVICE_FAMILY':'3','TVOS_DEPLOYMENT_TARGET':'17.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
+    if app:
+        common.update(INFOPLIST_FILE='QRCatcherTV/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherTV/QRCatcherTV-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        src+=sharedSources+nativeSharedSources;files+=sharedFiles+nativeSharedFiles
+        for path in ['QRCatcherMac/MacLocalization.swift']:
+            r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
+        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        localized=add('tvlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
+        variant=add('tvvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
+    else:
+        common.update(GENERATE_INFOPLIST_FILE='YES')
+        if key=='tvunit':
+            common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherTV.app/QRCatcherTV',BUNDLE_LOADER='$(TEST_HOST)')
+            for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
+                r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
+        else:common.update(TEST_TARGET_NAME='QRCatcherTV')
+        proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=tvID,remoteInfo='QRCatcherTV')
+        deps=[add(key+'dependency','PBXTargetDependency',target=tvID,targetProxy=proxy)]
+    groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
+    targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 # A file reference has one navigator owner even when several targets compile it.
 from collections import Counter
 counts=Counter(r for group in groups for r in objects[group]['children'])
@@ -157,4 +185,7 @@ visionScheme.write_text(scheme.read_text().replace(uid('app'),uid('vision')).rep
 
 # The sandbox gate uses a separate test bundle and a separate derived-data path.
 sandboxScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMacSandbox.xcscheme'
-sandboxScheme.write_text(macScheme.read_text().replace(uid('macunit'),uid('macsandboxunit')).replace('QRCatcherMacTests','QRCatcherMacSandboxTests'))
+sandboxScheme.write_text(macScheme.read_text().replace(f'<TestableReference skipped="NO">{ref("macunit","QRCatcherMacTests.xctest")}</TestableReference>', ''))
+
+tvScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherTV.xcscheme'
+tvScheme.write_text(scheme.read_text().replace(uid('app'),uid('tv')).replace(uid('unit'),uid('tvunit')).replace(uid('ui'),uid('tvui')).replace('QRCatcherTests','QRCatcherTVTests').replace('QRCatcherUITests','QRCatcherTVUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherTV.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherTV"'))
