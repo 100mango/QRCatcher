@@ -62,18 +62,18 @@ jobs:
         timeout-minutes: 8
         run: |
           set -o pipefail
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath UnitTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath UnitTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
       - name: Run large-phone UI regression tests
         timeout-minutes: 10
         run: |
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Run compact-phone UI regression tests
         timeout-minutes: 10
         run: |
           xcrun simctl shutdown "$SIMULATOR_ID" || true
           xcrun simctl bootstatus "$COMPACT_SIMULATOR_ID" -b
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$COMPACT_SIMULATOR_ID" -only-testing:QRCatcherUITests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath CompactTestResults.xcresult CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$COMPACT_SIMULATOR_ID" -only-testing:QRCatcherUITests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath CompactTestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Analyze application sources
         timeout-minutes: 5
         run: xcodebuild analyze -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
