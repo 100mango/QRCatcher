@@ -126,6 +126,10 @@ jobs:
       - name: Analyze application sources
         timeout-minutes: 5
         run: xcodebuild analyze -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+      - name: Export bounded test screenshot evidence
+        if: always()
+        timeout-minutes: 3
+        run: python3 scripts/export_test_screenshots.py
       - name: Simulator diagnostics
         if: always()
         timeout-minutes: 2

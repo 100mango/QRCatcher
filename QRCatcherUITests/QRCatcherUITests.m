@@ -12,12 +12,49 @@
     NSData *JPEG = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image, 0.55);
     XCTAssertLessThanOrEqual(JPEG.length, 500 * 1024);
     if (JPEG.length > 500 * 1024) return;
-    NSString *base64 = [JPEG base64EncodedStringWithOptions:0];
-    NSLog(@"SCREENSHOT_BEGIN:%@", name);
-    for (NSUInteger index = 0; index < base64.length; index += 4096) {
-        NSLog(@"SCREENSHOT_CHUNK:%@", [base64 substringWithRange:NSMakeRange(index, MIN((NSUInteger)4096, base64.length - index))]);
-    }
-    NSLog(@"SCREENSHOT_END:%@", name);
+    XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:JPEG uniformTypeIdentifier:@"public.jpeg"];
+    attachment.name = name;
+    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
+    // The workflow exports/streams named attachments after XCTest finishes.
+    // Console transport must not consume the app's execution-time allowance.
+}
+- (void)testProductionCameraAllowThenResetAndDeny {
+    self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
+    [self.app resetAuthorizationStatusForResource:XCUIProtectedResourceCamera];
+    __block BOOL handledAllow = NO;
+    id allowMonitor = [self addUIInterruptionMonitorWithDescription:@"Allow camera" handler:^BOOL(XCUIElement *alert) {
+        XCUIElement *allow = alert.buttons[@"Allow"];
+        if (!allow.exists) allow = alert.buttons[@"OK"];
+        if (allow.exists) { [allow tap]; handledAllow = YES; return YES; }
+        return NO;
+    }];
+    [self.app launch]; [self.app tap];
+    NSPredicate *unavailable = [NSPredicate predicateWithFormat:@"label CONTAINS %@", @"No camera is available"];
+    [self expectationForPredicate:unavailable evaluatedWithObject:self.app.staticTexts[@"scan.status"] handler:nil];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+    XCTAssertTrue(handledAllow, @"This must exercise the real system Allow dialog, not a launch argument.");
+    XCTAssertFalse(self.app.buttons[@"scan.settings"].exists);
+    NSLog(@"PRODUCTION_CAMERA_ALLOW_OBSERVED: real system Allow, no simulator capture device");
+    [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
+    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"No camera is available"]);
+    [self.app terminate];
+    XCTAssertTrue([self.app waitForState:XCUIApplicationStateNotRunning timeout:5]);
+    [self removeUIInterruptionMonitor:allowMonitor];
+    [self.app resetAuthorizationStatusForResource:XCUIProtectedResourceCamera];
+    __block BOOL handledDeny = NO;
+    id denyMonitor = [self addUIInterruptionMonitorWithDescription:@"Deny camera after reset" handler:^BOOL(XCUIElement *alert) {
+        XCUIElement *deny = alert.buttons[@"Don’t Allow"];
+        if (!deny.exists) deny = alert.buttons[@"Don't Allow"];
+        if (deny.exists) { [deny tap]; handledDeny = YES; return YES; }
+        return NO;
+    }];
+    [self.app launch]; [self.app tap];
+    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
+    XCTAssertTrue(handledDeny);
+    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);
+    NSLog(@"PRODUCTION_CAMERA_DENY_OBSERVED: real system Deny after protected-resource reset");
+    [self removeUIInterruptionMonitor:denyMonitor];
 }
 - (void)testProductionSceneLaunchWithoutCameraStub {
     self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
@@ -77,6 +114,9 @@
     XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);
 }
 - (void)testScannedTextPersistsAcrossRelaunchAndBackground {
+    // Keep a bounded allowance for this case's two complete app relaunches.
+    // Bulk JPEG transfer now happens after the suite, outside app timing.
+    self.executionTimeAllowance = 180;
     NSString *payload = @"QRCatcher regression text";
     [self launch:@[@"-reset-history", @"-fixture-payload", payload]];
     XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
