@@ -22,7 +22,7 @@ def records(value):
  elif isinstance(value,list):
   for child in value:yield from records(child)
 screenshots=[];warnings=[]
-names=['mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
+names=['mac-system-picker-before-selection','mac-system-picker-after-selection','mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
 # Prefer the stricter sandbox's actual pixels; keep both full structured summaries.
 for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.xcresult','native')]:
  if not pathlib.Path(result,'Info.plist').is_file():

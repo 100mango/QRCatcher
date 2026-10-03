@@ -62,7 +62,15 @@ struct VisionMainView: View {
             switch result { case .success(let url): session.read(url: url); case .failure(let error): session.error = error.localizedDescription }
         }
         .fileExporter(isPresented: Binding(get: { export != nil }, set: { if !$0 { export = nil } }), document: export?.document, contentType: export?.type ?? .png, defaultFilename: export?.filename) { result in
-            switch result { case .success: session.status = QRL("Export completed"); case .failure(let error): session.error = error.localizedDescription }
+            switch result {
+            case .success(let url):
+                #if DEBUG
+                do { try VisionExportTestReceipt.observe(url) }
+                catch { session.error = "Export readback verification failed: \(error.localizedDescription)"; return }
+                #endif
+                session.status = QRL("Export completed")
+            case .failure(let error): session.error = error.localizedDescription
+            }
         }
         .task(id: photo) { await importPhoto() }
         .onDisappear(perform: session.cancel)

@@ -60,15 +60,23 @@ final class QRCatcherTVUITests: XCTestCase {
             print("TV_PHOTOS_PERMISSION_SYSTEM_UI:", system.debugDescription)
         }
     }
-    private func capture(_ name: String) {
+    private func capture(_ name: String, focused target: XCUIElement? = nil) {
+        // Capture the asserted remote-focus state before the system audit visits
+        // accessibility elements and potentially changes focus to the first row.
+        guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { XCTFail("TV screenshot unavailable"); return }
+        XCTAssertLessThanOrEqual(data.count, 800 * 1024)
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg")
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        if let target {
+            let cell = app.descendants(matching: .cell).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            let ownedCell = cell.exists && cell.buttons.count == 1 && cell.buttons[target.identifier].exists
+            XCTAssertTrue(target.hasFocus || ownedCell, "Named focus screenshot must retain the requested real focus owner")
+            print("TV_FOCUS_AT_PIXEL_CHECKPOINT", name, target.debugDescription, cell.exists ? cell.debugDescription : "no focused cell")
+        }
         if name != "tv-failure" {
             do { try app.performAccessibilityAudit(for: .all) { issue in print("TV_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("TV accessibility audit failed: \(error)") }
         }
-        guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { return }
-        XCTAssertLessThanOrEqual(data.count, 800 * 1024)
-        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg")
-        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
     func testActualPhotosDecodeExportVerificationAndOfflineReopen() { realPhotosWorkflow(expectPrompt: true) }
     func testExplicitlyPreconditionedPhotosDecodeExportAndReopen() {
@@ -106,9 +114,9 @@ final class QRCatcherTVUITests: XCTestCase {
         let record = app.buttons["tv.record"].firstMatch
         XCTAssertTrue(record.waitForExistence(timeout: 15))
         capture("tv-history-list")
-        focusAndSelect(record, activate: false); capture("tv-history-focused-record")
+        focusAndSelect(record, activate: false); capture("tv-history-focused-record", focused: record)
         let remove = app.buttons["tv.deleteRecord"].firstMatch
-        focusAndSelect(remove, activate: false); capture("tv-history-focused-delete")
+        focusAndSelect(remove, activate: false); capture("tv-history-focused-delete", focused: remove)
         focusAndSelect(record)
         XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
         capture("tv-reopened-history")

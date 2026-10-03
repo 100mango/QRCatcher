@@ -1,4 +1,5 @@
 import XCTest
+import CoreImage
 import AppKit
 import CryptoKit
 import Security
@@ -132,13 +133,16 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.import"].click()
         fileDialog(path: root.appendingPathComponent("Tests/Fixtures/\(name).png").path, button: "Read QR Code")
     }
-    private func screenshot(_ name: String) throws {
+    private func capturePixels(_ name: String) throws {
         let png = XCUIScreen.main.screenshot().pngRepresentation
         let bitmap = try XCTUnwrap(NSBitmapImageRep(data: png))
         let jpeg = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: 0.55]))
         XCTAssertLessThanOrEqual(jpeg.count, 800 * 1024)
         let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
+    }
+    private func screenshot(_ name: String) throws {
+        try capturePixels(name)
         if name != "mac-failure" {
             try app.performAccessibilityAudit(for: .all) { issue in
                 let detail = String((issue.compactDescription + "\n" + issue.detailedDescription + "\n" + (issue.element?.debugDescription ?? "no issue element")).prefix(20000))
@@ -267,7 +271,54 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.photos"].click()
         print("SYSTEM_PHOTOS_PICKER_UI:", app.debugDescription)
         let image = app.images["PXGGridLayout-Info"].firstMatch
-        XCTAssertTrue(image.waitForExistence(timeout: 15), app.debugDescription); image.click()
+        if image.waitForExistence(timeout: 15) {
+            image.click()
+        } else {
+            // The current OS renders the populated picker in a remote hosted
+            // sheet whose children may not be bridged into the target's AX tree.
+            // Query only actually running, system Photos-picker app identities.
+            let candidates = NSWorkspace.shared.runningApplications.filter {
+                guard let id = $0.bundleIdentifier?.lowercased() else { return false }
+                return id.hasPrefix("com.apple.") && (id.contains("photospicker") || id.contains("photosui"))
+            }.prefix(6)
+            var selected = false
+            for running in candidates {
+                guard let identifier = running.bundleIdentifier else { continue }
+                let picker = XCUIApplication(bundleIdentifier: identifier)
+                print("PHOTOS_PICKER_OBSERVED_PROCESS", identifier, running.processIdentifier,
+                      String(picker.debugDescription.prefix(16000)))
+                let asset = picker.images["PXGGridLayout-Info"].firstMatch
+                if asset.exists && asset.isHittable { asset.click(); selected = true; break }
+            }
+            if !selected {
+                // Pixel-grounded fallback from the retained 9c876a4 screenshot:
+                // one imported QR at (248,242) within a 780×620 system sheet.
+                // Require that exact synthetic single-photo/layout precondition;
+                // do not guess coordinates for another size or populated library.
+                let sheet = app.sheets.firstMatch
+                XCTAssertTrue(sheet.exists, app.debugDescription)
+                XCTAssertEqual(sheet.frame.width, 780, accuracy: 2)
+                XCTAssertEqual(sheet.frame.height, 620, accuracy: 2)
+                XCTAssertEqual(photos.collectionViews["photos_collection_view"].descendants(matching: .any).matching(identifier: "mediaKind_asset").count, 1)
+                try capturePixels("mac-system-picker-before-selection")
+                // Independently decode the currently rendered thumbnail too.
+                // A blank, shifted, or different library must fail before click.
+                let screen = try XCTUnwrap(CIImage(data: XCUIScreen.main.screenshot().pngRepresentation))
+                XCTAssertEqual(screen.extent.width, 1024, accuracy: 1)
+                XCTAssertEqual(screen.extent.height, 768, accuracy: 1)
+                let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode, context: CIContext(), options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+                let visibleCodes = detector.features(in: screen).compactMap { $0 as? CIQRCodeFeature }
+                XCTAssertEqual(visibleCodes.count, 1)
+                let visible = try XCTUnwrap(visibleCodes.first)
+                XCTAssertEqual(visible.messageString, "QRCatcher 你好 🌈 123")
+                let renderedCenter = CGPoint(x: visible.bounds.midX, y: screen.extent.height - visible.bounds.midY)
+                XCTAssertEqual(renderedCenter.x, sheet.frame.minX + 248, accuracy: 15)
+                XCTAssertEqual(renderedCenter.y, sheet.frame.minY + 242, accuracy: 15)
+                print("PHOTOS_PICKER_PIXEL_GROUNDED_SINGLE_ASSET_SELECTION", sheet.frame)
+                sheet.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 248, dy: 242)).click()
+                try capturePixels("mac-system-picker-after-selection")
+            }
+        }
         XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 20), app.debugDescription)
         let payload = app.staticTexts["mac.payload"]
         XCTAssertEqual((payload.value as? String) ?? payload.label, "QRCatcher 你好 🌈 123")

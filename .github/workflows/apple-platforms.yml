@@ -32,6 +32,7 @@ jobs:
         xcodebuild -version
         xcodebuild -version | grep '27A266a'
         test "$(uname -m)" = arm64
+        python3 Tests/Harness/test_ios_launcher.py
         python3 scripts/verify_portable_source.py
         python3 scripts/materialize_qr_fixtures.py
         python3 scripts/materialize_mac_icons.py
@@ -44,6 +45,14 @@ jobs:
 
         python3 scripts/validate_evidence_budget.py --validate-allocation
         git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Verify unsigned native Watch device Release package
+      if: ${{ (matrix.scope == 'watchos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Release -derivedDataPath build/ReleaseWatch -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO | tee release-watch.log
+        python3 scripts/verify_native_release.py Watch
+        python3 scripts/inspect_watch_cpp_compat.py build/ReleaseWatch/Build/Products/Release-watchos/QRCatcherWatch.app
     - name: Build native Mac unsigned Release arm64 and x86_64
       if: ${{ (matrix.scope == 'macos') && (!cancelled()) }}
       timeout-minutes: 10
@@ -183,13 +192,6 @@ jobs:
       if: ${{ (matrix.scope == 'watchos') && (always() && env.WATCH_SIMULATOR_ID != '') }}
       timeout-minutes: 1
       run: xcrun simctl shutdown "$WATCH_SIMULATOR_ID" || true
-    - name: Verify unsigned native Watch device Release package
-      if: ${{ (matrix.scope == 'watchos') && (!cancelled()) }}
-      timeout-minutes: 8
-      run: |
-        set -o pipefail
-        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Release -derivedDataPath build/ReleaseWatch -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO | tee release-watch.log
-        python3 scripts/verify_native_release.py Watch
     - name: Verify unsigned native TV device Release package
       if: ${{ (matrix.scope == 'tvos') && (!cancelled()) }}
       timeout-minutes: 8
@@ -296,10 +298,10 @@ jobs:
       max-parallel: 1
       matrix:
         scope:
+        - watchos
         - macos
         - visionos
         - tvos
-        - watchos
         - iphone_pro
         - iphone_se3
         - ipad_pro

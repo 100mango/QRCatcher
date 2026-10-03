@@ -9,9 +9,10 @@ seen=set()
 for root in roots:
  if not root.is_dir():continue
  for folder,dirs,_ in os.walk(root):
+  if report['visited_directories']>=400:break
   path=Path(folder);depth=len(path.relative_to(root).parts);report['visited_directories']+=1
   dirs[:]=[d for d in dirs if not d.startswith('.') and not (path/d).is_symlink()]
-  if report['visited_directories']>=400 or depth>6:dirs[:]=[];continue
+  if depth>6:dirs[:]=[];continue
   if path.suffix=='.app':
    identifier=None
    try:

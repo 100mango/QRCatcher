@@ -14,14 +14,13 @@ struct WatchRecord: Codable, Identifiable, Equatable {
 }
 private struct WatchArchive: Codable { let version: Int; var records: [WatchRecord] }
 enum WatchStoreError: LocalizedError {
-    case invalidImage, imageLimit, archiveFull, invalidArchive, unavailable, noQR
+    case invalidImage, imageLimit, archiveFull, invalidArchive, noQR
     var errorDescription: String? {
         switch self {
         case .invalidImage: return NSLocalizedString("This photo could not be read.", comment: "")
         case .imageLimit: return NSLocalizedString("Choose a photo up to 8 MB and 40 megapixels.", comment: "")
         case .archiveFull: return NSLocalizedString("The Watch collection is full. Remove a local item before importing another; existing items were kept.", comment: "")
         case .invalidArchive: return NSLocalizedString("The saved Watch collection could not be read. Its original file has been kept.", comment: "")
-        case .unavailable: return NSLocalizedString("Local QR photo reading requires watchOS 27. You can request processing on your paired iPhone.", comment: "")
         case .noQR: return NSLocalizedString("No QR code was found. Try a clearer photo.", comment: "")
         }
     }

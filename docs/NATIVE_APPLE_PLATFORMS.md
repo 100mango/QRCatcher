@@ -247,3 +247,46 @@ arm64_32 load/runtime still require the exact Apple CI candidate.
 The Watch app is not yet embedded in the iOS product; a combined unsigned
 companion packaging gate remains after native Watch compilation/runtime stabilizes.
 No App Store platform, App ID, or persistent signing resource has been created.
+
+## 9c876a4 runtime checkpoint
+
+The exact portable candidate has passed all 21 Mac hosted tests, including the
+production C ABI/CoreGraphics bridge with independent Unicode/ECI/rotation/multiple
+fixtures and callback cancellation. Mac Release arm64/x86_64 builds and icon checks
+pass. The Mac sandbox row remains red: the root label is fixed, but six unsuppressed
+audits now identify the sidebar hosting pane; the genuine system Photos library
+and populated picker render correctly while its app-scoped AX query fails.
+
+Vision is green: 7 hosted tests and real Photos import, Unicode decode, copy,
+history selection and process-relaunch UI passed with unsuppressed audits and
+two successful held simctl screenshots. Both actual spatial images were inspected.
+The unsigned Vision device Release identity/minimum 1.0/icon/privacy checks passed.
+The next candidate adds actual system Files exports plus independently checked
+readback receipts; that additional workflow is not yet qualified.
+
+TV passed all 4 hosted tests, actual system Photos authorization, local QR import,
+PhotoKit export/refetch verification, history/relaunch, remote focus navigation,
+policy, Chinese UI and revoked-Photos recovery. Release packaging passed. Its
+evidence step intentionally failed because five named screenshots exceeded the
+reserved cap. A screenshot taken after the accessibility audit no longer retained
+the intended focused row, so focused text-color proof remains open. The successor
+captures before the audit and compresses the complete TV frame within the same cap.
+
+Watch executed zero runtime tests on this head: Swift failed to diagnose the generic
+queued-cancellation continuation. The narrow repair adds the explicit Void/Error
+continuation type. The successor puts generic Watch Release compilation, strict
+SDK availability diagnostics, per-slice minima and bounded linked-libc++ inventory
+first in the existing single-runner matrix. An actual older Watch launch remains
+separate from current-SDK compilation and static symbol inspection.
+
+The same head's Pro Max and SE3 UI lanes executed zero tests because the new
+optional empty Bash array was unbound under macOS Bash 3.2 with nounset. The Pro
+Max's 16 hosted tests passed. The 13-inch iPad successfully seeded its real QR
+photo, then hit that same shell issue before UI execution. The successor uses
+an always-populated command array, with isolated command-routing tests for phone,
+seeded iPad and failed-seed iPad branches on the actual runner's Bash. These shell
+tests are explicitly command doubles, not app-runtime evidence.
+
+Native Vision/Watch audits currently cover normal runtime text size. A system
+Settings text-size route has not yet been established; forced SwiftUI environment
+layout stress will not be presented as a real system preference change.

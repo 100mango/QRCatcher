@@ -33,6 +33,7 @@ struct MacMainView: View {
                     else { Text("\(history.items.count) saved on this Mac") }
                 }.font(.caption).foregroundStyle(.secondary).padding()
             }
+            .background(MacPaneAccessibility(label: QRL("Saved QR history"), identifier: "mac.pane.history"))
             .navigationTitle("History")
             .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 380)
         } detail: {
@@ -49,6 +50,7 @@ struct MacMainView: View {
                 }
                 QRResultView(workspace: workspace, historyError: history.error)
             }
+                .background(MacPaneAccessibility(label: QRL("QR Result"), identifier: "mac.pane.result"))
                 .background(targeted ? Color.accentColor.opacity(0.08) : Color.clear)
                 .onDrop(of: [UTType.fileURL, UTType.image], isTargeted: $targeted, perform: workspace.dropped)
         }

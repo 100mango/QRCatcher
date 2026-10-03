@@ -1,7 +1,6 @@
 "Read QR Photo" = "识别二维码照片";
 "Reading photo…" = "正在读取照片…";
 "Choose a QR photo. Saved photos and results stay available offline on this Watch." = "选择二维码照片。保存的照片和识别结果可在这块手表上离线查看。";
-"Local reading requires watchOS 27. Choose a photo, then request processing on iPhone." = "本地识别需要 watchOS 27。你可以选择照片，然后请求配对的 iPhone 处理。";
 "Photo awaiting iPhone" = "等待 iPhone 识别的照片";
 "Privacy Policy" = "隐私政策";
 "OK" = "好";
@@ -25,7 +24,6 @@
 "Choose a photo up to 8 MB and 40 megapixels." = "请选择不超过 8 MB、4000 万像素的照片。";
 "The Watch collection is full. Remove a local item before importing another; existing items were kept." = "手表收藏空间已满。请移除一条本地记录后再导入；已有记录均已保留。";
 "The saved Watch collection could not be read. Its original file has been kept." = "无法读取手表收藏。原始文件已保留。";
-"Local QR photo reading requires watchOS 27. You can request processing on your paired iPhone." = "本地二维码照片识别需要 watchOS 27。你可以请求配对的 iPhone 处理。";
 "No QR code was found. Try a clearer photo." = "未发现二维码。请尝试更清晰的照片。";
 "Open QRCatcher on your paired iPhone, then try again." = "请先在配对的 iPhone 上打开 QRCatcher，然后重试。";
 "Waiting for paired iPhone. Keep both apps installed; delivery may happen later." = "正在等待配对的 iPhone。请保留两端应用，传输可能稍后完成。";
@@ -37,6 +35,6 @@
 "iPhone could not read a QR code. Existing results and the saved photo were kept." = "iPhone 未能识别二维码。已有结果和保存的照片均已保留。";
 
 "This QR photo could not be decoded. Its existing saved data was kept." = "无法识别此二维码照片。已有保存数据已保留。";
-"Open Source Licenses" = "开源许可";
 
 "Licenses" = "开源许可";
+"Saved QR photo" = "已保存的二维码照片";

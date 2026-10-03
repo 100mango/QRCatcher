@@ -71,7 +71,7 @@ def portable_sources(files,src,common):
     for p in portablePaths:
         kind='sourcecode.swift' if p.endswith('.swift') else ('sourcecode.cpp.cpp' if p.endswith('.cpp') else 'sourcecode.c.c')
         r=file(p,kind);files.append(r);src.append(build(r))
-    common.update(CLANG_CXX_LANGUAGE_STANDARD='c++20',OTHER_CPLUSPLUSFLAGS=['$(inherited)','-DZXING_INTERNAL','-DZUECI_EMBED_NO_TO_ECI'],OTHER_CFLAGS=['$(inherited)','-DZUECI_EMBED_NO_TO_ECI'],OTHER_LDFLAGS=['$(inherited)','-lc++'])
+    common.update(CLANG_CXX_LANGUAGE_STANDARD='c++20',OTHER_CPLUSPLUSFLAGS=['$(inherited)','-DZXING_INTERNAL','-DZUECI_EMBED_NO_TO_ECI','-Werror=unguarded-availability','-Werror=unguarded-availability-new'],OTHER_CFLAGS=['$(inherited)','-DZUECI_EMBED_NO_TO_ECI'],OTHER_LDFLAGS=['$(inherited)','-lc++'])
     common['HEADER_SEARCH_PATHS']=common.get('HEADER_SEARCH_PATHS',[])+['$(SRCROOT)/Shared/PortableQR','$(SRCROOT)/ThirdParty/ZXingCpp/src','$(SRCROOT)/ThirdParty/ZXingCpp/Config']
 
 # Native macOS executable and supported hosted XCTest/UI routes, independent of the iOS target.

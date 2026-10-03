@@ -28,16 +28,31 @@ final class QRCatcherVisionUITests: XCTestCase {
         let request = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcher-capture-" + id + ".json")
         let ack = request.deletingPathExtension().appendingPathExtension("ack")
         do {
-            let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name])
+            let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name, "test_store": app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] ?? ""])
             try descriptor.write(to: request, options: .atomic)
             print("QRCATCHER_VISION_CAPTURE_REQUEST:" + id); fflush(stdout)
-            let deadline = Date().addingTimeInterval(60)
+            let deadline = Date().addingTimeInterval(100)
             while Date() < deadline && !FileManager.default.fileExists(atPath: ack.path) { Thread.sleep(forTimeInterval: 0.2) }
             let result = try JSONSerialization.jsonObject(with: Data(contentsOf: ack)) as? [String: Any]
             XCTAssertEqual(result?["id"] as? String, id)
             XCTAssertEqual(result?["success"] as? Bool, true, "Held simulator checkpoint failed: \(String(describing: result))")
         } catch { XCTFail("Held simulator capture acknowledgement: \(error)") }
         try? FileManager.default.removeItem(at: request); try? FileManager.default.removeItem(at: ack)
+    }
+    private func saveUsingSystemFileExporter(_ button: String, name: String, checkpoint: String) {
+        app.buttons[button].tap()
+        // These identifiers were observed in the native SDK 27 document picker.
+        let filename = app.textFields["DOCPicker.filenameTextField"]
+        XCTAssertTrue(filename.waitForExistence(timeout: 20), app.debugDescription)
+        filename.tap()
+        if let value = filename.value as? String, !value.isEmpty { filename.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count)) }
+        filename.typeText(name)
+        let save = app.buttons["DOCPicker.actionButton"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(save.isEnabled, app.debugDescription); save.tap()
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Export completed"), object: app.staticTexts["vision.status"])
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 20), .completed, app.debugDescription)
+        capture(checkpoint) // Host independently verifies bytes read from the saved URL.
     }
     func testRealPhotosImportCopyAndReopen() {
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
@@ -56,5 +71,10 @@ final class QRCatcherVisionUITests: XCTestCase {
         XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
         XCTAssertTrue(app.buttons["vision.exportQR"].waitForExistence(timeout: 5))
         capture("vision-reopened-history")
+        saveUsingSystemFileExporter("vision.exportQR", name: "QRCatcher Synthetic QR", checkpoint: "vision-exported-qr")
+        // Copy resets the status, so a prior successful save cannot satisfy the
+        // second completion assertion before that system exporter actually ends.
+        app.buttons["vision.copy"].tap()
+        saveUsingSystemFileExporter("vision.exportHistory", name: "QRCatcher Synthetic History", checkpoint: "vision-exported-history")
     }
 }

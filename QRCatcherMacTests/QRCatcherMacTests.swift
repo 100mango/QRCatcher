@@ -2,6 +2,7 @@ import XCTest
 import CoreData
 import AppKit
 import UniformTypeIdentifiers
+import SwiftUI
 @testable import QRCatcherMac
 
 @MainActor
@@ -11,6 +12,28 @@ final class QRCatcherMacTests: QRManagedStoreTestCase {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         cleanupLater(url)
         return url
+    }
+
+    func testActualNativeSplitPaneLabelsPreserveAccessibleChildren() async throws {
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let workspace = MacWorkspace(history: history)
+        let host = NSHostingView(rootView: MacMainView(workspace: workspace, history: history).frame(minWidth: 760, minHeight: 520))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
+                              styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        for _ in 0..<20 {
+            host.layoutSubtreeIfNeeded()
+            if descendants(host).filter({ $0.accessibilityIdentifier()?.hasPrefix("mac.pane.") == true }).count == 2 { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        for (identifier, label) in [("mac.pane.history", "Saved QR history"), ("mac.pane.result", "QR Result")] {
+            let pane = try XCTUnwrap(descendants(host).first { $0.accessibilityIdentifier() == identifier })
+            XCTAssertTrue(pane.superview is NSSplitView)
+            XCTAssertEqual(pane.accessibilityLabel(), QRL(label))
+            XCTAssertFalse((pane.accessibilityChildren() ?? []).isEmpty, "Semantic labels must preserve pane children")
+        }
     }
 
     func testSafePayloadPolicy() {

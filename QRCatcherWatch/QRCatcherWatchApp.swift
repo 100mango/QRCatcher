@@ -66,7 +66,7 @@ private struct WatchCollectionContent: View {
                 if history.records.isEmpty { Text("Choose a QR photo. Saved photos and results stay available offline on this Watch.") }
                 ForEach(history.records) { record in
                     NavigationLink { WatchRecordView(model: model, history: history, phone: phone, id: record.id) } label: {
-                        VStack(alignment: .leading) { Text(record.payloads.first ?? String(localized: "Photo awaiting iPhone")).lineLimit(3); Text(record.createdAt, style: .date).font(.caption2) }
+                        VStack(alignment: .leading) { Text(record.payloads.first ?? (record.phoneState == "pending" ? String(localized: "Photo awaiting iPhone") : String(localized: "Saved QR photo"))).lineLimit(3); Text(record.createdAt, style: .date).font(.caption2) }
                     }.accessibilityIdentifier("watch.record")
                 }
                 NavigationLink("Privacy Policy") {

@@ -9,7 +9,7 @@ setup=pathlib.Path('build/ios-platform-setup.json')
 if setup.exists():
  data=setup.read_bytes();assert len(data)<16384;(out/setup.name).write_bytes(data)
 for path in pathlib.Path('build/vision-runtime').glob('*'):
- if path.is_file() and path.suffix in {'.json','.jpg','.log'}:
+ if path.is_file() and path.suffix in {'.json','.jpg','.log','.png'}:
   data=path.read_bytes();assert len(data)<=800*1024;(out/('vision-'+path.name)).write_bytes(data)
 for path in pathlib.Path('build/watch-runtime').glob('*'):
  if path.is_file():
@@ -43,9 +43,16 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   if not name or 'accessibility' in text:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=path.read_bytes()
+  source_bytes=len(data)
   if data.startswith(b'\x89PNG'):
    converted=path.with_suffix('.bounded.jpg')
    subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','55','-Z','1440',str(path),'--out',str(converted)],check=True,capture_output=True)
+   data=converted.read_bytes()
+  elif label.startswith('apple-tv') and data.startswith(b'\xff\xd8'):
+   # Preserve the whole actual TV frame, but bound its long edge so the enlarged
+   # focus/localization/policy set fits this platform's fixed artifact allocation.
+   converted=path.with_suffix('.bounded.jpg')
+   subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','50','-Z','1920',str(path),'--out',str(converted)],check=True,capture_output=True,timeout=30)
    data=converted.read_bytes()
   assert data.startswith(b'\xff\xd8') and len(data)<=800*1024,'Invalid or oversized synthetic screenshot'
   filename=f'{label}-{name}-{len(summary["screenshots"])+1}.jpg'
@@ -54,7 +61,7 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   if used+len(data)>limit-512*1024 or len(summary['screenshots'])>=28:
    summary['omitted'].append({'name':filename,'reason':'bounded evidence cap'});print('OMITTED_AT_CAP',filename,flush=True);continue
   (out/filename).write_bytes(data)
-  item={'name':filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};summary['screenshots'].append(item);print(json.dumps(item),flush=True)
+  item={'name':filename,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()};summary['screenshots'].append(item);print(json.dumps(item),flush=True)
 (out/'manifest.json').write_text(json.dumps(summary,indent=2)+'\n')
 size=sum(p.stat().st_size for p in out.iterdir())
 mac=sum(p.stat().st_size for p in pathlib.Path('build/mac-evidence').glob('*') if p.is_file())

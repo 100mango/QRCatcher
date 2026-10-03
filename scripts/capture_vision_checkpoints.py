@@ -20,7 +20,25 @@ while time.monotonic()<deadline:
    request=container/'tmp'/('QRCatcher-capture-'+request_id+'.json');ack=request.with_suffix('.ack')
    assert not request.is_symlink() and request.stat().st_size<1024
    descriptor=json.loads(request.read_text());name=descriptor['name']
-   assert descriptor['id']==request_id and name in ['vision-imported-qr','vision-reopened-history','vision-failure']
+   assert descriptor['id']==request_id and name in ['vision-imported-qr','vision-reopened-history','vision-exported-qr','vision-exported-history','vision-failure']
+   if name in ['vision-exported-qr','vision-exported-history']:
+    test_store=descriptor['test_store'];assert str(uuid.UUID(test_store)).upper()==test_store
+    app_container=Path(subprocess.check_output(['xcrun','simctl','get_app_container',udid,'100mango.QRCatcher','data'],text=True,timeout=20).strip())
+    receipts=app_container/'Documents/QRCatcherExportTestReceipts'/test_store
+    kind='png' if name=='vision-exported-qr' else 'json'
+    receipt_file=receipts/(kind+'.json');saved=receipts/('saved.'+kind)
+    assert not receipt_file.is_symlink() and receipt_file.stat().st_size<2048
+    receipt=json.loads(receipt_file.read_text());assert receipt['test_store']==test_store and receipt['type']==kind
+    assert not saved.is_symlink() and 0<saved.stat().st_size<=2*1024*1024
+    saved_bytes=saved.read_bytes();assert len(saved_bytes)==receipt['bytes'] and hashlib.sha256(saved_bytes).hexdigest()==receipt['sha256']
+    if kind=='png':
+     subprocess.run(['xcrun','swift','scripts/verify_vision_export_pixels.swift',str(saved)],check=True,timeout=30)
+    else:
+     history=json.loads(saved_bytes);assert history['format']=='QRCatcher.history' and history['version']==1
+     assert len(history['records'])==1 and history['records'][0]['payload']=='QRCatcher 你好 🌈 123'
+    assert len(saved_bytes)<128*1024,'Synthetic output evidence exceeded its separate cap'
+    (out/('actual-export.'+kind)).write_bytes(saved_bytes)
+    row['actual_export_readback']=receipt
    row['checkpoint']=name;raw=out/(request_id+'.raw.png');jpeg=out/(name+'.jpg')
    # simctl can write complete pixels before its process times out. Preserve a
    # valid bounded image as evidence, while keeping that command/ACK gate red.
