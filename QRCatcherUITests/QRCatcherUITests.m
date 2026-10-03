@@ -42,7 +42,7 @@
     XCTAssertTrue(privacy.hittable);
     XCTAssertEqualObjects(privacy.label, @"Privacy Policy");
     [privacy tap];
-    XCUIElement *done = self.app.buttons[@"Done"];
+    XCUIElement *done = self.app.buttons[@"Close"];
     XCTAssertTrue([done waitForExistenceWithTimeout:15]);
     NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
     [self logSyntheticScreenshot:@"privacy-open-diagnostic"];

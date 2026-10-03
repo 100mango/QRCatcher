@@ -89,6 +89,13 @@ jobs:
           pathlib.Path('build/embedded-frameworks.json').write_text(text+'\n')
           print('Embedded framework inventory: '+text)
           PYINVENTORY
+      - name: Warm up large-phone simulator
+        timeout-minutes: 6
+        run: |
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl spawn "$SIMULATOR_ID" launchctl print system >/dev/null
+          xcodebuild -project QRCatcher.xcodeproj -scheme QRCatcher -showdestinations
       - name: Build and run unit regression tests
         timeout-minutes: 12
         run: |
@@ -99,11 +106,16 @@ jobs:
         run: |
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Warm up compact-phone simulator
+        timeout-minutes: 6
+        run: |
+          xcrun simctl shutdown "$SIMULATOR_ID" || true
+          xcrun simctl boot "$COMPACT_SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$COMPACT_SIMULATOR_ID" -b
+          xcrun simctl spawn "$COMPACT_SIMULATOR_ID" launchctl print system >/dev/null
       - name: Run compact-phone UI regression tests
         timeout-minutes: 10
         run: |
-          xcrun simctl shutdown "$SIMULATOR_ID" || true
-          xcrun simctl bootstatus "$COMPACT_SIMULATOR_ID" -b
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$COMPACT_SIMULATOR_ID" -only-testing:QRCatcherUITests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath CompactTestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Analyze application sources
         timeout-minutes: 5

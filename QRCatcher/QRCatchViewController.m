@@ -22,6 +22,7 @@
 @property (atomic) BOOL ready;
 @property (atomic) BOOL wantsCamera;
 @property (nonatomic) BOOL hasResult;
+@property (nonatomic) BOOL privacyPolicyPresented;
 @property (nonatomic) BOOL appliedFixture;
 @property (nonatomic, copy) NSString *payload;
 @end
@@ -168,8 +169,13 @@
     self.settingsButton.hidden = !denied;
     [self.ripple removeAllAnimations];
 }
+- (void)setPrivacyPolicyPresented:(BOOL)presented {
+    _privacyPolicyPresented = presented;
+    if (!self.isViewLoaded) return;
+    if (presented) [self pauseCamera]; else [self resumeCamera];
+}
 - (void)resumeCamera {
-    if (!self.visible || self.hasResult) return;
+    if (!self.visible || self.hasResult || self.privacyPolicyPresented) return;
 #if DEBUG
     // Hosted unit tests do not exercise camera hardware. Avoid a system permission
     // alert competing with the separate UI-test runner's automation session.
@@ -260,7 +266,7 @@
     });
 }
 - (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection {
-    if (!self.visible || self.hasResult || !self.wantsCamera) return;
+    if (!self.visible || self.hasResult || self.privacyPolicyPresented || !self.wantsCamera) return;
     for (AVMetadataObject *object in metadataObjects) {
         if ([object.type isEqualToString:AVMetadataObjectTypeQRCode] && [object isKindOfClass:AVMetadataMachineReadableCodeObject.class]) {
             [self handlePayload:((AVMetadataMachineReadableCodeObject *)object).stringValue];
