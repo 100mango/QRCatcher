@@ -166,7 +166,7 @@
     [self.ripple removeAllAnimations];
 }
 - (void)resumeCamera {
-    if (!self.visible || self.hasResult || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+    if (!self.visible || self.hasResult) return;
 #if DEBUG
     // Hosted unit tests do not exercise camera hardware. Avoid a system permission
     // alert competing with the separate UI-test runner's automation session.
@@ -180,6 +180,7 @@
         return;
     }
 #endif
+    if (self.view.window.windowScene.activationState != UISceneActivationStateForegroundActive) return;
     AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
     if (status == AVAuthorizationStatusNotDetermined) {
         __weak typeof(self) weakSelf = self;
