@@ -14,6 +14,10 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     private var lastFrame = CMTime.zero
     private var observers: [NSObjectProtocol] = []
     private var acceptsFrames = false
+    // deliveryID belongs to the main queue; activeDeliveryID belongs to the capture queue.
+    // A queued frame must never outlive a stop, source change, dismissal or interruption.
+    private var deliveryID = UUID()
+    private var activeDeliveryID = UUID()
 
     private static func discoverDevices() -> [AVCaptureDevice] {
         let types: [AVCaptureDevice.DeviceType]
@@ -45,17 +49,19 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             status = "No camera is available. Connect a camera, or import an image instead."
             return
         }
+        deliveryID = UUID()
+        let delivery = deliveryID
         status = "Preparing camera…"
         queue.async {
             self.generation += 1
             let token = self.generation
             switch AVCaptureDevice.authorizationStatus(for: .video) {
-            case .authorized: self.configure(device: device, token: token)
+            case .authorized: self.configure(device: device, token: token, delivery: delivery)
             case .notDetermined:
                 AVCaptureDevice.requestAccess(for: .video) { granted in
                     self.queue.async {
                         guard token == self.generation else { return }
-                        if granted { self.configure(device: device, token: token) }
+                        if granted { self.configure(device: device, token: token, delivery: delivery) }
                         else { self.publish("Camera access was denied. You can enable it in System Settings > Privacy & Security > Camera, or import an image.", running: false) }
                     }
                 }
@@ -65,6 +71,7 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     }
 
     func stop(message: String = "Camera stopped") {
+        deliveryID = UUID()
         queue.async {
             self.generation += 1
             self.acceptsFrames = false
@@ -73,7 +80,7 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         }
     }
 
-    private func configure(device: AVCaptureDevice, token: Int) {
+    private func configure(device: AVCaptureDevice, token: Int, delivery: UUID) {
         guard token == generation else { return }
         if session.isRunning { session.stopRunning() }
         session.beginConfiguration()
@@ -93,6 +100,7 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
             output.setSampleBufferDelegate(self, queue: queue)
             session.commitConfiguration()
+            activeDeliveryID = delivery
             acceptsFrames = true; lastFrame = .zero
             session.startRunning()
             publish("Point the camera at a QR code. Nothing opens automatically.", running: session.isRunning)
@@ -116,11 +124,15 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         guard !values.isEmpty else { return }
         acceptsFrames = false
         let token = generation
+        let delivery = activeDeliveryID
         // Never call stopRunning synchronously from within the output callback.
         queue.async {
             guard token == self.generation else { return }
             self.session.stopRunning()
-            DispatchQueue.main.async { self.running = false; self.onRead?(values) }
+            DispatchQueue.main.async {
+                guard self.deliveryID == delivery else { return }
+                self.running = false; self.onRead?(values)
+            }
         }
     }
 }

@@ -88,6 +88,7 @@ final class QRCatcherMacTests: XCTestCase {
         try data.write(to: url)
         let history = MacHistory(url: url)
         XCTAssertNotNil(history.error)
+        XCTAssertThrowsError(try history.exportData())
         let workspace = MacWorkspace(history: history)
         workspace.accept(["Safe copy after storage error"])
         XCTAssertEqual(workspace.payload, "Safe copy after storage error")

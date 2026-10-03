@@ -26,14 +26,14 @@
 + (NSArray<NSString *> *)decodeImageData:(NSData *)data error:(NSError **)error {
     if (data.length == 0 || data.length > 50 * 1024 * 1024) {
         if (error) *error = [NSError errorWithDomain:@"QRCatcher.Image" code:1 userInfo:@{NSLocalizedDescriptionKey:@"Choose an image smaller than 50 MB."}];
-        return @[];
+        return nil;
     }
     CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
     CGImageRef image = source ? CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)@{(id)kCGImageSourceCreateThumbnailFromImageAlways:@YES, (id)kCGImageSourceCreateThumbnailWithTransform:@YES, (id)kCGImageSourceThumbnailMaxPixelSize:@4096, (id)kCGImageSourceShouldCacheImmediately:@YES}) : nil;
     if (source) CFRelease(source);
     if (!image) {
         if (error) *error = [NSError errorWithDomain:@"QRCatcher.Image" code:2 userInfo:@{NSLocalizedDescriptionKey:@"This file could not be read as an image."}];
-        return @[];
+        return nil;
     }
     NSArray *results = [self payloadsInCGImage:image];
     CGImageRelease(image);

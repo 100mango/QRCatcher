@@ -82,8 +82,11 @@ final class MacHistory: ObservableObject {
     }
 
     func exportData() throws -> Data {
+        guard error == nil else {
+            throw NSError(domain: "QRCatcher.History", code: 2, userInfo: [NSLocalizedDescriptionKey: "History is unavailable. Export the current QR result instead; your saved data has not been erased."])
+        }
         // Export all records in displayed order, including null legacy values, without deduplication.
-        try JSONSerialization.data(withJSONObject: ["format": "QRCatcher.history", "version": 1,
+        return try JSONSerialization.data(withJSONObject: ["format": "QRCatcher.history", "version": 1,
             "records": items.map(\.exportValue)], options: [.prettyPrinted, .sortedKeys])
     }
 }
