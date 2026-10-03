@@ -83,6 +83,12 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         deps=[add(key+'dependency','PBXTargetDependency',target=macID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# A file reference has one navigator owner even when several targets compile it.
+from collections import Counter
+counts=Counter(r for group in groups for r in objects[group]['children'])
+commonRefs=[r for r,n in counts.items() if n>1]
+for group in groups:objects[group]['children']=[r for r in objects[group]['children'] if counts[r]==1]
+groups.append(add('sharedgroup','PBXGroup',children=commonRefs,name='Shared sources and test fixtures',sourceTree='<group>'))
 productsID=add('products','PBXGroup',children=products,name='Products',sourceTree='<group>')
 main=add('main','PBXGroup',children=groups+[productsID],sourceTree='<group>')
 projectSettings={'CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','CLANG_WARN_BOOL_CONVERSION':'YES','CLANG_WARN_CONSTANT_CONVERSION':'YES','CLANG_WARN_ENUM_CONVERSION':'YES','CLANG_WARN_INT_CONVERSION':'YES','CLANG_WARN_OBJC_ROOT_CLASS':'YES_ERROR','GCC_WARN_ABOUT_RETURN_TYPE':'YES_ERROR','GCC_WARN_UNUSED_VARIABLE':'YES','IPHONEOS_DEPLOYMENT_TARGET':'15.0','SDKROOT':'iphoneos','ENABLE_USER_SCRIPT_SANDBOXING':'YES','GCC_C_LANGUAGE_STANDARD':'gnu11','CLANG_CXX_LANGUAGE_STANDARD':'gnu++17','DEBUG_INFORMATION_FORMAT':'dwarf-with-dsym'}

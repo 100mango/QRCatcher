@@ -5,7 +5,7 @@ import CoreImage
 /// Actual video frames use the same QR decoder as imported images. No simulator substitution.
 final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published private(set) var status = "Choose Start Camera when you are ready."
-    @Published private(set) var devices = AVCaptureDevice.devices(for: .video)
+    @Published private(set) var devices = MacCamera.discoverDevices()
     @Published private(set) var running = false
     let session = AVCaptureSession()
     var onRead: (([String]) -> Void)?
@@ -15,12 +15,19 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
     private var observers: [NSObjectProtocol] = []
     private var acceptsFrames = false
 
+    private static func discoverDevices() -> [AVCaptureDevice] {
+        let types: [AVCaptureDevice.DeviceType]
+        if #available(macOS 14.0, *) { types = [.builtInWideAngleCamera, .external, .continuityCamera] }
+        else { types = [.builtInWideAngleCamera, .externalUnknown] }
+        return AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video, position: .unspecified).devices
+    }
+
     override init() {
         super.init()
         for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
-                self.devices = AVCaptureDevice.devices(for: .video)
+                self.devices = Self.discoverDevices()
                 self.stop(message: "Camera connection changed. Choose a camera and start again.")
             })
         }

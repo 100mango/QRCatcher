@@ -9,7 +9,7 @@ struct HistoryItem: Identifiable {
     var text: String { payload ?? "(Empty legacy record)" }
     var webURL: URL? { payload.flatMap { QRPayload.safeWebURL($0) } }
     var exportValue: [String: Any] {
-        QRHistoryValue(identifier: id, payload: payload, createdAt: createdAt).exportValue()
+        QRHistoryValue(identifier: id, payload: payload, createdAt: createdAt).export()
     }
 }
 
