@@ -168,6 +168,12 @@
 - (void)resumeCamera {
     if (!self.visible || self.hasResult || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
 #if DEBUG
+    // Hosted unit tests do not exercise camera hardware. Avoid a system permission
+    // alert competing with the separate UI-test runner's automation session.
+    if (NSClassFromString(@"XCTestCase") != nil) {
+        [self.ripple removeAllAnimations];
+        return;
+    }
     NSArray *args = NSProcessInfo.processInfo.arguments;
     if ([args containsObject:@"-ui-testing"]) {
         [self showCameraUnavailable:[args containsObject:@"-camera-denied"]];

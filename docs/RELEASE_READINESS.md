@@ -2,7 +2,7 @@
 
 ## Identity and retained functionality
 
-- Original App Store ID: **993170818** (historical README evidence; current App Store Connect record still requires verification)
+- Original App Store ID: **993170818** (historical README evidence and App Store Connect account check on 2026-10-03)
 - Bundle identifier: **100mango.QRCatcher**, unchanged
 - Native Objective-C app: QR camera scanning/decoding, text results, web links, persistent scan history, history selection and swipe deletion
 - Original scanning artwork, tab icons and ripple animation retained; native safe-area layout, Dynamic Type, Reduce Motion and labelled controls replace device-size assumptions
@@ -51,7 +51,7 @@ Permission states are injected for determinism because simulator camera hardware
 3. Upgrade archived published build; validate old history, delete/add/relaunch and failure recovery; retain a backup before migration checks
 4. Test supported oldest iOS on physical hardware or available compatible simulator; VoiceOver, Reduce Motion, large text, small and large phone layouts
 5. Obtain an original high-resolution **1024×1024 marketing icon**. The repository's largest existing icon is only 180×180; an upscaled copy is not an original high-resolution source
-6. Verify App Store Connect ownership, current released version/build, signing team, current privacy declarations, support/privacy-policy URLs, screenshots, export-compliance answers and review notes. Proposed version 1.1/build 2 are placeholders until checked against the live record
+6. Verify App Store Connect ownership, current released version/build, signing team, current privacy declarations, support/privacy-policy URLs, screenshots, export-compliance answers and review notes. The App Store Connect account check on 2026-10-03 confirmed the existing release is version 1.0/build 1; candidate version 1.1/build 2 is higher, and must be rechecked immediately before upload
 7. Review the privacy manifest against the final binary. Current app has no tracking, network SDK or collected data, and declares no directly used required-reason APIs; all scan history remains local. Opening a chosen website exposes that request to the destination/browser
 8. Sign/archive/upload only through explicitly authorized Apple account access. Resolve agreements/credentials through the account owner. Keep this PR in draft and do not merge/publish without release approval
 

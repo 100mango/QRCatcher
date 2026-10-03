@@ -45,15 +45,8 @@ jobs:
               f.write('SIMULATOR_ID='+d['udid']+'\n')
               f.write('COMPACT_SIMULATOR_ID='+compact['udid']+'\n')
           PY
-      - name: Build and run unit and UI regression tests
-        run: |
-          set -o pipefail
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
-      - name: Run compact-phone UI regression tests
-        run: |
-          xcrun simctl shutdown "$SIMULATOR_ID" || true
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$COMPACT_SIMULATOR_ID" -only-testing:QRCatcherUITests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath CompactTestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Build unsigned device Release and verify identity
+        timeout-minutes: 8
         run: |
           xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/DerivedData -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
           APP=build/DerivedData/Build/Products/Release-iphoneos/QRCatcher.app
@@ -65,21 +58,42 @@ jobs:
           if grep -E -- '-ui-testing|-fixture-payload|-fixture-empty|-reset-history' release-strings.txt; then
             echo 'Debug-only test seams leaked into the Release binary'; exit 1
           fi
+      - name: Build and run unit regression tests
+        timeout-minutes: 8
+        run: |
+          set -o pipefail
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath UnitTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
+      - name: Run large-phone UI regression tests
+        timeout-minutes: 10
+        run: |
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Run compact-phone UI regression tests
+        timeout-minutes: 10
+        run: |
+          xcrun simctl shutdown "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$COMPACT_SIMULATOR_ID" -b
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$COMPACT_SIMULATOR_ID" -only-testing:QRCatcherUITests -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath CompactTestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Analyze application sources
+        timeout-minutes: 5
         run: xcodebuild analyze -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
       - name: Simulator diagnostics
         if: always()
+        timeout-minutes: 2
         run: |
           xcrun simctl list devices booted
+          vm_stat
+          ps -axo pid,pcpu,pmem,comm | sort -k 2 -nr | head -n 20
           for DEVICE in "$SIMULATOR_ID" "${COMPACT_SIMULATOR_ID:-}"; do
             if [ -n "$DEVICE" ]; then
-              xcrun simctl spawn "$DEVICE" log show --last 2m --style compact --predicate 'process == "QRCatcher"' | tail -n 150 || true
+              xcrun simctl spawn "$DEVICE" log show --last 2m --style compact --predicate 'process == "QRCatcher" OR process == "QRCatcherUITests-Runner" OR process == "testmanagerd"' | tail -n 150 || true
             fi
           done
       - name: Summarize test evidence
         if: always()
+        timeout-minutes: 2
         run: |
-          for RESULT in TestResults.xcresult CompactTestResults.xcresult; do
-            if [ -d "$RESULT" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
+          for RESULT in UnitTestResults.xcresult TestResults.xcresult CompactTestResults.xcresult; do
+            if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
           done
           echo 'Physical-device camera, signing, App Store metadata and release approval remain separate gates.' >> "$GITHUB_STEP_SUMMARY"

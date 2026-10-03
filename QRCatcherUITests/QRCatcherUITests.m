@@ -4,6 +4,7 @@
 @property (nonatomic, strong) XCUIApplication *app;
 @end
 @implementation QRCatcherUITests
++ (void)load { NSLog(@"QRCatcher UI regression bundle loaded"); }
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
 - (void)logSyntheticScreenshot:(NSString *)name {
