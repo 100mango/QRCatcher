@@ -65,7 +65,22 @@ jobs:
       - name: Capture four actual Chinese app screens
         timeout-minutes: 15
         run: |
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/capture -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests/testCaptureStoreScreenshots -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 -resultBundlePath build/StoreScreenshots.xcresult CODE_SIGNING_ALLOWED=NO
+          set -o pipefail
+          mkdir -p build
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/capture -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests/QRCatcherUITests/testCaptureStoreScreenshots -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 -resultBundlePath build/StoreScreenshots.xcresult CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/capture.log
+      - name: Verify one capture test and four images
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,re,subprocess
+          result=json.loads(subprocess.check_output(['xcrun','xcresulttool','get','test-results','summary','--path','build/StoreScreenshots.xcresult']))
+          assert result['totalTestCount']==1 and result['passedTests']==1 and result['failedTests']==0 and result['skippedTests']==0, result
+          log=pathlib.Path('build/capture.log').read_text()
+          names=re.findall(r'SCREENSHOT_BEGIN:(store-[^\s]+)',log)
+          ends=re.findall(r'SCREENSHOT_END:(store-[^\s]+)',log)
+          expected={'store-01-scan-result-zh-Hans','store-02-history-zh-Hans','store-03-history-detail-zh-Hans','store-04-privacy-policy-zh-Hans'}
+          assert len(names)==4 and set(names)==expected and sorted(ends)==sorted(names), (names,ends)
+          print('Verified one passing test and four complete screenshot payloads:',names)
+          PY
       - name: Verify capture did not change source
         run: git diff --exit-code HEAD --
       - name: Record capture results
@@ -74,4 +89,4 @@ jobs:
         run: |
           if [ -f build/StoreScreenshots.xcresult/Info.plist ]; then xcrun xcresulttool get test-results summary --path build/StoreScreenshots.xcresult; fi
           xcrun simctl shutdown "$SIMULATOR_ID" || true
-          echo 'Four 1320x2868 JPEG screenshots use synthetic QR content through the existing Debug seam. No image resizing, overlays, live-camera fabrication, artifact storage, signing or upload.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Capture target: four 1320x2868 JPEG screenshots seeded through the existing Debug seam. Check the capture verification step for actual output; no resizing, overlays, live-camera fabrication, artifact storage, signing or upload.' >> "$GITHUB_STEP_SUMMARY"
