@@ -53,6 +53,31 @@ final class QRCatcherVisionTests: QRManagedStoreTestCase {
         let link = folder.appendingPathComponent("provider-link.png"); try FileManager.default.createSymbolicLink(at: link, withDestinationURL: large)
         XCTAssertThrowsError(try QRBoundedPhotoFile.read(link))
     }
+    func testProviderReadCancellationStopsBeforeRemainingChunks() throws {
+        let file = try storeURL().deletingLastPathComponent().appendingPathComponent("provider.png")
+        try Data(repeating: 0x20, count: 256 * 1024).write(to: file)
+        let token = QRImportCancellation(); var checks = 0
+        do {
+            _ = try QRBoundedPhotoFile.read(file, isCancelled: { checks += 1; if checks == 3 { token.cancel() }; return token.isCancelled })
+            XCTFail("Cancellation must interrupt the bounded provider read")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(checks, 3)
+    }
+    func testRapidHistorySelectionLastIntentClearAndNewImport() async throws {
+        let history = makeHistory(url: try storeURL())
+        for value in ["A","B","C"] { XCTAssertTrue(history.record(value)) }
+        let session = VisionReadSession(history: history)
+        let ids = Dictionary(uniqueKeysWithValues: history.items.map { ($0.text, $0.id) })
+        session.queueSelection(ids["A"]); session.queueSelection(ids["B"]); session.queueSelection(ids["C"])
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(session.payload, "C"); XCTAssertEqual(history.items.count, 3)
+        session.queueSelection(ids["A"]); session.queueSelection(nil)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertNil(session.selection); XCTAssertEqual(session.payload, "C")
+        session.queueSelection(ids["A"]); session.accept(["new imported result"])
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(session.payload, "new imported result"); XCTAssertEqual(history.items.count, 4)
+    }
     func testUnreadableStoreNeverErasesBytes() throws {
         let url = try storeURL(); let sentinel = Data("Preserve unreadable history".utf8); try sentinel.write(to: url)
         let history = makeHistory(url: url)

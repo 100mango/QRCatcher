@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded native XCTest evidence. No app binaries or full xcresult upload."""
 import hashlib,json,os,pathlib,subprocess
+limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes']['macos']
 out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
 icon=pathlib.Path('build/icon-verification/mac-bundled-icon.png')
@@ -8,7 +9,7 @@ if icon.exists():
  data=icon.read_bytes();assert len(data)<=600*1024;(out/icon.name).write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
 for name in ['mac-test.log','mac-sandbox-test.log','mac-sandbox-build.log']:
  path=pathlib.Path(name)
- if path.exists():(out/name.replace('.log','-tail.log')).write_bytes(path.read_bytes()[-512*1024:])
+ if path.exists():(out/name.replace('.log','-tail.log')).write_bytes(path.read_bytes()[-256*1024:])
 for name in ['mac-sandbox-entitlements.plist','mac-sandbox-signature.txt']:
  path=pathlib.Path('build')/name
  if path.exists():
@@ -36,12 +37,12 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
   if not name:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
-  if len(screenshots)>=12 or sum(p.stat().st_size for p in out.iterdir())+len(data)>6*1024*1024-256*1024:
+  if len(screenshots)>=12 or sum(p.stat().st_size for p in out.iterdir())+len(data)>limit-256*1024:
    print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
   filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
   item={'name':filename,'scope':label,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};screenshots.append(item);print(json.dumps(item),flush=True)
 (out/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
-size=sum(p.stat().st_size for p in out.iterdir());assert size<=6*1024*1024
+size=sum(p.stat().st_size for p in out.iterdir());assert size<=limit
 print(json.dumps({'mac_evidence_bytes':size,'exported_screenshots':len(screenshots)}),flush=True)
 if any('Publishing changes from within view updates' in item.get('message','') for item in warnings):
  raise SystemExit('SwiftUI re-entrant publication warning is a release blocker')

@@ -6,7 +6,19 @@
 @implementation QRCatcherUITests
 + (void)load { NSLog(@"QRCatcher UI regression bundle loaded"); }
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
-- (void)tearDown { XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown]; }
+- (void)tearDown {
+    if (self.testRun.failureCount > 0) {
+        NSString *description = self.app.debugDescription;
+        XCUIElement *visibleStatus = self.app.staticTexts[@"scan.status"];
+        NSLog(@"PHONE_FAILURE_STATE:%lu STATUS:%@", (unsigned long)self.app.state, visibleStatus.exists ? visibleStatus.label : @"status not in visible hierarchy");
+        NSLog(@"PHONE_FAILURE_UI:%@", [description substringToIndex:MIN(description.length, 24000)]);
+        XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
+        XCUIElement *cameraAlert = [system.alerts containingPredicate:[NSPredicate predicateWithFormat:@"label CONTAINS %@ AND label CONTAINS %@", @"QRCatcher", @"camera"]].firstMatch;
+        if (cameraAlert.exists) NSLog(@"PHONE_FAILURE_CAMERA_DIALOG:%@", cameraAlert.debugDescription);
+        [self logSyntheticScreenshot:@"phone-failure"];
+    }
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown];
+}
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
 - (void)logSyntheticScreenshot:(NSString *)name {
     NSData *JPEG = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image, 0.55);

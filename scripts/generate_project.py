@@ -76,7 +76,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
             r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
-        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
         r=file('QRCatcherMac/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for localizedName in ['Localizable.strings','InfoPlist.strings']:
             localized=add('maclocalized:'+localizedName,'PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/'+localizedName,sourceTree='<group>')
@@ -103,11 +103,12 @@ for key,name,kind in [('vision','QRCatcherVision','application'),('visionunit','
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'xros','SUPPORTED_PLATFORMS':'xros xrsimulator','TARGETED_DEVICE_FAMILY':'7','XROS_DEPLOYMENT_TARGET':'1.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherVision/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherVision/QRCatcherVision-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(INFOPLIST_FILE='QRCatcherVision/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherVision/QRCatcherVision-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
+        r=file('QRCatcherVision/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m','QRCatcherMac/MacHistory.swift','QRCatcherMac/MacLocalization.swift']:
             r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
-        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
         localized=add('visionlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('visionvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
@@ -132,8 +133,9 @@ for key,name,kind in [('tv','QRCatcherTV','application'),('tvunit','QRCatcherTVT
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'appletvos','SUPPORTED_PLATFORMS':'appletvos appletvsimulator','TARGETED_DEVICE_FAMILY':'3','TVOS_DEPLOYMENT_TARGET':'17.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherTV/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherTV/QRCatcherTV-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(INFOPLIST_FILE='QRCatcherTV/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherTV/QRCatcherTV-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src+=sharedSources+nativeSharedSources;files+=sharedFiles+nativeSharedFiles
+        r=file('QRCatcherTV/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for path in ['QRCatcherMac/MacLocalization.swift']:
             r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
         r=file('QRCatcherTV/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
@@ -160,11 +162,12 @@ for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRC
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher.watchkitapp' if app else '100mango.'+name,'SDKROOT':'watchos','SUPPORTED_PLATFORMS':'watchos watchsimulator','TARGETED_DEVICE_FAMILY':'4','WATCHOS_DEPLOYMENT_TARGET':'9.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherWatch/Info.plist',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(INFOPLIST_FILE='QRCatcherWatch/Info.plist',OTHER_LDFLAGS=['$(inherited)','-weak_framework','Vision'],ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         localized=add('watchlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherWatch/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('watchvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
         r=file('Shared/Services/QRPrivacyText.swift','sourcecode.swift');files.append(r);src.append(build(r))
-        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('QRCatcherWatch/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
+        r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES')
         if key=='watchunit':

@@ -14,6 +14,18 @@ values=plistlib.loads(Path('QRCatcherMac/QRCatcherMac.entitlements').read_bytes(
 values['com.apple.security.get-task-allow']=True
 Path('build/mac-sandbox-runtime.entitlements').write_bytes(plistlib.dumps(values))
 PYCODE
+xcrun swift scripts/prepare_sandbox_boundary.swift build/MacSandbox/Build/Products/Debug/qrcatcher-boundary-control.json
+trap 'python3 - <<"CLEANUP"
+import json,uuid
+from pathlib import Path
+value=json.loads(Path("build/MacSandbox/Build/Products/Debug/qrcatcher-boundary-control.json").read_text())
+folder=Path(value["folder"])
+assert folder.parent==Path.home() and folder.name.startswith("QRCatcherBoundaryProbe-")
+uuid.UUID(folder.name.removeprefix("QRCatcherBoundaryProbe-"))
+(folder/"synthetic-read.txt").unlink()
+folder.rmdir()
+CLEANUP
+' EXIT
 codesign --force --sign - --timestamp=none --entitlements build/mac-sandbox-runtime.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
 codesign -d --entitlements - --xml "$APP" > build/mac-sandbox-entitlements.plist

@@ -11,9 +11,13 @@ def run(args,seconds=120,check=True,log=None):
  process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,start_new_session=True)
  try: data=process.communicate(timeout=seconds)[0]
  except subprocess.TimeoutExpired:
-  os.killpg(process.pid,signal.SIGTERM)
+  try:process.terminate()
+  except (PermissionError,ProcessLookupError) as error:print('OWN_CHILD_CLEANUP',str(error),flush=True)
   try:data=process.communicate(timeout=10)[0]
-  except subprocess.TimeoutExpired:os.killpg(process.pid,signal.SIGKILL);data=process.communicate()[0]
+  except subprocess.TimeoutExpired as error:
+   partial=error.output or b'';data=partial.decode(errors='replace') if isinstance(partial,bytes) else partial
+   try:process.kill()
+   except (PermissionError,ProcessLookupError) as cleanup:print('OWN_CHILD_CLEANUP',str(cleanup),flush=True)
   if log:Path(log).write_text(data)
   print(data,flush=True);raise TimeoutError('Bounded operation timed out: '+args[0])
  if log:Path(log).write_text(data)

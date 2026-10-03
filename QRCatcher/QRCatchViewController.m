@@ -36,6 +36,9 @@
 @property (nonatomic) BOOL privacyPolicyPresented;
 @property (nonatomic) BOOL appliedFixture;
 @property (nonatomic, copy) NSString *payload;
+#if DEBUG
+@property (atomic) NSUInteger cameraDiagnosticEpoch;
+#endif
 @end
 
 @implementation QRCatchViewController
@@ -189,9 +192,21 @@
     [self.ripple addAnimation:group forKey:@"scanPulse"];
     [self.view setNeedsLayout];
 }
+#if DEBUG
+- (void)traceCamera:(NSString *)event {
+    NSLog(@"QRCATCHER_CAMERA_TRACE event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d result=%d importing=%d presented=%@ policy=%d ready=%d wants=%d status=%@",
+          event, (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
+          (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState,
+          self.visible, self.hasResult, self.importing, NSStringFromClass(self.presentedViewController.class), self.privacyPolicyPresented,
+          self.ready, self.wantsCamera, self.statusLabel.text);
+}
+#endif
 - (void)showCameraUnavailable:(BOOL)denied {
     self.statusLabel.text = NSLocalizedString(denied ? @"Camera access is off. Enable it in Settings to scan QR codes." : @"No camera is available. Your saved history is still available.", nil);
     self.settingsButton.hidden = !denied;
+#if DEBUG
+    [self traceCamera:denied ? @"denied-visible" : @"unavailable-visible"];
+#endif
     [self.ripple removeAllAnimations];
 }
 - (void)setPrivacyPolicyPresented:(BOOL)presented {
@@ -200,6 +215,10 @@
     if (presented) [self pauseCamera]; else [self resumeCamera];
 }
 - (void)resumeCamera {
+#if DEBUG
+    self.cameraDiagnosticEpoch += 1;
+    [self traceCamera:@"resume-enter"];
+#endif
     if (!self.visible || self.hasResult || self.importing || self.privacyPolicyPresented || self.presentedViewController) return;
 #if DEBUG
     // Hosted unit tests do not exercise camera hardware. Avoid a system permission
@@ -218,8 +237,17 @@
     AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
     if (status == AVAuthorizationStatusNotDetermined) {
         __weak typeof(self) weakSelf = self;
+#if DEBUG
+        NSUInteger requestedEpoch = self.cameraDiagnosticEpoch;
+        [self traceCamera:@"request-system-authorization"];
+#endif
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-            dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf resumeCamera]; });
+            dispatch_async(dispatch_get_main_queue(), ^{
+#if DEBUG
+                [weakSelf traceCamera:[NSString stringWithFormat:@"authorization-callback granted=%d requestedEpoch=%lu", granted, (unsigned long)requestedEpoch]];
+#endif
+                [weakSelf resumeCamera];
+            });
         }];
         return;
     }
@@ -236,6 +264,9 @@
     AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
     NSError *error;
     AVCaptureDeviceInput *input = device ? [AVCaptureDeviceInput deviceInputWithDevice:device error:&error] : nil;
+#if DEBUG
+    NSLog(@"QRCATCHER_CAMERA_TRACE configure epoch=%lu device=%@ input=%d error=%@ running=%d", (unsigned long)self.cameraDiagnosticEpoch, device.deviceType, input != nil, error, self.session.isRunning);
+#endif
     AVCaptureMetadataOutput *output = [AVCaptureMetadataOutput new];
     [self.session beginConfiguration];
     if (!input || ![self.session canAddInput:input]) {
@@ -303,6 +334,10 @@
     } completion:nil];
 }
 - (void)pauseCamera {
+#if DEBUG
+    self.cameraDiagnosticEpoch += 1;
+    [self traceCamera:@"pause"];
+#endif
     self.wantsCamera = NO;
     dispatch_async(self.sessionQueue, ^{ if (self.session.isRunning) [self.session stopRunning]; });
 }

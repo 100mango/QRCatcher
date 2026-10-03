@@ -13,14 +13,14 @@ import UniformTypeIdentifiers
     private var importTask: Task<Void, Never>?
     func startRead(_ selection: PhotosPickerItem) {
         guard !importing else { return }
+        importing = true
         importTask = Task { await read(selection) }
     }
     func cancelRead() { importTask?.cancel() }
     @Published var importing = false
     @Published var error: String?
-    func read(_ selection: PhotosPickerItem) async {
-        guard !importing else { return }
-        importing = true; defer { importing = false }
+    private func read(_ selection: PhotosPickerItem) async {
+        defer { importing = false }
         do {
             guard let file = try await selection.loadTransferable(type: WatchSelectedPhoto.self) else { throw WatchStoreError.invalidImage }
             let source = try await codec.prepare(file.data)
@@ -91,12 +91,12 @@ private struct WatchRecordView: View {
                 VStack(spacing: 12) {
                     if let image = WatchPhotoCodec.preview(record.sourcePNG) {
                         ScrollView([.horizontal, .vertical]) {
-                            Image(image, scale: 1, label: Text("Saved QR source photo")).resizable().interpolation(.none)
+                            Image(image, scale: 1, label: Text("Saved QR photo preview")).resizable().interpolation(.none)
                                 .aspectRatio(contentMode: .fit).frame(width: 160 * zoom).accessibilityIdentifier("watch.source-image")
                         }.frame(height: 170)
                         HStack { Button("−") { zoom = max(1, zoom - 1) }.accessibilityLabel("Zoom out"); Button("+") { zoom = min(4, zoom + 1) }.accessibilityLabel("Zoom in") }
-                        Text("Original selected QR photo").font(.caption2)
-                    }
+                        Text("Saved QR photo preview, up to 1536 pixels").font(.caption2)
+                    } else { Text("The saved preview could not be read. Your text result is still available.").font(.footnote) }
                     ForEach(Array(record.payloads.enumerated()), id: \.offset) { _, payload in Text(payload).accessibilityIdentifier("watch.payload") }
                     if let state = record.phoneState { Text(LocalizedStringKey(state.capitalized)).accessibilityIdentifier("watch.phone-state") }
                     if let error = record.phoneError { Text(error).font(.footnote) }
@@ -106,7 +106,7 @@ private struct WatchRecordView: View {
                     } else {
                         Button("Read on iPhone") { do { try phone.request(id) } catch { model.error = error.localizedDescription } }.accessibilityIdentifier("watch.phone-request")
                     }
-                    Text("Sends only this selected photo to your paired iPhone when you choose Read on iPhone. No link opens automatically.").font(.footnote)
+                    Text("Read on iPhone sends this saved photo preview to your paired iPhone. The original Photos asset stays unchanged. No link opens automatically.").font(.footnote)
                     if !phone.status.isEmpty { Text(phone.status).font(.footnote) }
                     Button("Remove from Watch", role: .destructive) { confirmDelete = true }.accessibilityIdentifier("watch.remove")
                 }

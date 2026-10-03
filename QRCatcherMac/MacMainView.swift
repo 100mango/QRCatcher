@@ -24,6 +24,7 @@ struct MacMainView: View {
                             .contextMenu { Button("Delete Record", role: .destructive) { deleteItem = item } }
                     }
                 }
+                .accessibilityLabel("Saved QR history")
                 .accessibilityIdentifier("mac.history")
                 .overlay { if filtered.isEmpty { Text(QRL(history.error != nil ? "History could not be loaded" : history.items.isEmpty ? "Your QR history appears here" : "No matching results")).foregroundStyle(.secondary).padding() } }
                 .searchable(text: $workspace.search, prompt: "Search history")
@@ -61,6 +62,9 @@ struct MacMainView: View {
                 Button { sheet = .privacy } label: { Label("Privacy", systemImage: "hand.raised") }.accessibilityIdentifier("mac.privacy")
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("QRCatcher workspace")
+        .accessibilityIdentifier("mac.workspace")
         .task(id: photo) { await readPhoto() }
         .sheet(item: $sheet) { value in
             switch value {
@@ -77,17 +81,7 @@ struct MacMainView: View {
     }
 
     private var selectionBinding: Binding<String?> {
-        Binding(get: { workspace.selection }, set: { identifier in
-            let previous = workspace.selection
-            guard identifier != previous else { return }
-            // AppKit may send List selection while SwiftUI is updating its tree.
-            // Publish the resulting model transition on the next main-actor job.
-            Task { @MainActor in
-                guard workspace.selection == previous else { return }
-                if let item = history.items.first(where: { $0.id == identifier }) { workspace.select(item) }
-                else { workspace.selection = nil }
-            }
-        })
+        Binding(get: { workspace.selection }, set: { workspace.queueSelection($0) })
     }
 
     private func readPhoto() async {

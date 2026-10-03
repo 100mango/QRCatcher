@@ -28,7 +28,7 @@ enum WatchStoreError: LocalizedError {
 }
 @MainActor
 final class WatchHistory: ObservableObject {
-    static let maximumBytes = 32 * 1024 * 1024
+    static let maximumBytes = 12 * 1024 * 1024
     static let maximumRecords = 50
     @Published private(set) var records: [WatchRecord] = []
     @Published private(set) var error: String?
@@ -43,7 +43,7 @@ final class WatchHistory: ObservableObject {
                 let archive = try JSONDecoder().decode(WatchArchive.self, from: Data(contentsOf: url))
                 guard archive.version == 1, archive.records.count <= Self.maximumRecords,
                       Set(archive.records.map(\.id)).count == archive.records.count,
-                      archive.records.allSatisfy({ !$0.sourcePNG.isEmpty && $0.sourcePNG.count <= WatchPhotoCodec.byteLimit && Self.digest($0.sourcePNG) == $0.sourceSHA256 && $0.payloads.count <= 32 && $0.payloads.allSatisfy({ $0.utf8.count <= 16384 }) }) else { throw WatchStoreError.invalidArchive }
+                      archive.records.allSatisfy({ WatchPhotoCodec.validPreparedPNG($0.sourcePNG) && Self.digest($0.sourcePNG) == $0.sourceSHA256 && $0.payloads.count <= 32 && $0.payloads.allSatisfy({ $0.utf8.count <= 16384 }) }) else { throw WatchStoreError.invalidArchive }
                 records = archive.records
             }
         } catch { readable = false; self.error = WatchStoreError.invalidArchive.localizedDescription }
@@ -57,7 +57,7 @@ final class WatchHistory: ObservableObject {
     }
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     @discardableResult func append(source: Data, payloads: [String], date: Date = Date()) throws -> WatchRecord {
-        guard !source.isEmpty, source.count <= WatchPhotoCodec.byteLimit, payloads.count <= 32, payloads.allSatisfy({ $0.utf8.count <= 16384 }) else { throw WatchStoreError.imageLimit }
+        guard WatchPhotoCodec.validPreparedPNG(source), payloads.count <= 32, payloads.allSatisfy({ $0.utf8.count <= 16384 }) else { throw WatchStoreError.imageLimit }
         let record = WatchRecord(id: UUID(), createdAt: date, sourcePNG: source, sourceSHA256: Self.digest(source), payloads: payloads)
         try commit([record] + records); return record
     }
@@ -70,7 +70,7 @@ final class WatchHistory: ObservableObject {
         guard readable else { throw WatchStoreError.invalidArchive }
         guard values.count <= Self.maximumRecords else { throw WatchStoreError.archiveFull }
         guard Set(values.map(\.id)).count == values.count, values.allSatisfy({
-            !$0.sourcePNG.isEmpty && $0.sourcePNG.count <= WatchPhotoCodec.byteLimit && Self.digest($0.sourcePNG) == $0.sourceSHA256 && $0.payloads.count <= 32 && $0.payloads.allSatisfy({ $0.utf8.count <= 16384 })
+            WatchPhotoCodec.validPreparedPNG($0.sourcePNG) && Self.digest($0.sourcePNG) == $0.sourceSHA256 && $0.payloads.count <= 32 && $0.payloads.allSatisfy({ $0.utf8.count <= 16384 })
         }) else { throw WatchStoreError.invalidArchive }
         let bytes = try JSONEncoder().encode(WatchArchive(version: 1, records: values))
         guard bytes.count <= Self.maximumBytes else { throw WatchStoreError.archiveFull }

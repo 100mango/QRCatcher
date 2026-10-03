@@ -1,6 +1,6 @@
 #import "QRWatchSessionGate.h"
 @interface QRWatchSessionGate ()
-@property (nonatomic) NSLock *lock;
+@property (nonatomic, strong) NSLock *lock;
 @property (nonatomic) NSUInteger epoch;
 @property (nonatomic) BOOL active;
 @end

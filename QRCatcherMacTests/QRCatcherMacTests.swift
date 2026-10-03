@@ -209,6 +209,21 @@ final class QRCatcherMacTests: QRManagedStoreTestCase {
         XCTAssertEqual(probe.snapshot.maximumConcurrent, 1)
     }
 
+    func testRapidHistorySelectionLastIntentClearAndNewImport() async throws {
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        for value in ["A","B","C"] { XCTAssertTrue(history.record(value)) }
+        let session = MacWorkspace(history: history)
+        let ids = Dictionary(uniqueKeysWithValues: history.items.map { ($0.text, $0.id) })
+        session.queueSelection(ids["A"]); session.queueSelection(ids["B"]); session.queueSelection(ids["C"])
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(session.payload, "C"); XCTAssertEqual(history.items.count, 3)
+        session.queueSelection(ids["A"]); session.queueSelection(nil)
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertNil(session.selection); XCTAssertEqual(session.payload, "C")
+        session.queueSelection(ids["A"]); session.accept(["new imported result"])
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(session.payload, "new imported result"); XCTAssertEqual(history.items.count, 4)
+    }
     func testCameraAbsenceIsExplicit() throws {
         let camera = MacCamera()
         print("Actual camera inventory:", camera.devices.map(\.localizedName))

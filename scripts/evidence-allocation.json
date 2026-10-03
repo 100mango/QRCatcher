@@ -1,0 +1,13 @@
+{
+  "whole_run_limit_bytes": 20000000,
+  "scope_limits_bytes": {
+    "macos": 3000000,
+    "visionos": 2000000,
+    "tvos": 2000000,
+    "watchos": 2000000,
+    "iphone_pro": 2000000,
+    "iphone_se3": 2000000,
+    "ipad_pro": 2000000,
+    "ipad_mini": 2000000
+  }
+}

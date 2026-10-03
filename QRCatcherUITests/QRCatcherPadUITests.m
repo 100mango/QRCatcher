@@ -57,7 +57,7 @@
     // The iPad picker has a sidebar collection before its actual asset grid.
     // Use the real photo-image AX identifier observed in run 37121579198.
     XCUIElement *photo = self.app.images[@"PXGGridLayout-Info"].firstMatch;
-    XCTAssertTrue([photo waitForExistenceWithTimeout:15], @"%@", self.app.debugDescription);
+    XCTAssertTrue([photo waitForExistenceWithTimeout:45], @"%@", self.app.debugDescription);
     [photo tap];
     NSPredicate *decoded = [NSPredicate predicateWithFormat:@"label == %@", @"QRCatcher 你好 🌈 123"];
     [self expectationForPredicate:decoded evaluatedWithObject:self.app.staticTexts[@"scan.result"] handler:nil];

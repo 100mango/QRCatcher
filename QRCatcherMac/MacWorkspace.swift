@@ -13,11 +13,20 @@ final class MacWorkspace: ObservableObject {
     let history: MacHistory
     private let decoder: QRDecodeWorker
     private var generation = UUID()
+    private let selectionCoordinator = QRSelectionCoordinator()
     private var task: Task<Void, Never>?
     private var providerProgress: Progress?
+    private var providerCancellation = QRImportCancellation()
 
     init(history: MacHistory, decoder: QRDecodeWorker = .shared) { self.history = history; self.decoder = decoder }
 
+    func queueSelection(_ identifier: String?) {
+        selectionCoordinator.enqueue(identifier) { [weak self] identifier in
+            guard let self else { return }
+            if let item = self.history.items.first(where: { $0.id == identifier }) { self.select(item) }
+            else { self.selection = nil }
+        }
+    }
     func select(_ item: HistoryItem) {
         cancelRead()
         selection = item.id
@@ -26,10 +35,11 @@ final class MacWorkspace: ObservableObject {
     }
 
     func cancelRead() {
+        selectionCoordinator.invalidate();
         generation = UUID()
         task?.cancel()
         task = nil
-        providerProgress?.cancel(); providerProgress = nil
+        providerCancellation.cancel(); providerCancellation = QRImportCancellation(); providerProgress?.cancel(); providerProgress = nil
         isReading = false
     }
 
@@ -168,11 +178,21 @@ final class MacWorkspace: ObservableObject {
             return true
         }
         guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else { return false }
-        providerProgress = provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, failure in
+        let cancellation = providerCancellation
+        providerProgress = provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, failure in
+            // Consume the provider-owned temporary file before this callback
+            // returns. Never first materialize arbitrary provider image Data.
+            let result: Result<Data, Error>
+            do {
+                guard let url else { throw failure ?? CocoaError(.fileReadUnknown) }
+                result = .success(try QRBoundedPhotoFile.read(url, isCancelled: { cancellation.isCancelled }))
+            } catch { result = .failure(error) }
             Task { @MainActor in
                 guard self.generation == token else { return }
-                if let data { self.read(data: data) }
-                else { self.error = failure?.localizedDescription ?? QRL("The dropped image could not be read.") }
+                switch result {
+                case .success(let data): self.read(data: data)
+                case .failure(let error): self.error = error.localizedDescription
+                }
             }
         }
         return true

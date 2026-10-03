@@ -20,11 +20,24 @@ final class QRCatcherTVUITests: XCTestCase {
         let scope = root ?? app!
         for _ in 0..<30 {
             if target.hasFocus { XCUIRemote.shared.press(.select); return }
-            let focused = scope.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            let focusedButton = scope.descendants(matching: .button).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            let focused = focusedButton.exists ? focusedButton : scope.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
             if focused.exists {
-                let dx = target.frame.midX - focused.frame.midX, dy = target.frame.midY - focused.frame.midY
-                XCUIRemote.shared.press(abs(dx) > abs(dy) ? (dx >= 0 ? .right : .left) : (dy >= 0 ? .down : .up))
+                let destination = target.frame, origin = focused.frame
+                if focused.label == target.label && abs(destination.midX-origin.midX) < 2 && abs(destination.midY-origin.midY) < 2 {
+                    // tvOS can expose nested buttons with the same frame/title;
+                    // activate the actual focused child of this exact control.
+                    XCUIRemote.shared.press(.select); return
+                }
+                // The observed permission dialog starts at Select: above its
+                // action row. Align rows before horizontal movement.
+                if destination.minY >= origin.maxY - 1 { XCUIRemote.shared.press(.down) }
+                else if destination.maxY <= origin.minY + 1 { XCUIRemote.shared.press(.up) }
+                else { XCUIRemote.shared.press(destination.midX >= origin.midX ? .right : .left) }
             } else { XCUIRemote.shared.press(.down) }
+        }
+        if root != nil && target.label == "Allow All Photos" {
+            print("QRCATCHER_TV_EXACT_PERMISSION_FOCUS_BLOCKED"); fflush(stdout)
         }
         XCTFail("Remote focus could not reach the actual control: \(target.debugDescription)")
     }
@@ -42,7 +55,7 @@ final class QRCatcherTVUITests: XCTestCase {
     }
     private func capture(_ name: String) {
         if name != "tv-failure" {
-            do { try app.performAccessibilityAudit(for: .all) { issue in print("TV_ACCESSIBILITY_ISSUE", issue.compactDescription); return false } }
+            do { try app.performAccessibilityAudit(for: .all) { issue in print("TV_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("TV accessibility audit failed: \(error)") }
         }
         guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { return }
@@ -50,11 +63,26 @@ final class QRCatcherTVUITests: XCTestCase {
         let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
-    func testActualPhotosDecodeExportVerificationAndOfflineReopen() {
+    func testActualPhotosDecodeExportVerificationAndOfflineReopen() { realPhotosWorkflow(expectPrompt: true) }
+    func testExplicitlyPreconditionedPhotosDecodeExportAndReopen() {
+        print("PRECONDITIONED_SIMULATOR_PHOTOS_GRANTED: this does not qualify system prompt interaction")
+        realPhotosWorkflow(expectPrompt: false)
+    }
+    func testExplicitlyRevokedPhotosRecovery() {
+        print("PRECONDITIONED_SIMULATOR_PHOTOS_REVOKED: separate from real prompt denial interaction")
+        focusAndSelect(app.buttons["tv.photos"])
+        let explanation = app.staticTexts["Photos access is unavailable. You can change access in Settings, then choose Retry."]
+        XCTAssertTrue(explanation.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(app.buttons["tv.asset.0"].exists)
+        capture("tv-revoked-photos")
+        XCUIRemote.shared.press(.menu)
+        XCTAssertTrue(app.buttons["tv.photos"].waitForExistence(timeout: 10))
+    }
+    private func realPhotosWorkflow(expectPrompt: Bool) {
         focusAndSelect(app.buttons["tv.photos"])
         // The actual tvOS 27 permission dialog belongs to the system app, not
         // the target app's accessibility subtree. Exact title/button only.
-        respondToExactPhotosPermissionIfPresent()
+        if expectPrompt { respondToExactPhotosPermissionIfPresent() }
         let photo = app.buttons["tv.asset.0"]
         XCTAssertTrue(photo.waitForExistence(timeout: 20), app.debugDescription)
         focusAndSelect(photo)

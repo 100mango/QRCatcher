@@ -10,6 +10,36 @@ import XCTest
         return folder.appendingPathComponent("history.json")
     }
     private func fixture(_ name: String) throws -> Data { try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "png"))) }
+    func testCancelledReselectionsNeverOverlapSuspendedNativeWork() async throws {
+        let codec = WatchPhotoCodec(), probe = WatchAdmissionProbe()
+        let first = Task { try await codec.withExclusiveProcessing {
+            await probe.enter()
+            await probe.waitForRelease() // Deliberately ignores cancellation like a native request may.
+            await probe.leave()
+            try Task.checkCancellation()
+            return "stale"
+        } }
+        while !(await probe.started) { await Task.yield() }
+        first.cancel()
+        var cancelled: [Task<String, Error>] = []
+        for _ in 0..<30 {
+            let job = Task { try await codec.withExclusiveProcessing {
+                await probe.enter(); await probe.leave(); return "obsolete"
+            } }
+            job.cancel(); cancelled.append(job)
+        }
+        let last = Task { try await codec.withExclusiveProcessing {
+            await probe.enter(); await probe.leave(); return "newest"
+        } }
+        for _ in 0..<20 { await Task.yield() }
+        let during = await probe.maximum
+        XCTAssertEqual(during, 1)
+        await probe.release()
+        do { _ = try await first.value; XCTFail("Cancelled completion must not become a result") } catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+        for job in cancelled { do { _ = try await job.value; XCTFail("Cancelled queued job ran") } catch is CancellationError {} catch { XCTFail("Unexpected \(error)") } }
+        let final = try await last.value, maximum = await probe.maximum, starts = await probe.starts
+        XCTAssertEqual(final, "newest"); XCTAssertEqual(maximum, 1); XCTAssertEqual(starts, 2)
+    }
     func testActualWatchVisionIndependentGoldenPhotos() async throws {
         guard #available(watchOS 27.0, *) else { throw XCTSkip("Local Vision API requires watchOS 27; paired iPhone remains the older-OS path") }
         let codec = WatchPhotoCodec()
@@ -62,6 +92,8 @@ import XCTest
     func testOversizedMetadataRejectedBeforeDecode() async throws {
         let codec = WatchPhotoCodec()
         for name in ["oversized-edge", "oversized-area"] {
+            XCTAssertFalse(WatchPhotoCodec.validPreparedPNG(try fixture(name)))
+            XCTAssertNil(WatchPhotoCodec.preview(try fixture(name)))
             do { _ = try await codec.prepare(fixture(name)); XCTFail("Image metadata limit must reject \(name)") }
             catch { XCTAssertNotNil(error as? WatchStoreError) }
         }
@@ -83,4 +115,16 @@ import XCTest
         record.phoneState = "cancelled"; record.payloads = []; try history.replace(record)
         try transport.accept(response(try XCTUnwrap(record.phoneRequest), record.sourceSHA256)); XCTAssertTrue(history.records[0].payloads.isEmpty)
     }
+}
+
+private actor WatchAdmissionProbe {
+    var started = false
+    var maximum = 0
+    var starts = 0
+    private var active = 0
+    private var continuation: CheckedContinuation<Void, Never>?
+    func enter() { active += 1; starts += 1; maximum = max(maximum, active) }
+    func leave() { active -= 1 }
+    func waitForRelease() async { await withCheckedContinuation { continuation = $0; started = true } }
+    func release() { continuation?.resume(); continuation = nil }
 }

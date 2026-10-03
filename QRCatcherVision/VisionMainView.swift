@@ -62,7 +62,7 @@ struct VisionMainView: View {
             switch result { case .success(let url): session.read(url: url); case .failure(let error): session.error = error.localizedDescription }
         }
         .fileExporter(isPresented: Binding(get: { export != nil }, set: { if !$0 { export = nil } }), document: export?.document, contentType: export?.type ?? .png, defaultFilename: export?.filename) { result in
-            switch result { case .success: session.status = "Export completed"; case .failure(let error): session.error = error.localizedDescription }
+            switch result { case .success: session.status = QRL("Export completed"); case .failure(let error): session.error = error.localizedDescription }
         }
         .task(id: photo) { await importPhoto() }
         .onDisappear(perform: session.cancel)
@@ -75,16 +75,9 @@ struct VisionMainView: View {
         .sheet(isPresented: $showPrivacy) { VisionPrivacyView() }
     }
     private var selectionBinding: Binding<String?> {
-        Binding(get: { session.selection }, set: { identifier in
-            let previous = session.selection
-            guard previous != identifier else { return }
-            Task { @MainActor in
-                guard session.selection == previous else { return }
-                if let item = history.items.first(where: { $0.id == identifier }) { session.select(item) }
-                else { session.selection = nil }
-            }
-        })
+        Binding(get: { session.selection }, set: { session.queueSelection($0) })
     }
+
     private func importPhoto() async {
         guard let photo else { return }
         let token = session.beginExternalLoad()
@@ -93,13 +86,13 @@ struct VisionMainView: View {
             if !Task.isCancelled { session.completeExternalLoad(token, data: data, error: nil) }
         } catch { if !Task.isCancelled { session.completeExternalLoad(token, data: nil, error: error) } }
     }
-    private func copy() { if let payload = session.payload { UIPasteboard.general.string = payload; session.status = "Result copied" } }
+    private func copy() { if let payload = session.payload { UIPasteboard.general.string = payload; session.status = QRL("Result copied") } }
     private func openWebsite() {
         guard let payload = session.payload, let url = QRPayload.safeWebURL(payload) else { return }
-        openURL(url) { success in if !success { session.error = "The system browser could not open this website." } }
+        openURL(url) { success in if !success { session.error = QRL("The system browser could not open this website.") } }
     }
     private func exportQR() {
-        guard let payload = session.payload, let png = QRImageCodec.png(payload: payload) else { session.error = "This result could not be exported as a QR image."; return }
+        guard let payload = session.payload, let png = QRImageCodec.png(payload: payload) else { session.error = QRL("This result could not be exported as a QR image."); return }
         export = QRExportRequest(document: QRExportDocument(data: png), type: .png, filename: "QRCatcher")
     }
     private func exportHistory() {
@@ -122,7 +115,7 @@ private struct VisionResultView: View {
         ScrollView {
             VStack(spacing: 22) {
                 Image(systemName: "qrcode.viewfinder").font(.system(size: 42)).foregroundStyle(.tint)
-                Text(payload == nil ? "Read a QR code" : "QR Result").font(.largeTitle.bold())
+                Text(QRL(payload == nil ? "Read a QR code" : "QR Result")).font(.largeTitle.bold())
                 if let payload {
                     if let code { Image(uiImage: code).interpolation(.none).resizable().scaledToFit().frame(width: 240, height: 240).accessibilityLabel("Scannable QR representation of this result") }
                     Text(payload).font(.title3).accessibilityIdentifier("vision.payload")

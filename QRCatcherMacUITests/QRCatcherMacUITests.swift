@@ -2,12 +2,12 @@ import XCTest
 import AppKit
 import CryptoKit
 import Security
+import Darwin
 
 @MainActor
 final class QRCatcherMacUITests: XCTestCase {
     private var app: XCUIApplication!
     private var folder: URL!
-    private var boundaryFolder: URL?
     private var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent() }
 
     override func setUpWithError() throws {
@@ -21,13 +21,13 @@ final class QRCatcherMacUITests: XCTestCase {
             // container. No absolute /tmp override or broad file grant is used.
             app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
             app.launchEnvironment["QRCATCHER_SANDBOX_PROOF"] = "1"
-            let boundary = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent("QRCatcherBoundaryProbe-" + UUID().uuidString, isDirectory: true)
-            try FileManager.default.createDirectory(at: boundary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-            let bytes = Data("synthetic sandbox read sentinel".utf8)
-            XCTAssertTrue(FileManager.default.createFile(atPath: boundary.appendingPathComponent("synthetic-read.txt").path, contents: bytes, attributes: [.posixPermissions: 0o600]))
-            XCTAssertEqual(try Data(contentsOf: boundary.appendingPathComponent("synthetic-read.txt")), bytes)
-            boundaryFolder = boundary
-            app.launchEnvironment["QRCATCHER_SANDBOX_BOUNDARY"] = boundary.path
+            let controlURL = expectedApplicationURL.deletingLastPathComponent().appendingPathComponent("qrcatcher-boundary-control.json")
+            let control = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: controlURL)) as? [String: Any])
+            XCTAssertEqual(control["unsandboxed_read_control"] as? Bool, true)
+            XCTAssertEqual(control["control_sandboxed"] as? Bool, false)
+            XCTAssertEqual(control["control_user_id"] as? UInt32, getuid())
+            XCTAssertEqual(control["file_mode"] as? Int, 0o600)
+            app.launchEnvironment["QRCATCHER_SANDBOX_BOUNDARY"] = try XCTUnwrap(control["folder"] as? String)
         } else { app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path }
         dismissObservedRealityWidgetsCrash()
         app.launch(); verifyRunningApplication()
@@ -35,7 +35,7 @@ final class QRCatcherMacUITests: XCTestCase {
     }
     override func tearDownWithError() throws {
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); try? screenshot("mac-failure") }
-        app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }; if let boundaryFolder { try? FileManager.default.removeItem(at: boundaryFolder) }
+        app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }
     }
 
     private var expectedApplicationURL: URL {
@@ -140,7 +140,7 @@ final class QRCatcherMacUITests: XCTestCase {
         let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
         if name != "mac-failure" {
-            try app.performAccessibilityAudit(for: .all) { issue in print("MAC_ACCESSIBILITY_ISSUE", issue.compactDescription); return false }
+            try app.performAccessibilityAudit(for: .all) { issue in print("MAC_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false }
         }
     }
 
@@ -236,7 +236,9 @@ final class QRCatcherMacUITests: XCTestCase {
         print("PHOTOS_LIBRARY_INITIAL_UI:", photos.debugDescription)
         let file = photos.menuBarItems["File"]
         XCTAssertTrue(file.waitForExistence(timeout: 15), photos.debugDescription); file.click()
-        let importMenu = photos.menuItems.matching(NSPredicate(format: "label BEGINSWITH %@", "Import")).firstMatch
+        // Exact normal File > Import command observed in Photos27 AX. Cocoa
+        // menu titles are not the same field as the label predicate.
+        let importMenu = photos.menuItems["_NS:1096"]
         XCTAssertTrue(importMenu.isEnabled, photos.debugDescription); importMenu.click()
         photos.typeKey("g", modifierFlags: [.command, .shift])
         let path = photos.sheets.textFields.firstMatch

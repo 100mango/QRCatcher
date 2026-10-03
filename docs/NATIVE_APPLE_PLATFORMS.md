@@ -120,7 +120,7 @@ physical Continuity Camera and further accessibility audits remain separate gate
 The new Watch source (first QRCatcher compiler/runtime pass still pending) uses watchOS 27's Swift `DetectBarcodesRequest` behind an
 availability check, not unavailable legacy VN/Core Image APIs. It imports a
 bounded selected Photos file, normalizes a real source image with ImageIO,
-retains that source and all decoded payloads in a quota-bounded atomic archive,
+retains that normalized preview (up to1536pixels, not original bytes) and all decoded payloads in a quota-bounded atomic archive,
 and provides offline viewing, zoom, confirmed removal and the approved policy.
 Unreadable archives are never overwritten. Older watchOS versions retain the
 selected photo and offer explicit paired-iPhone processing.
@@ -143,9 +143,43 @@ Cloud test scopes are deliberately distinct:
 - Apple excludes background WCSession file/user-info delivery from Simulator
   support; cross-device transport requires a paired physical iPhone and Watch
 - An older-watchOS launch and weak-link/device Release packaging remain separate
-  gates, as do physical scannability of the displayed original photo and camera
+  gates, as do physical scannability of the displayed saved preview and camera
   capture where a platform has a camera workflow
 
 No App IDs, certificates, provisioning profiles or Store records were registered
 for these source targets. All native platform builds/tests use the one bounded
 standard cloud runner lane.
+
+## Isolated qualification candidate after 84accd6
+
+The same-head qualification workflow uses eight fresh standard `xcode-27` VMs,
+serialized with `max-parallel: 1` and `fail-fast: false`: Mac, Vision, TV, Watch,
+large phone, SE3, 13-inch iPad, and iPad mini. No successful result is inferred
+from this isolation. Per-command timeouts retain their actual operation names.
+The artifact allocation is 3,000,000 bytes for Mac and 2,000,000 for each other
+row, totaling 17,000,000 bytes under the 20,000,000-byte whole-run cap. Each
+upload has its own strict successful budget gate and one-day retention.
+
+Mac hosted regressions execute once; real external UI executes in the minimally
+entitled ephemeral sandbox. Its private 0600 unselected boundary fixture is now
+created and read by an explicitly unsandboxed same-user Swift helper. Photos.app
+Get Started and File menu inventory were observed; actual synthetic import and
+populated app picker selection still require successful runtime evidence.
+
+Watch processing uses an explicit FIFO admission permit across native async
+Vision calls, with a controlled suspended-work/cancellation regression. Native
+Watch, TV, and Vision unsigned generic-device Release packaging is separately
+checked, including Watch's actual weak Vision Mach-O load command. These checks
+do not establish older Watch launch or physical paired background transport.
+
+TV's exact real Photos dialog remains a strict UI case. Only if its specifically
+observed focus marker fails may a separate per-app synthetic simulator-granted
+lane execute selection/decode/Photos export/refetch/reopen. That lane never
+changes the original red prompt result. Revoked access recovery is separately
+labeled as a simulator precondition, not a real Don't Allow interaction pass.
+
+Vision screenshot checkpoints hold the actual UI until a UUID acknowledgement
+from public simctl capture succeeds or reports an error. Blank XCTest images and
+capture timeouts never count as visual acceptance. Phone camera-state assertions
+remain strict; DEBUG-only lifecycle/authorization/epoch diagnostics and failure
+pixels explain any failure without changing the production camera behavior.

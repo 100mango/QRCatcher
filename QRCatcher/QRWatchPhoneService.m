@@ -8,9 +8,9 @@
 #import <unistd.h>
 
 @interface QRWatchPhoneService () <WCSessionDelegate>
-@property (nonatomic) dispatch_queue_t queue;
-@property (nonatomic) NSURL *folder;
-@property (nonatomic) QRWatchSessionGate *gate;
+@property (nonatomic, strong) dispatch_queue_t queue;
+@property (nonatomic, strong) NSURL *folder;
+@property (nonatomic, strong) QRWatchSessionGate *gate;
 @end
 @implementation QRWatchPhoneService
 + (instancetype)shared { static QRWatchPhoneService *value; static dispatch_once_t once; dispatch_once(&once, ^{ value = [QRWatchPhoneService new]; }); return value; }
@@ -59,7 +59,7 @@
     // this bounded, validated request into the app-owned durable queue first.
     NSDictionary *properties = [file.fileURL resourceValuesForKeys:@[NSURLFileSizeKey, NSURLIsRegularFileKey, NSURLIsSymbolicLinkKey] error:nil];
     NSNumber *size = properties[NSURLFileSizeKey];
-    if (![properties[NSURLIsRegularFileKey] boolValue] || [properties[NSURLIsSymbolicLinkKey] boolValue] || ![file.fileURL.pathExtension.lowercaseString isEqual:@"png"] || !size || size.unsignedIntegerValue > 8 * 1024 * 1024) return;
+    if (![properties[NSURLIsRegularFileKey] boolValue] || [properties[NSURLIsSymbolicLinkKey] boolValue] || !size || size.unsignedIntegerValue > 8 * 1024 * 1024) return;
     NSData *bytes = [self boundedRegularFile:file.fileURL limit:8 * 1024 * 1024];
     static const unsigned char signature[] = {137,80,78,71,13,10,26,10};
     if (bytes.length < 8 || memcmp(bytes.bytes, signature, 8) != 0 || bytes.length > 8 * 1024 * 1024 || ![[self digest:bytes] isEqual:metadata[@"sourceSHA256"]]) return;

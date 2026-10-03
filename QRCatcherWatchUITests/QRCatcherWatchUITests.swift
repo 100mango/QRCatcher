@@ -9,8 +9,8 @@ import XCTest
     }
     override func tearDownWithError() throws { if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); capture("watch-failure") }; app.terminate() }
     private func capture(_ name: String) {
-        if name != "watch-failure" && name != "watch-system-picker-unavailable" {
-            do { try app.performAccessibilityAudit(for: .all) { issue in print("WATCH_ACCESSIBILITY_ISSUE", issue.compactDescription); return false } }
+        if #available(watchOS 10.0, *), name != "watch-failure" && name != "watch-system-picker-unavailable" {
+            do { try app.performAccessibilityAudit(for: .all) { issue in print("WATCH_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("Watch accessibility audit failed: \(error)") }
         }
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment) }

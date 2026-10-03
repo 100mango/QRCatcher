@@ -87,3 +87,44 @@
 "The image could not be read." = "无法读取这张图片。";
 
 "This image is too large or has invalid dimensions. Choose a smaller image." = "图片过大或尺寸无效，请选择较小的图片。";
+
+"QRCatcher workspace" = "QRCatcher 工作区";
+"Saved QR history" = "已保存的二维码历史记录";
+
+"Import an image containing a QR code." = "导入包含二维码的图片。";
+"Saved on this device" = "已保存在此设备上";
+"%d QR code(s) read and saved locally" = "已识别并在本地保存 %d 个二维码";
+"Choose an image from Files or Photos, or drop one into this window. Images are decoded locally. This app does not use passthrough cameras." = "从“文件”或“照片”选择图片，也可以将图片拖入此窗口。识别在本地进行，本应用不使用透视摄像头。";
+"Export QR Image" = "导出二维码图片";
+"This result could not be exported as a QR image." = "无法将此结果导出为二维码图片。";
+"Export completed" = "导出完成";
+"Choose a QR image from Photos." = "从“照片”选择二维码图片。";
+"Saved on this TV" = "已保存在此电视上";
+"The selected photo has no readable image resource." = "所选照片没有可读取的图片资源。";
+"QR code read and saved on this TV" = "已识别二维码并保存在此电视上";
+"QR code read. History could not be saved; scan the displayed code with your phone." = "已识别二维码，但无法保存历史记录。可以用手机扫描显示的二维码。";
+"This result could not be represented as a QR image. Its text is still available." = "无法将此结果显示为二维码，文本结果仍可查看。";
+"Saved to Photos and verified" = "已保存到“照片”并核验";
+"The previously selected QR was saved to Photos and verified" = "上一条二维码已保存到“照片”并核验";
+"Choose Photos to read a QR image stored in your photo library." = "选择“照片”以识别图库中的二维码图片。";
+"Waiting for Photos permission. Respond to the system request to continue." = "正在等待照片权限。请先回应系统提示。";
+"Photos access is unavailable. You can change access in Settings, then choose Retry." = "无法访问照片。可在系统设置中修改权限，然后选择“重试”。";
+"No photos are available in this library. Add a QR image to Photos, then choose Retry." = "图库中没有可用照片。请先添加二维码图片，再选择“重试”。";
+"Choose a photo. Only the selected image is decoded." = "请选择照片。仅识别您选择的图片。";
+"Photos reported a save, but the exported QR image could not be fetched and verified. Check Photos before trying again." = "系统报告已保存，但无法重新读取并核验二维码图片。请先检查“照片”，再决定是否重试。";
+"Photos access is required to save and verify this QR image. Change access in Settings, then try again." = "保存和核验二维码图片需要照片权限。请在系统设置中修改权限后重试。";
+"This result is too large to display as a QR image. Its text is still available." = "此结果过长，无法显示为二维码。文本结果仍可查看。";
+"Scan this QR code with your phone. Nothing opens automatically." = "使用手机扫描二维码。不会自动打开任何内容。";
+"Read a QR image from Photos, save the result on this TV, and display a code your phone can scan." = "从“照片”识别二维码，将结果保存在此电视上，并显示供手机扫描的二维码。";
+"Save QR to Photos" = "将二维码保存到照片";
+"Back" = "返回";
+"Retry" = "重试";
+"More Photos" = "更多照片";
+"No saved QR codes yet" = "还没有已保存的二维码";
+"History is unavailable" = "历史记录暂不可用";
+"Clear TV History" = "清空电视历史记录";
+"Clear history saved on this TV? Photos and phone history are not deleted." = "清空此电视上的历史记录？照片和手机历史记录不会被删除。";
+"Previous Code" = "上一个二维码";
+"Next Code" = "下一个二维码";
+"Scannable QR representation of this result" = "此识别结果的可扫描二维码";
+"Scan to read the approved privacy policy" = "扫描以阅读隐私政策";

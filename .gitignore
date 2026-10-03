@@ -38,3 +38,7 @@ Tests/Fixtures/*.png
 QRCatcherMac/Assets.xcassets/AppIcon.appiconset/*.png
 
 QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-*.png
+
+QRCatcherWatch/Assets.xcassets/**/*.png
+QRCatcherVision/Assets.xcassets/**/*.png
+QRCatcherTV/Assets.xcassets/**/*.png

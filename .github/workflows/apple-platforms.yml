@@ -1,247 +1,303 @@
 name: Native Apple platforms
-on:
-  push:
-    branches: [codex/apple-platforms]
 permissions:
   contents: read
 concurrency:
   group: qrcatcher-apple-platforms
   cancel-in-progress: true
 jobs:
-  mac-native:
+  platform:
     runs-on: xcode-27
-    timeout-minutes: 110
+    timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
-      # Full compact/large phone and mini/large iPad coverage runs serially.
-      RUN_EXTENDED_IOS_MATRIX: 'true'
+      EVIDENCE_SCOPE: ${{ matrix.scope }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 64
-          ref: ${{ github.sha }}
-      - name: Verify exact source and stable toolchain
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
-          test "$GITHUB_REF" = refs/heads/codex/apple-platforms
-          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --exit-code HEAD --
-          echo "Tested commit: $(git rev-parse HEAD)"
-          echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
-          shasum -a 256 .github/workflows/apple-platforms.yml
-          sw_vers
-          xcodebuild -version
-          xcodebuild -version | grep '27A266a'
-          test "$(uname -m)" = arm64
-          python3 scripts/materialize_qr_fixtures.py
-          python3 scripts/materialize_mac_icons.py
-          python3 scripts/materialize_ipad_icons.py
-          python3 scripts/generate_project.py
-          git diff --exit-code -- QRCatcher.xcodeproj
-          plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
-          xcodebuild -list -project QRCatcher.xcodeproj
-      - name: Build native Mac unsigned Release arm64 and x86_64
-        if: ${{ !cancelled() }}
-        timeout-minutes: 10
-        run: |
-          set -o pipefail
-          xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Release -derivedDataPath build/MacRelease -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tee mac-build.log
-          APP=build/MacRelease/Build/Products/Release/QRCatcherMac.app
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = '100mango.QRCatcher'
-          ARCHITECTURES=$(xcrun lipo -archs "$APP/Contents/MacOS/QRCatcherMac")
-          echo "Verified native slices: $ARCHITECTURES"
-          [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]]
-          xcrun lipo -info "$APP/Contents/MacOS/QRCatcherMac"
-          ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")
-          test -n "$ICON"
-          ICON_PATH="$APP/Contents/Resources/${ICON%.icns}.icns"
-          test -s "$ICON_PATH"
-          shasum -a 256 "$ICON_PATH"
-          mkdir -p build/icon-verification
-          xcrun swift scripts/verify_mac_icon.swift "$ICON_PATH" build/icon-verification/mac-bundled-icon.png
-          strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
-          if grep -E -- 'QRCATCHER_TEST_STORE|QRCATCHER_SANDBOX_|sandboxDiagnostics|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
-      - name: Execute native Mac unit and UI tests
-        if: ${{ !cancelled() }}
-        timeout-minutes: 20
-        run: |
-          set -o pipefail
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
-      - name: Execute ephemeral ad-hoc App Sandbox UI gate
-        if: ${{ !cancelled() }}
-        timeout-minutes: 15
-        run: bash scripts/run_mac_sandbox.sh
-      - name: Export bounded native Mac screenshots
-        if: always()
-        timeout-minutes: 3
-        run: python3 -u scripts/export_mac_screenshots.py
-      - name: Validate native Mac outbound evidence budget
-        id: mac_evidence_budget
-        if: always()
-        run: python3 scripts/validate_evidence_budget.py build/mac-evidence --report build/mac-evidence-budget.json
-      - name: Retain small native Mac evidence
-        if: ${{ always() && steps.mac_evidence_budget.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: qrcatcher-native-mac-evidence
-          path: build/mac-evidence
-          retention-days: 1
-          compression-level: 9
-          if-no-files-found: error
-      - name: Probe installed visionOS runtime on the standard runner
-        if: ${{ !cancelled() }}
-        timeout-minutes: 12
-        run: python3 -u scripts/probe_vision_runtime.py
-      - name: Compile the native Vision test bundles
-        id: vision_test_build
-        if: ${{ !cancelled() }}
-        timeout-minutes: 8
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination 'generic/platform=visionOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee vision-test-build.log
-      - name: Execute native Vision hosted decode and persistence
-        if: ${{ !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' }}
-        timeout-minutes: 10
-        run: |
-          set -o pipefail
-          xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
-          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -only-testing:QRCatcherVisionTests -resultBundlePath VisionTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-test.log
-      - name: Execute native Vision system-picker UI flow
-        if: ${{ !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' }}
-        timeout-minutes: 7
-        run: |
-          set -o pipefail
-          python3 -u scripts/capture_vision_checkpoints.py "$VISION_SIMULATOR_ID" vision-ui-test.log > build/vision-runtime/checkpoint-capture.log &
-          CAPTURE_PID=$!
-          trap 'kill "$CAPTURE_PID" 2>/dev/null || true' EXIT
-          set +e
-          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -only-testing:QRCatcherVisionUITests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 -resultBundlePath VisionUIResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-ui-test.log
-          TEST_EXIT=${PIPESTATUS[0]}
-          touch build/vision-runtime/ui-completed.marker
-          wait "$CAPTURE_PID"
-          exit "$TEST_EXIT"
-      - name: Stop the Vision simulator before other platform tests
-        if: ${{ always() && env.VISION_SIMULATOR_ID != '' }}
-        timeout-minutes: 1
-        run: xcrun simctl shutdown "$VISION_SIMULATOR_ID"
-      - name: Record bounded Vision component crash metadata
-        if: always()
-        timeout-minutes: 1
-        run: python3 -u scripts/summarize_vision_runtime_crash.py
-      - name: Compile native TV PhotoKit and bounded-history tests
-        id: tv_test_build
-        if: ${{ !cancelled() }}
-        timeout-minutes: 8
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Debug -derivedDataPath build/TVTests -destination 'generic/platform=tvOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee tv-test-build.log
-          python3 - <<'PYCODE'
-          import plistlib
-          from pathlib import Path
-          value=plistlib.loads(Path('build/TVTests/Build/Products/Debug-appletvsimulator/QRCatcherTV.app/PrivacyInfo.xcprivacy').read_bytes())
-          assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}]
-          print('VERIFIED_TV_BUNDLED_REQUIRED_REASON',value['NSPrivacyAccessedAPITypes'],flush=True)
-          PYCODE
-      - name: Execute real TV Photos decode export and reopen workflows
-        if: ${{ !cancelled() && steps.tv_test_build.outcome == 'success' }}
-        timeout-minutes: 12
-        run: bash scripts/run_tv_platform_tests.sh
-      - name: Stop TV simulator before phone and iPad tests
-        if: ${{ always() && env.TV_SIMULATOR_ID != '' }}
-        timeout-minutes: 1
-        run: xcrun simctl shutdown "$TV_SIMULATOR_ID"
-      - name: Compile native Watch local decode and paired-phone state tests
-        id: watch_test_build
-        if: ${{ !cancelled() }}
-        timeout-minutes: 8
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Debug -derivedDataPath build/WatchTests -destination 'generic/platform=watchOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee watch-test-build.log
-      - name: Execute actual Watch local decode history and native UI
-        if: ${{ !cancelled() && steps.watch_test_build.outcome == 'success' }}
-        timeout-minutes: 18
-        run: python3 -u scripts/run_watch_platform_tests.py
-      - name: Stop Watch simulator before phone and iPad matrix
-        if: ${{ always() && env.WATCH_SIMULATOR_ID != '' }}
-        timeout-minutes: 1
-        run: xcrun simctl shutdown "$WATCH_SIMULATOR_ID" || true
-      - name: Verify iOS release and unchanged store model
-        if: ${{ !cancelled() }}
-        timeout-minutes: 8
-        run: |
-          xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/iOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
-          git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '100mango.QRCatcher'
-          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '15.0'
-          /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist
-          strings build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/QRCatcher > build/ios-release-strings.txt
-          if grep -E -- '-ui-testing|-fixture-payload|-fixture-empty|-reset-history' build/ios-release-strings.txt; then exit 1; fi
-      - name: Compile the iOS test bundles once before booting the matrix
-        id: ios_test_build
-        if: ${{ !cancelled() }}
-        timeout-minutes: 8
-        run: |
-          set -o pipefail
-          xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination 'generic/platform=iOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee ios-test-build.log
-      - name: Select installed phone and iPad matrix
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' }}
-        run: python3 scripts/select_ios_platform_matrix.py
-      - name: Run iOS codec equivalence and existing unit regression
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' }}
-        timeout-minutes: 15
-        run: |
-          set -o pipefail
-          xcrun simctl boot "$SIMULATOR_ID" || true
-          xcrun simctl bootstatus "$SIMULATOR_ID" -b
-          xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
-      - name: Run large-phone UI regression
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' }}
-        timeout-minutes: 10
-        run: bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
-      - name: Run compact-phone UI regression
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' && env.RUN_EXTENDED_IOS_MATRIX == 'true' }}
-        timeout-minutes: 12
-        run: bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests "$SIMULATOR_ID"
-      - name: Run native 13-inch iPad workflows
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' }}
-        timeout-minutes: 12
-        run: bash scripts/run_ios_platform_ui.sh "$IPAD_SIMULATOR_ID" PadUIResults.xcresult QRCatcherPadUITests "$SIMULATOR_ID" "$COMPACT_SIMULATOR_ID"
-      - name: Run native iPad mini workflows
-        if: ${{ !cancelled() && steps.ios_test_build.outcome == 'success' && env.RUN_EXTENDED_IOS_MATRIX == 'true' }}
-        timeout-minutes: 12
-        run: bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests "$IPAD_SIMULATOR_ID"
-      - name: Export bounded phone and iPad evidence
-        if: always()
-        timeout-minutes: 3
-        run: python3 -u scripts/export_ios_platform_screenshots.py
-      - name: Validate cumulative outbound evidence budget
-        id: platform_evidence_budget
-        if: always()
-        run: python3 scripts/validate_evidence_budget.py build/ios-platform-evidence --previous build/mac-evidence --report build/platform-evidence-budget.json
-      - name: Retain small phone and iPad evidence
-        if: ${{ always() && steps.platform_evidence_budget.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: qrcatcher-phone-ipad-evidence
-          path: build/ios-platform-evidence
-          retention-days: 1
-          compression-level: 9
-          if-no-files-found: error
-      - name: Summarize executed evidence
-        if: always()
-        timeout-minutes: 3
-        run: |
-          for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
-            if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
-          done
-          echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect and paired Watch background file transport remain physical-device gates; exact sandbox/platform outcomes are reported separately.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Verify source stayed unchanged
-        if: always()
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --exit-code HEAD --
-          echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
-          shasum -a 256 .github/workflows/apple-platforms.yml
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify exact source and stable toolchain
+      run: |
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        test "$GITHUB_REF" = refs/heads/codex/apple-platforms
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Tested commit: $(git rev-parse HEAD)"
+        echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py
+        git diff --exit-code -- QRCatcher.xcodeproj
+        plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
+        xcodebuild -list -project QRCatcher.xcodeproj
+
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Build native Mac unsigned Release arm64 and x86_64
+      if: ${{ (matrix.scope == 'macos') && (!cancelled()) }}
+      timeout-minutes: 10
+      run: |
+        set -o pipefail
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Release -derivedDataPath build/MacRelease -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tee mac-build.log
+        APP=build/MacRelease/Build/Products/Release/QRCatcherMac.app
+        test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = '100mango.QRCatcher'
+        ARCHITECTURES=$(xcrun lipo -archs "$APP/Contents/MacOS/QRCatcherMac")
+        echo "Verified native slices: $ARCHITECTURES"
+        [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]]
+        xcrun lipo -info "$APP/Contents/MacOS/QRCatcherMac"
+        python3 - <<'PYCODE'
+        import plistlib
+        from pathlib import Path
+        value=plistlib.loads(Path('build/MacRelease/Build/Products/Release/QRCatcherMac.app/Contents/Resources/PrivacyInfo.xcprivacy').read_bytes())
+        assert value['NSPrivacyAccessedAPITypes']==[] and value['NSPrivacyCollectedDataTypes']==[] and value['NSPrivacyTracking'] is False
+        print('VERIFIED_MAC_MINIMAL_PRIVACY_MANIFEST',flush=True)
+        PYCODE
+        ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")
+        test -n "$ICON"
+        ICON_PATH="$APP/Contents/Resources/${ICON%.icns}.icns"
+        test -s "$ICON_PATH"
+        shasum -a 256 "$ICON_PATH"
+        mkdir -p build/icon-verification
+        xcrun swift scripts/verify_mac_icon.swift "$ICON_PATH" build/icon-verification/mac-bundled-icon.png
+        strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
+        if grep -E -- 'QRCATCHER_TEST_STORE|QRCATCHER_SANDBOX_|sandboxDiagnostics|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
+    - name: Execute native Mac hosted regression tests
+      if: ${{ (matrix.scope == 'macos') && (!cancelled()) }}
+      timeout-minutes: 20
+      run: |
+        set -o pipefail
+        xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -only-testing:QRCatcherMacTests -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
+    - name: Execute ephemeral ad-hoc App Sandbox UI gate
+      if: ${{ (matrix.scope == 'macos') && (!cancelled()) }}
+      timeout-minutes: 15
+      run: bash scripts/run_mac_sandbox.sh
+    - name: Export bounded native Mac screenshots
+      if: ${{ (matrix.scope == 'macos') && (always()) }}
+      timeout-minutes: 3
+      run: python3 -u scripts/export_mac_screenshots.py
+    - name: Validate native Mac outbound evidence budget
+      id: mac_evidence_budget
+      if: ${{ (matrix.scope == 'macos') && (always()) }}
+      run: python3 scripts/validate_evidence_budget.py build/mac-evidence --scope "$EVIDENCE_SCOPE" --report build/mac-evidence-budget.json
+    - name: Retain small native Mac evidence
+      if: ${{ (matrix.scope == 'macos') && (always() && steps.mac_evidence_budget.outcome == 'success') }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-${{ matrix.scope }}-evidence
+        path: build/mac-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Probe installed visionOS runtime on the standard runner
+      if: ${{ (matrix.scope == 'visionos') && (!cancelled()) }}
+      timeout-minutes: 12
+      run: python3 -u scripts/probe_vision_runtime.py
+    - name: Compile the native Vision test bundles
+      id: vision_test_build
+      if: ${{ (matrix.scope == 'visionos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination 'generic/platform=visionOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee vision-test-build.log
+    - name: Execute native Vision hosted decode and persistence
+      if: ${{ (matrix.scope == 'visionos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success') }}
+      timeout-minutes: 10
+      run: |
+        set -o pipefail
+        python3 -u scripts/run_bounded.py 30 open -a Simulator --args -CurrentDeviceUDID "$VISION_SIMULATOR_ID"
+        python3 -u scripts/run_bounded.py 150 xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
+        xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -only-testing:QRCatcherVisionTests -resultBundlePath VisionTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-test.log
+    - name: Execute native Vision system-picker UI flow
+      if: ${{ (matrix.scope == 'visionos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success') }}
+      timeout-minutes: 7
+      run: |
+        set -o pipefail
+        python3 -u scripts/capture_vision_checkpoints.py "$VISION_SIMULATOR_ID" vision-ui-test.log > build/vision-runtime/checkpoint-capture.log &
+        CAPTURE_PID=$!
+        trap 'kill "$CAPTURE_PID" 2>/dev/null || true' EXIT
+        set +e
+        xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -only-testing:QRCatcherVisionUITests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 -resultBundlePath VisionUIResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-ui-test.log
+        TEST_EXIT=${PIPESTATUS[0]}
+        touch build/vision-runtime/ui-completed.marker
+        wait "$CAPTURE_PID"
+        exit "$TEST_EXIT"
+    - name: Stop the Vision simulator before other platform tests
+      if: ${{ (matrix.scope == 'visionos') && (always() && env.VISION_SIMULATOR_ID != '') }}
+      timeout-minutes: 1
+      run: xcrun simctl shutdown "$VISION_SIMULATOR_ID"
+    - name: Record bounded Vision component crash metadata
+      if: ${{ (matrix.scope == 'visionos') && (always()) }}
+      timeout-minutes: 1
+      run: python3 -u scripts/summarize_vision_runtime_crash.py
+    - name: Compile native TV PhotoKit and bounded-history tests
+      id: tv_test_build
+      if: ${{ (matrix.scope == 'tvos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Debug -derivedDataPath build/TVTests -destination 'generic/platform=tvOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee tv-test-build.log
+        python3 - <<'PYCODE'
+        import plistlib
+        from pathlib import Path
+        value=plistlib.loads(Path('build/TVTests/Build/Products/Debug-appletvsimulator/QRCatcherTV.app/PrivacyInfo.xcprivacy').read_bytes())
+        assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}]
+        print('VERIFIED_TV_BUNDLED_REQUIRED_REASON',value['NSPrivacyAccessedAPITypes'],flush=True)
+        PYCODE
+    - name: Execute real TV Photos decode export and reopen workflows
+      if: ${{ (matrix.scope == 'tvos') && (!cancelled() && steps.tv_test_build.outcome == 'success') }}
+      timeout-minutes: 12
+      run: bash scripts/run_tv_platform_tests.sh
+    - name: Stop TV simulator before phone and iPad tests
+      if: ${{ (matrix.scope == 'tvos') && (always() && env.TV_SIMULATOR_ID != '') }}
+      timeout-minutes: 1
+      run: xcrun simctl shutdown "$TV_SIMULATOR_ID"
+    - name: Compile native Watch local decode and paired-phone state tests
+      id: watch_test_build
+      if: ${{ (matrix.scope == 'watchos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Debug -derivedDataPath build/WatchTests -destination 'generic/platform=watchOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee watch-test-build.log
+    - name: Execute actual Watch local decode history and native UI
+      if: ${{ (matrix.scope == 'watchos') && (!cancelled() && steps.watch_test_build.outcome == 'success') }}
+      timeout-minutes: 18
+      run: python3 -u scripts/run_watch_platform_tests.py
+    - name: Stop Watch simulator before phone and iPad matrix
+      if: ${{ (matrix.scope == 'watchos') && (always() && env.WATCH_SIMULATOR_ID != '') }}
+      timeout-minutes: 1
+      run: xcrun simctl shutdown "$WATCH_SIMULATOR_ID" || true
+    - name: Verify unsigned native Watch device Release package
+      if: ${{ (matrix.scope == 'watchos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Release -derivedDataPath build/ReleaseWatch -destination 'generic/platform=watchOS' CODE_SIGNING_ALLOWED=NO | tee release-watch.log
+        python3 scripts/verify_native_release.py Watch
+    - name: Verify unsigned native TV device Release package
+      if: ${{ (matrix.scope == 'tvos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Release -derivedDataPath build/ReleaseTV -destination 'generic/platform=tvOS' CODE_SIGNING_ALLOWED=NO | tee release-tv.log
+        python3 scripts/verify_native_release.py TV
+    - name: Verify unsigned native Vision device Release package
+      if: ${{ (matrix.scope == 'visionos') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Release -derivedDataPath build/ReleaseVision -destination 'generic/platform=visionOS' CODE_SIGNING_ALLOWED=NO | tee release-vision.log
+        python3 scripts/verify_native_release.py Vision
+    - name: Verify iOS release and unchanged store model
+      if: ${{ (matrix.scope == 'iphone_pro') && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/iOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+        test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '100mango.QRCatcher'
+        test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '15.0'
+        /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist
+        python3 - <<'PYCODE'
+        import plistlib
+        from pathlib import Path
+        value=plistlib.loads(Path('build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/PrivacyInfo.xcprivacy').read_bytes())
+        assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryFileTimestamp','NSPrivacyAccessedAPITypeReasons':['C617.1']}]
+        assert value['NSPrivacyCollectedDataTypes']==[] and value['NSPrivacyTracking'] is False
+        print('VERIFIED_IOS_APP_CONTAINER_REQUEST_METADATA_REASON',flush=True)
+        PYCODE
+        strings build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/QRCatcher > build/ios-release-strings.txt
+        if grep -E -- '-ui-testing|-fixture-payload|-fixture-empty|-reset-history|QRCATCHER_CAMERA_TRACE' build/ios-release-strings.txt; then exit 1; fi
+    - name: Compile iOS tests before this device boots
+      id: ios_test_build
+      if: ${{ (startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled()) }}
+      timeout-minutes: 8
+      run: |
+        set -o pipefail
+        xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination 'generic/platform=iOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee ios-test-build.log
+    - name: Select this fresh VM phone or iPad device
+      if: ${{ (startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled() && steps.ios_test_build.outcome == 'success')
+        }}
+      run: python3 scripts/select_ios_platform_matrix.py
+    - name: Run iOS codec equivalence and existing unit regression
+      if: ${{ (matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
+      timeout-minutes: 15
+      run: |
+        set -o pipefail
+        xcrun simctl boot "$SIMULATOR_ID" || true
+        xcrun simctl bootstatus "$SIMULATOR_ID" -b
+        xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
+    - name: Run large-phone UI regression
+      if: ${{ (matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
+      timeout-minutes: 10
+      run: bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
+    - name: Run compact-phone UI regression
+      if: ${{ (matrix.scope == 'iphone_se3') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
+      timeout-minutes: 12
+      run: bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests
+    - name: Run native 13-inch iPad workflows
+      if: ${{ (matrix.scope == 'ipad_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
+      timeout-minutes: 12
+      run: bash scripts/run_ios_platform_ui.sh "$IPAD_SIMULATOR_ID" PadUIResults.xcresult QRCatcherPadUITests
+    - name: Run native iPad mini workflows
+      if: ${{ (matrix.scope == 'ipad_mini') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
+      timeout-minutes: 12
+      run: bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests
+    - name: Export bounded phone and iPad evidence
+      if: ${{ (matrix.scope != 'macos') && (always()) }}
+      timeout-minutes: 3
+      run: python3 -u scripts/export_ios_platform_screenshots.py
+    - name: Validate isolated platform and whole-run evidence allocation
+      id: platform_evidence_budget
+      if: ${{ (matrix.scope != 'macos') && (always()) }}
+      run: python3 scripts/validate_evidence_budget.py build/ios-platform-evidence --scope "$EVIDENCE_SCOPE" --report build/platform-evidence-budget.json
+    - name: Retain small phone and iPad evidence
+      if: ${{ (matrix.scope != 'macos') && (always() && steps.platform_evidence_budget.outcome == 'success') }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-${{ matrix.scope }}-evidence
+        path: build/ios-platform-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Summarize executed evidence
+      if: always()
+      timeout-minutes: 3
+      run: |
+        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
+          if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
+        done
+        echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect and paired Watch background file transport remain physical-device gates; exact sandbox/platform outcomes are reported separately.' >> "$GITHUB_STEP_SUMMARY"
+    - name: Verify source stayed unchanged
+      if: always()
+      run: |
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+    name: "${{ matrix.scope }} \xB7 fresh standard VM"
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scope:
+        - macos
+        - visionos
+        - tvos
+        - watchos
+        - iphone_pro
+        - iphone_se3
+        - ipad_pro
+        - ipad_mini
+'on':
+  push:
+    branches:
+    - codex/apple-platforms

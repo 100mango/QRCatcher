@@ -5,10 +5,10 @@
 "Photo awaiting iPhone" = "等待 iPhone 识别的照片";
 "Privacy Policy" = "隐私政策";
 "OK" = "好";
-"Saved QR source photo" = "已保存的二维码原始照片";
+"Saved QR photo preview" = "已保存的二维码照片预览";
 "Zoom out" = "缩小";
 "Zoom in" = "放大";
-"Original selected QR photo" = "所选二维码原始照片";
+"Saved QR photo preview, up to 1536 pixels" = "已保存的二维码照片预览，最长边不超过 1536 像素";
 "Read on iPhone" = "使用 iPhone 识别";
 "Cancel Request" = "取消请求";
 "Pending" = "等待处理";
@@ -16,7 +16,7 @@
 "Completed" = "已完成";
 "Failed" = "处理失败";
 "Waiting for paired iPhone. Delivery may happen later." = "正在等待配对的 iPhone。传输可能稍后完成。";
-"Sends only this selected photo to your paired iPhone when you choose Read on iPhone. No link opens automatically." = "只有选择“使用 iPhone 识别”时，才会将当前照片发送到配对的 iPhone。不会自动打开链接。";
+"Read on iPhone sends this saved photo preview to your paired iPhone. The original Photos asset stays unchanged. No link opens automatically." = "选择“使用 iPhone 识别”会将这份已保存的照片预览发送到配对的 iPhone。照片图库中的原图保持不变，也不会自动打开链接。";
 "Remove from Watch" = "从手表移除";
 "Remove this local item?" = "移除这条本地记录？";
 "Cancel" = "取消";
@@ -31,3 +31,5 @@
 "Waiting for paired iPhone. Keep both apps installed; delivery may happen later." = "正在等待配对的 iPhone。请保留两端应用，传输可能稍后完成。";
 "No QR code was found on iPhone. Try a clearer photo." = "iPhone 未发现二维码。请尝试更清晰的照片。";
 "iPhone result saved on this Watch" = "iPhone 的识别结果已保存在这块手表上";
+
+"The saved preview could not be read. Your text result is still available." = "无法读取已保存的预览，文本结果仍可查看。";
