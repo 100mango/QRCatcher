@@ -1,0 +1,94 @@
+name: Native Apple platforms
+on:
+  push:
+    branches: [codex/apple-platforms]
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-apple-platforms
+  cancel-in-progress: true
+jobs:
+  mac-native:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 64
+          ref: ${{ github.sha }}
+      - name: Verify exact source and stable toolchain
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/apple-platforms
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          echo "Tested commit: $(git rev-parse HEAD)"
+          echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
+          shasum -a 256 .github/workflows/apple-platforms.yml
+          sw_vers
+          xcodebuild -version
+          xcodebuild -version | grep '27A266a'
+          test "$(uname -m)" = arm64
+          python3 scripts/materialize_qr_fixtures.py
+          python3 scripts/generate_project.py
+          git diff --exit-code -- QRCatcher.xcodeproj
+          plutil -lint QRCatcherMac/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
+          xcodebuild -list -project QRCatcher.xcodeproj
+      - name: Build native Mac unsigned Release arm64 and x86_64
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Release -derivedDataPath build/MacRelease -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tee mac-build.log
+          APP=build/MacRelease/Build/Products/Release/QRCatcherMac.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = '100mango.QRCatcher'
+          lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/QRCatcherMac"
+          lipo -info "$APP/Contents/MacOS/QRCatcherMac"
+          strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
+          if grep -E -- 'QRCATCHER_TEST_STORE|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
+      - name: Execute native Mac unit and UI tests
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
+      - name: Verify iOS release and unchanged store model
+        timeout-minutes: 8
+        run: |
+          xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/iOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+          git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '100mango.QRCatcher'
+      - name: Run iOS codec equivalence and existing unit regression
+        timeout-minutes: 15
+        run: |
+          SIMULATOR_ID=$(python3 - <<'PY'
+          import json,subprocess
+          d=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          print(next(x['udid'] for r,ds in d['devices'].items() if r.endswith('iOS-27-0') for x in ds if x['name'].startswith('iPhone')))
+          PY
+          )
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Export bounded native Mac screenshots
+        if: always()
+        timeout-minutes: 3
+        run: python3 -u scripts/export_mac_screenshots.py
+      - name: Summarize executed evidence
+        if: always()
+        timeout-minutes: 3
+        run: |
+          for RESULT in MacTestResults.xcresult iOSUnitResults.xcresult; do
+            if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
+          done
+          echo 'Native arm64 runtime is tested; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect, signed sandbox, distribution and other platform targets remain separate gates.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source stayed unchanged
+        if: always()
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
+          shasum -a 256 .github/workflows/apple-platforms.yml

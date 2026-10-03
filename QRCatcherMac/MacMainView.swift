@@ -1,0 +1,138 @@
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+
+struct MacMainView: View {
+    @ObservedObject var workspace: MacWorkspace
+    @ObservedObject var history: MacHistory
+    @State private var photo: PhotosPickerItem?
+    @State private var sheet: Sheet?
+    @State private var targeted = false
+    @State private var deleteItem: HistoryItem?
+    enum Sheet: String, Identifiable { case camera, privacy; var id: String { rawValue } }
+
+    var filtered: [HistoryItem] {
+        history.items.filter { workspace.search.isEmpty || $0.text.localizedCaseInsensitiveContains(workspace.search) }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            VStack(spacing: 0) {
+                List(selection: $workspace.selection) {
+                    ForEach(filtered) { item in
+                        HistoryRow(item: item).tag(item.id)
+                            .contextMenu { Button("Delete Record", role: .destructive) { deleteItem = item } }
+                    }
+                }
+                .accessibilityIdentifier("mac.history")
+                .overlay { if filtered.isEmpty { Text(history.items.isEmpty ? "Your QR history appears here" : "No matching results").foregroundStyle(.secondary).padding() } }
+                .searchable(text: $workspace.search, prompt: "Search history")
+                Text("\(history.items.count) saved on this Mac").font(.caption).foregroundStyle(.secondary).padding()
+            }
+            .navigationTitle("History")
+            .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 380)
+        } detail: {
+            QRResultView(workspace: workspace, historyError: history.error)
+                .background(targeted ? Color.accentColor.opacity(0.08) : Color.clear)
+                .onDrop(of: [UTType.fileURL, UTType.image], isTargeted: $targeted, perform: workspace.dropped)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button(action: workspace.importFile) { Label("Open Image", systemImage: "folder") }.accessibilityIdentifier("mac.import")
+                PhotosPicker(selection: $photo, matching: .images) { Label("Photos", systemImage: "photo") }.accessibilityIdentifier("mac.photos")
+                Button(action: workspace.pasteImage) { Label("Paste Image", systemImage: "doc.on.clipboard") }.accessibilityIdentifier("mac.paste")
+                Button { sheet = .camera } label: { Label("Camera", systemImage: "camera") }.accessibilityIdentifier("mac.camera")
+                Button(action: workspace.exportHistory) { Label("Export History", systemImage: "square.and.arrow.up") }.accessibilityIdentifier("mac.exportHistory")
+                Button { sheet = .privacy } label: { Label("Privacy", systemImage: "hand.raised") }.accessibilityIdentifier("mac.privacy")
+            }
+        }
+        .onChange(of: workspace.selection) { value in
+            if let item = history.items.first(where: { $0.id == value }), workspace.payload != item.payload { workspace.select(item) }
+        }
+        .task(id: photo) { await readPhoto() }
+        .sheet(item: $sheet) { value in
+            switch value {
+            case .camera: MacCameraView(onRead: workspace.accept)
+            case .privacy: MacPrivacyView()
+            }
+        }
+        .alert("QRCatcher", isPresented: Binding(get: { workspace.error != nil }, set: { if !$0 { workspace.error = nil } })) {
+            Button("OK") { workspace.error = nil }
+        } message: { Text(workspace.error ?? "") }
+        .confirmationDialog("Delete this history record?", isPresented: Binding(get: { deleteItem != nil }, set: { if !$0 { deleteItem = nil } })) {
+            Button("Delete Record", role: .destructive) { if let deleteItem { history.delete(deleteItem) }; deleteItem = nil }
+        } message: { Text("The original image is not affected.") }
+    }
+
+    private func readPhoto() async {
+        guard let photo else { return }
+        do {
+            guard let data = try await photo.loadTransferable(type: Data.self), !Task.isCancelled else { return }
+            workspace.read(data: data)
+        } catch { if !Task.isCancelled { workspace.error = "Photo could not be loaded. \(error.localizedDescription)" } }
+    }
+}
+
+private struct HistoryRow: View {
+    let item: HistoryItem
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: item.webURL == nil ? "text.alignleft" : "globe").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.text).lineLimit(2)
+                if let date = item.createdAt { Text(date, style: .date).font(.caption).foregroundStyle(.secondary) }
+            }
+        }.padding(.vertical, 6).accessibilityElement(children: .combine)
+    }
+}
+
+private struct QRResultView: View {
+    @ObservedObject var workspace: MacWorkspace
+    let historyError: String?
+    var image: NSImage? { workspace.payload.flatMap { QRImageCodec.png(payload: $0) }.flatMap(NSImage.init(data:)) }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                Image(systemName: "qrcode.viewfinder").font(.system(size: 40)).foregroundStyle(Color.accentColor)
+                Text(workspace.payload == nil ? "Read a QR code" : "QR Result").font(.largeTitle.bold())
+                if let payload = workspace.payload {
+                    if let image {
+                        Image(nsImage: image).interpolation(.none).resizable().scaledToFit().frame(width: 200, height: 200)
+                            .accessibilityLabel("Scannable QR representation of the selected result")
+                    }
+                    Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload")
+                    HStack {
+                        Button("Copy", action: workspace.copy).accessibilityIdentifier("mac.copy")
+                        Button("Export QR Image…", action: workspace.exportQR).accessibilityIdentifier("mac.exportQR")
+                        if QRPayload.safeWebURL(payload) != nil {
+                            Button("Open in Browser", action: workspace.openWebsite).accessibilityIdentifier("mac.openWebsite")
+                        }
+                    }
+                    Text("Links open only when you choose Open in Browser.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Use an image from Files, Photos or your clipboard. You can also drop an image here, or use an available camera.")
+                        .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 400)
+                    Button("Open Image…", action: workspace.importFile).buttonStyle(.borderedProminent)
+                }
+                if workspace.isReading { HStack { ProgressView().controlSize(.small); Button("Cancel", action: workspace.cancelRead) } }
+                Text(workspace.status).foregroundStyle(.secondary).multilineTextAlignment(.center).accessibilityIdentifier("mac.status")
+                if let historyError { Text(historyError).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("mac.historyError") }
+            }.padding(36).frame(maxWidth: .infinity)
+        }.navigationTitle("QRCatcher")
+    }
+}
+
+private struct MacPrivacyView: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Privacy").font(.title.bold())
+            Text("QR decoding and history storage happen on this device. Imported images are processed locally. Camera access is requested only when you choose Camera. History is not automatically synchronized with your other devices.")
+            Text("Copying, exporting or opening a website is an explicit action. A website you open is handled by your system browser and its own privacy practices.")
+            Link("Read the privacy policy", destination: URL(string: "https://100mango.github.io/app-privacy/")!)
+            Text("Questions: 100mango@gmail.com").textSelection(.enabled)
+            Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+        }.padding(28).frame(width: 480)
+    }
+}

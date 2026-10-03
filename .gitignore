@@ -32,3 +32,5 @@ __pycache__/
 *.pyc
 *.xcresult/
 test.log
+
+Tests/Fixtures/*.png

@@ -7,8 +7,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, nullable) NSError *loadError;
 + (NSManagedObjectModel *)model;
 + (NSDictionary *)migrationOptions;
-- (instancetype)initWithURL:(nullable NSURL *)URL;
-- (BOOL)recordPayload:(NSString *)payload error:(NSError **)error;
+- (instancetype)initWithURL:(nullable NSURL *)URL NS_SWIFT_NAME(init(url:));
+- (BOOL)recordPayload:(NSString *)payload error:(NSError **)error NS_SWIFT_NAME(record(payload:));
 - (BOOL)save:(NSError **)error;
 @end
 NS_ASSUME_NONNULL_END

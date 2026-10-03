@@ -13,11 +13,17 @@ def configs(key,common):
     refs=[]
     for name in ['Debug','Release']:
         settings=dict(common)
-        if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES',GCC_SYMBOLS_PRIVATE_EXTERN='NO',ENABLE_TESTABILITY='YES')
+        if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES',GCC_SYMBOLS_PRIVATE_EXTERN='NO',ENABLE_TESTABILITY='YES',SWIFT_OPTIMIZATION_LEVEL='-Onone',SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG')
         else:settings.update(GCC_OPTIMIZATION_LEVEL='s',VALIDATE_PRODUCT='YES')
         refs.append(add(key+name,'XCBuildConfiguration',buildSettings=settings,name=name))
     return add(key+'configs','XCConfigurationList',buildConfigurations=refs,defaultConfigurationIsVisible=0,defaultConfigurationName='Release')
 source=[]; appfiles=[]
+sharedSources=[];sharedFiles=[]
+for path in sorted((root/'Shared').rglob('*')):
+    if path.suffix in ['.h','.m']:
+        r=file(str(path.relative_to(root)),'sourcecode.c.objc' if path.suffix=='.m' else 'sourcecode.c.h');sharedFiles.append(r)
+        if path.suffix=='.m':sharedSources.append(build(r))
+source+=sharedSources;appfiles+=sharedFiles
 for path in sorted((root/'QRCatcher').glob('*')):
     if path.suffix in ['.h','.m']:
         ref=file(str(path.relative_to(root)),'sourcecode.c.objc' if path.suffix=='.m' else 'sourcecode.c.h');appfiles.append(ref)
@@ -35,17 +41,46 @@ projectID=uid('project'); appID=uid('app')
 for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','application'),('unit','QRCatcherTests','100mango.QRCatcherTests','bundle.unit-test'),('ui','QRCatcherUITests','100mango.QRCatcherUITests','bundle.ui-testing')]:
     ext='app' if key=='app' else 'xctest'
     product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if key=='app' else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
-    common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':bundle,'CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
+    common={'HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':bundle,'CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
     if key=='app':
         common.update(INFOPLIST_FILE='QRCatcher/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src=source;res=resources;files=appfiles;deps=[]
     else:
-        common.update(GENERATE_INFOPLIST_FILE='YES',HEADER_SEARCH_PATHS='$(SRCROOT)/QRCatcher',IPHONEOS_DEPLOYMENT_TARGET='17.0')
+        common.update(GENERATE_INFOPLIST_FILE='YES',HEADER_SEARCH_PATHS=['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],IPHONEOS_DEPLOYMENT_TARGET='17.0')
         if key=='unit':common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcher.app/QRCatcher',BUNDLE_LOADER='$(TEST_HOST)')
         else:common.update(TEST_TARGET_NAME='QRCatcher')
         test=file(name+'/'+name+'.m','sourcecode.c.objc');files=[test];src=[build(test)];res=[]
+        if key=='unit':
+            for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
+                r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
         proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=appID,remoteInfo='QRCatcher')
         deps=[add(key+'dependency','PBXTargetDependency',target=appID,targetProxy=proxy)]
+    groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
+    targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# Native macOS executable and supported hosted XCTest/UI routes, independent of the iOS target.
+macID=uid('mac')
+for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing')]:
+    app=key=='mac';ext='app' if app else 'xctest'
+    product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
+    files=[];src=[];res=[];deps=[]
+    for path in sorted((root/name).glob('*.swift')):
+        r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
+    common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'macosx','SUPPORTED_PLATFORMS':'macosx','MACOSX_DEPLOYMENT_TARGET':'13.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks','CODE_SIGN_STYLE':'Automatic','ENABLE_HARDENED_RUNTIME':'NO'}
+    if app:
+        common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        src+=sharedSources+[build(model)];files+=sharedFiles+[model]
+        for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
+            r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
+        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+    else:
+        common.update(GENERATE_INFOPLIST_FILE='YES')
+        if key=='macunit':
+            common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
+            for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
+                r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
+        else:common.update(TEST_TARGET_NAME='QRCatcherMac')
+        proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=macID,remoteInfo='QRCatcherMac')
+        deps=[add(key+'dependency','PBXTargetDependency',target=macID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 productsID=add('products','PBXGroup',children=products,name='Products',sourceTree='<group>')
@@ -68,3 +103,6 @@ scheme.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref('app','QRCatcher.app')}</BuildableProductRunnable></ProfileAction>
 <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>''')
+
+macScheme=(root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme')
+macScheme.write_text(scheme.read_text().replace(uid('app'),uid('mac')).replace(uid('unit'),uid('macunit')).replace(uid('ui'),uid('macui')).replace('QRCatcherTests','QRCatcherMacTests').replace('QRCatcherUITests','QRCatcherMacUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherMac.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherMac"'))

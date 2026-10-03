@@ -3,6 +3,8 @@
 #import "URLEntity.h"
 #import "NSString+Tools.h"
 #import "QRCodeCodec.h"
+#import "QRImageCodec.h"
+#import <CoreImage/CoreImage.h>
 #import "AppDelegate.h"
 #import "QRCatchViewController.h"
 #import "QRURLViewController.h"
@@ -49,6 +51,26 @@
         UIImage *image = [QRCodeCodec imageForPayload:payload];
         XCTAssertNotNil(image);
         XCTAssertEqualObjects([QRCodeCodec payloadsInImage:image].firstObject, payload);
+    }
+}
+- (void)testSharedCodecMatchesOriginalUIImageOracle {
+    for (NSString *name in @[@"ascii", @"unicode", @"rotated", @"invalid", @"multiple"]) {
+        NSURL *URL = [[NSBundle bundleForClass:self.class] URLForResource:name withExtension:@"png"];
+        XCTAssertNotNil(URL);
+        NSData *data = [NSData dataWithContentsOfURL:URL];
+        UIImage *image = [UIImage imageWithData:data];
+        XCTAssertNotNil(image);
+        // Frozen baseline algorithm from 9abdd5e; independent of the new adapter.
+        CIImage *input = [[CIImage alloc] initWithImage:image];
+        CIDetector *detector = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil options:@{CIDetectorAccuracy: CIDetectorAccuracyHigh}];
+        NSMutableArray *oracle = [NSMutableArray new];
+        for (CIQRCodeFeature *feature in [detector featuresInImage:input]) if (feature.messageString.length) [oracle addObject:feature.messageString];
+        NSError *error;
+        NSArray *portable = [QRImageCodec decodeImageData:data error:&error];
+        XCTAssertNil(error);
+        XCTAssertEqualObjects([NSSet setWithArray:portable], [NSSet setWithArray:oracle]);
+        XCTAssertEqualObjects([QRCodeCodec payloadsInImage:image], oracle);
+        XCTAssertEqual(oracle.count, [name isEqualToString:@"invalid"] ? 0 : [name isEqualToString:@"multiple"] ? 2 : 1);
     }
 }
 - (void)testEmptyQR {
