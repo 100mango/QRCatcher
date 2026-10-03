@@ -1,0 +1,51 @@
+name: Supplemental iOS compatibility
+'on':
+  push:
+    branches: [codex/compatibility-matrix]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: supplemental-ios-compatibility
+  cancel-in-progress: false
+jobs:
+  inventory:
+    runs-on: macos-14
+    timeout-minutes: 12
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # official v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify controller
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/compatibility-matrix
+          test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          echo "Controller $(git rev-parse HEAD) tree $(git rev-parse 'HEAD^{tree}')"
+          shasum -a 256 .github/workflows/compatibility.yml
+      - name: Record actual standard runner toolchain and simulator inventory
+        run: |
+          set -euo pipefail
+          sw_vers
+          uname -m
+          printf 'Installed Xcodes\n'
+          ls -d /Applications/Xcode*.app
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list runtimes -j
+          xcrun simctl list devices available
+          xcrun simctl list devicetypes | grep -E 'iPhone SE|iPad mini'
+          xcodebuild -help > /tmp/xcode-help.txt 2>&1 || true
+          grep -E 'downloadPlatform|buildVersion|importPlatform|architectureVariant' /tmp/xcode-help.txt
+          xcrun simctl help runtime
+          echo 'Inventory only: no app execution or minimum-OS pass claimed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify controller stayed unchanged
+        if: always()
+        run: git diff --exit-code HEAD --
