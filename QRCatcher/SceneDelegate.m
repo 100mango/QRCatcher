@@ -2,8 +2,8 @@
 #import "AppDelegate.h"
 #import "QRCatchViewController.h"
 #import "QRURLViewController.h"
-#import <SafariServices/SafariServices.h>
-@interface SceneDelegate () <SFSafariViewControllerDelegate, UIAdaptivePresentationControllerDelegate>
+#import "QRPrivacyViewController.h"
+@interface SceneDelegate ()
 @property (nonatomic, weak) QRCatchViewController *scanController;
 @end
 @implementation SceneDelegate
@@ -36,22 +36,13 @@
     UINavigationController *navigation = (UINavigationController *)tabs.selectedViewController;
     UIViewController *presenter = navigation.visibleViewController;
     if (presenter.presentedViewController) return;
-    NSURL *URL = [NSURL URLWithString:@"https://100mango.github.io/app-privacy/"];
-    SFSafariViewController *browser = [[SFSafariViewController alloc] initWithURL:URL];
-    browser.dismissButtonStyle = SFSafariViewControllerDismissButtonStyleClose;
-    browser.delegate = self;
+    QRPrivacyViewController *privacy = [QRPrivacyViewController new];
+    __weak typeof(self) weakSelf = self;
+    privacy.dismissalHandler = ^{ [weakSelf.scanController setPrivacyPolicyPresented:NO]; };
+    UINavigationController *policyNavigation = [[UINavigationController alloc] initWithRootViewController:privacy];
+    policyNavigation.modalPresentationStyle = UIModalPresentationFullScreen;
     [self.scanController setPrivacyPolicyPresented:YES];
-    [presenter presentViewController:browser animated:YES completion:^{
-        browser.presentationController.delegate = self;
-    }];
-}
-- (void)safariViewControllerDidFinish:(SFSafariViewController *)controller {
-    [controller dismissViewControllerAnimated:YES completion:^{
-        [self.scanController setPrivacyPolicyPresented:NO];
-    }];
-}
-- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
-    [self.scanController setPrivacyPolicyPresented:NO];
+    [presenter presentViewController:policyNavigation animated:YES completion:nil];
 }
 - (void)sceneDidEnterBackground:(UIScene *)scene { [[AppDelegate appDelegate] saveContext]; }
 @end

@@ -175,7 +175,7 @@
     if (presented) [self pauseCamera]; else [self resumeCamera];
 }
 - (void)resumeCamera {
-    if (!self.visible || self.hasResult || self.privacyPolicyPresented) return;
+    if (!self.visible || self.hasResult || self.privacyPolicyPresented || self.presentedViewController) return;
 #if DEBUG
     // Hosted unit tests do not exercise camera hardware. Avoid a system permission
     // alert competing with the separate UI-test runner's automation session.
@@ -266,7 +266,7 @@
     });
 }
 - (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection {
-    if (!self.visible || self.hasResult || self.privacyPolicyPresented || !self.wantsCamera) return;
+    if (!self.visible || self.hasResult || self.privacyPolicyPresented || self.presentedViewController || !self.wantsCamera) return;
     for (AVMetadataObject *object in metadataObjects) {
         if ([object.type isEqualToString:AVMetadataObjectTypeQRCode] && [object isKindOfClass:AVMetadataMachineReadableCodeObject.class]) {
             [self handlePayload:((AVMetadataMachineReadableCodeObject *)object).stringValue];

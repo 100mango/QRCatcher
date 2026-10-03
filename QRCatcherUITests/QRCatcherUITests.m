@@ -42,7 +42,7 @@
     XCTAssertTrue(privacy.hittable);
     XCTAssertEqualObjects(privacy.label, @"Privacy Policy");
     [privacy tap];
-    XCUIElement *done = self.app.buttons[@"Close"];
+    XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];
     XCTAssertTrue([done waitForExistenceWithTimeout:15]);
     NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
     [self logSyntheticScreenshot:@"privacy-open-diagnostic"];
@@ -95,6 +95,10 @@
     [self launch:@[@"-reset-history", @"-fixture-payload", @"https://example.com/regression"]];
     XCTAssertTrue([self.app.buttons[@"scan.open"] waitForExistenceWithTimeout:10]);
     XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+    [self.app.navigationBars.buttons[@"privacy.policy"] tap];
+    XCTAssertTrue([self.app.navigationBars.buttons[@"privacy.close"] waitForExistenceWithTimeout:15]);
+    [self.app.navigationBars.buttons[@"privacy.close"] tap];
+    XCTAssertTrue([self.app.buttons[@"scan.open"] waitForExistenceWithTimeout:5]);
     [self.app swipeUp]; [self.app.buttons[@"scan.again"] tap];
     XCTAssertFalse(self.app.staticTexts[@"scan.result"].exists);
     XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"No camera"]);

@@ -7,7 +7,7 @@
 - Native Objective-C app: QR camera scanning/decoding, text results, web links, persistent scan history, history selection and swipe deletion
 - Original scanning artwork, tab icons and ripple animation retained; native safe-area layout, Dynamic Type, Reduce Motion and labelled controls replace device-size assumptions
 - Chinese interface retained through Simplified Chinese localization, with English fallback
-- Localized, VoiceOver-labelled Privacy Policy entry is available from both tabs and opens https://100mango.github.io/app-privacy/ in an in-app Safari view with an explicit Close dismissal
+- Localized, VoiceOver-labelled Privacy Policy entry is available from both tabs and opens https://100mango.github.io/app-privacy/ in a nonpersistent in-app web view with a native, localized Close control and a retry state when offline
 - Text results can now be copied and stored as well as web links. A scanned URL requires an explicit tap; QR content cannot launch arbitrary URL schemes automatically
 
 ## Storage compatibility
@@ -36,7 +36,7 @@ No CocoaPods install is required. Masonry 0.6.1 was an unused import; the app us
 
 - Production UIScene launch/background/foreground navigation without any UI-test camera stub; simulator may present its real permission prompt, but has no camera hardware
 
-- Denied camera explanation/Settings affordance and empty history, including Privacy Policy entry visibility, open/Close dismissal and return to the denied state
+- Denied camera explanation/Settings affordance and empty history, including Privacy Policy entry visibility, open/native Close dismissal and return to the denied state; Scan Again also verifies the camera pause gate clears after closing the policy
 - Production QR decode/result/save path via Debug-only generated QR fixture
 - Plain text cannot offer website opening; website scan remains in-app until explicit action
 - Relaunch/background/foreground history persistence and deletion persistence
