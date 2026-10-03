@@ -261,6 +261,9 @@
 - (void)handlePayload:(NSString *)payload {
     if (self.hasResult) return;
     if (!payload.length) {
+        self.hasResult = YES;
+        [self pauseCamera];
+        [self.ripple removeAllAnimations];
         self.statusLabel.text = NSLocalizedString(@"This QR code is empty or could not be read. Try another code.", nil);
         self.againButton.hidden = NO;
         return;

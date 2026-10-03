@@ -1,10 +1,22 @@
 #import <XCTest/XCTest.h>
+#import <UIKit/UIKit.h>
 @interface QRCatcherUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @end
 @implementation QRCatcherUITests
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
+- (void)logSyntheticScreenshot:(NSString *)name {
+    NSData *JPEG = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image, 0.55);
+    XCTAssertLessThanOrEqual(JPEG.length, 500 * 1024);
+    if (JPEG.length > 500 * 1024) return;
+    NSString *base64 = [JPEG base64EncodedStringWithOptions:0];
+    NSLog(@"SCREENSHOT_BEGIN:%@", name);
+    for (NSUInteger index = 0; index < base64.length; index += 4096) {
+        NSLog(@"SCREENSHOT_CHUNK:%@", [base64 substringWithRange:NSMakeRange(index, MIN((NSUInteger)4096, base64.length - index))]);
+    }
+    NSLog(@"SCREENSHOT_END:%@", name);
+}
 - (void)testProductionSceneLaunchWithoutCameraStub {
     self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
     [self addUIInterruptionMonitorWithDescription:@"Camera permission" handler:^BOOL(XCUIElement *alert) {
@@ -35,9 +47,11 @@
     [self launch:@[@"-reset-history", @"-fixture-payload", payload]];
     XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
     XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, payload);
+    [self logSyntheticScreenshot:@"synthetic-scan-result"];
     XCTAssertFalse(self.app.buttons[@"scan.open"].exists);
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCTAssertTrue([self.app.tables.cells.staticTexts[payload] waitForExistenceWithTimeout:5]);
+    [self logSyntheticScreenshot:@"synthetic-history"];
     [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
     XCTAssertTrue([self.app.tables.cells.staticTexts[payload] waitForExistenceWithTimeout:5]);
     [self.app terminate]; [self launch:@[]];
