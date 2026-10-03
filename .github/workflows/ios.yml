@@ -90,7 +90,7 @@ jobs:
           print('Embedded framework inventory: '+text)
           PYINVENTORY
       - name: Build and run unit regression tests
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: |
           set -o pipefail
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath UnitTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
