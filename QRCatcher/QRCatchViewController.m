@@ -13,7 +13,7 @@
 @property (nonatomic, strong) UIButton *settingsButton;
 @property (nonatomic, strong) UIButton *openButton;
 @property (nonatomic, strong) UIButton *againButton;
-@property (nonatomic, strong) UIButton *copyButton;
+@property (nonatomic, strong) UIButton *resultCopyButton;
 @property (nonatomic, strong) CAShapeLayer *ripple;
 @property (nonatomic, strong) AVCaptureSession *session;
 @property (nonatomic, strong) AVCaptureVideoPreviewLayer *previewLayer;
@@ -70,10 +70,10 @@
     self.resultLabel.hidden = YES;
     self.settingsButton = [self button:@"Open Settings" identifier:@"scan.settings" action:@selector(openSettings)];
     self.openButton = [self button:@"Open Website" identifier:@"scan.open" action:@selector(openWebsite)];
-    self.copyButton = [self button:@"Copy Result" identifier:@"scan.copy" action:@selector(copyResult)];
+    self.resultCopyButton = [self button:@"Copy Result" identifier:@"scan.copy" action:@selector(copyResult)];
     self.againButton = [self button:@"Scan Again" identifier:@"scan.again" action:@selector(scanAgain)];
-    self.settingsButton.hidden = self.openButton.hidden = self.againButton.hidden = self.copyButton.hidden = YES;
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.preview, self.statusLabel, self.resultLabel, self.settingsButton, self.openButton, self.copyButton, self.againButton]];
+    self.settingsButton.hidden = self.openButton.hidden = self.againButton.hidden = self.resultCopyButton.hidden = YES;
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.preview, self.statusLabel, self.resultLabel, self.settingsButton, self.openButton, self.resultCopyButton, self.againButton]];
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 16;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -264,7 +264,7 @@
     [self pauseCamera];
     [self.ripple removeAllAnimations];
     self.resultLabel.text = payload;
-    self.resultLabel.hidden = self.againButton.hidden = self.copyButton.hidden = NO;
+    self.resultLabel.hidden = self.againButton.hidden = self.resultCopyButton.hidden = NO;
     self.settingsButton.hidden = YES;
     self.openButton.hidden = [NSString HTTPURLFromString:payload] == nil;
     NSError *error;
@@ -274,7 +274,7 @@
 }
 - (void)scanAgain {
     self.hasResult = NO; self.payload = nil;
-    self.resultLabel.hidden = self.openButton.hidden = self.copyButton.hidden = self.againButton.hidden = YES;
+    self.resultLabel.hidden = self.openButton.hidden = self.resultCopyButton.hidden = self.againButton.hidden = YES;
     [self updateRipple]; [self resumeCamera];
 }
 - (void)copyResult { if (self.payload) UIPasteboard.generalPasteboard.string = self.payload; }

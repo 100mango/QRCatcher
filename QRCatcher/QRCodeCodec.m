@@ -10,11 +10,13 @@
     if (!output) return nil;
     CIImage *scaled = [output imageByApplyingTransform:CGAffineTransformMakeScale(8, 8)];
     CGImageRef cgImage = [[CIContext contextWithOptions:nil] createCGImage:scaled fromRect:scaled.extent];
+    if (!cgImage) return nil;
     UIImage *image = [UIImage imageWithCGImage:cgImage];
     CGImageRelease(cgImage);
     return image;
 }
 + (NSArray<NSString *> *)payloadsInImage:(UIImage *)image {
+    if (!image.CGImage && !image.CIImage) return @[];
     CIImage *input = image.CIImage ?: [[CIImage alloc] initWithImage:image];
     if (!input) return @[];
     CIDetector *detector = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil options:@{CIDetectorAccuracy: CIDetectorAccuracyHigh}];

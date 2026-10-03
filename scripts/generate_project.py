@@ -24,6 +24,10 @@ for path in sorted((root/'QRCatcher').glob('*')):
         if path.suffix=='.m':source.append(build(ref))
 model=file('QRCatcher/QR.xcdatamodeld','wrapper.xcdatamodeld');source.append(build(model));appfiles.append(model)
 resources=[]
+for name in ['Localizable.strings','InfoPlist.strings']:
+    localized=add('localized:'+name,'PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcher/zh-Hans.lproj/'+name,sourceTree='<group>')
+    variant=add('variant:'+name,'PBXVariantGroup',children=[localized],name=name,sourceTree='<group>')
+    appfiles.append(variant);resources.append(build(variant))
 for p,t in [('QRCatcher/Images.xcassets','folder.assetcatalog'),('QRCatcher/Base.lproj/LaunchScreen.xib','file.xib'),('QRCatcher/PrivacyInfo.xcprivacy','text.xml')]:
     r=file(p,t); appfiles.append(r);resources.append(build(r))
 products=[];targets=[];groups=[]

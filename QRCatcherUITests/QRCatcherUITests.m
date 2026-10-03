@@ -5,6 +5,22 @@
 @implementation QRCatcherUITests
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
+- (void)testProductionSceneLaunchWithoutCameraStub {
+    self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
+    [self addUIInterruptionMonitorWithDescription:@"Camera permission" handler:^BOOL(XCUIElement *alert) {
+        XCUIElement *deny = alert.buttons[@"Don’t Allow"];
+        if (!deny.exists) deny = alert.buttons[@"Don't Allow"];
+        if (deny.exists) { [deny tap]; return YES; }
+        return NO;
+    }];
+    [self.app launch];
+    XCTAssertTrue([self.app.tabBars.buttons[@"history.tab"] waitForExistenceWithTimeout:10]);
+    [self.app tap];
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.tables[@"history.table"] waitForExistenceWithTimeout:5]);
+    [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
+    XCTAssertTrue([self.app.tabBars.buttons[@"scan.tab"] waitForExistenceWithTimeout:5]);
+}
 - (void)testDeniedCameraAndEmptyHistory {
     [self launch:@[@"-reset-history", @"-camera-denied"]];
     XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
