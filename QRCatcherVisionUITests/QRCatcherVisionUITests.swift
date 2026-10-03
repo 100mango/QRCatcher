@@ -16,9 +16,12 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.terminate()
     }
     private func capture(_ name: String) {
-        guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.5) else { return }
-        XCTAssertLessThanOrEqual(data.count, 800 * 1024)
-        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg"); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        // Native Vision XCTest explicitly reports manual screenshots unsupported.
+        // The cloud script takes actual public simctl pixels at this checkpoint.
+        let description = String(app.debugDescription.prefix(20000))
+        let attachment = XCTAttachment(string: description); attachment.name = name + "-accessibility"; attachment.lifetime = .keepAlways; add(attachment)
+        print("QRCATCHER_VISION_CAPTURE:" + name); fflush(stdout)
+        Thread.sleep(forTimeInterval: 5)
     }
     func testRealPhotosImportCopyAndReopen() {
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))

@@ -39,6 +39,20 @@ final class QRCatcherVisionTests: QRManagedStoreTestCase {
         XCTAssertEqual(history.items.map(\.payload), ["current"])
         for value in ["javascript:alert(1)","file:///etc/passwd","https://user:secret@example.com","plain text"] { XCTAssertNil(QRPayload.safeWebURL(value)) }
     }
+    func testOversizedProviderFileKeepsPreviousResultAndRejectsSymlink() throws {
+        let store = try storeURL(), folder = store.deletingLastPathComponent()
+        let history = makeHistory(url: store), session = VisionReadSession(history: history)
+        session.accept(["existing result"])
+        let large = folder.appendingPathComponent("oversized-photo.png")
+        FileManager.default.createFile(atPath: large.path, contents: Data())
+        let handle = try FileHandle(forWritingTo: large); try handle.truncate(atOffset: UInt64(QRBoundedPhotoFile.maximumBytes + 1)); try handle.close()
+        let token = session.beginExternalLoad()
+        do { _ = try QRBoundedPhotoFile.read(large); XCTFail("Provider bytes must be bounded before materialization") }
+        catch { session.completeExternalLoad(token, data: nil, error: error) }
+        XCTAssertEqual(session.payload, "existing result"); XCTAssertEqual(history.items.map(\.payload), ["existing result"])
+        let link = folder.appendingPathComponent("provider-link.png"); try FileManager.default.createSymbolicLink(at: link, withDestinationURL: large)
+        XCTAssertThrowsError(try QRBoundedPhotoFile.read(link))
+    }
     func testUnreadableStoreNeverErasesBytes() throws {
         let url = try storeURL(); let sentinel = Data("Preserve unreadable history".utf8); try sentinel.write(to: url)
         let history = makeHistory(url: url)

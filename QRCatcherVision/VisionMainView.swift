@@ -89,7 +89,7 @@ struct VisionMainView: View {
         guard let photo else { return }
         let token = session.beginExternalLoad()
         do {
-            let data = try await photo.loadTransferable(type: Data.self)
+            let data = try await photo.loadTransferable(type: QRSelectedPhotoFile.self)?.data
             if !Task.isCancelled { session.completeExternalLoad(token, data: data, error: nil) }
         } catch { if !Task.isCancelled { session.completeExternalLoad(token, data: nil, error: error) } }
     }

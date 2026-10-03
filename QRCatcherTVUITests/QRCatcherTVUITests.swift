@@ -9,14 +9,6 @@ final class QRCatcherTVUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages","(en)","-AppleLocale","en_US"]
         app.launchEnvironment["QRCATCHER_TV_TEST_STORE"] = UUID().uuidString
-        addUIInterruptionMonitor(withDescription: "Explicit Photos request") { alert in
-            let text = alert.debugDescription
-            guard text.localizedCaseInsensitiveContains("Photos"), text.contains("QRCatcher") else { return false }
-            let allow = alert.buttons["Allow Full Access"].exists ? alert.buttons["Allow Full Access"] : alert.buttons["Allow"]
-            guard allow.exists else { return false }
-            self.focusAndSelect(allow, root: alert)
-            return true
-        }
         app.launch()
     }
     override func tearDownWithError() throws {
@@ -36,6 +28,18 @@ final class QRCatcherTVUITests: XCTestCase {
         }
         XCTFail("Remote focus could not reach the actual control: \(target.debugDescription)")
     }
+    private func respondToExactPhotosPermissionIfPresent() {
+        let system = XCUIApplication(bundleIdentifier: "com.apple.PineBoard")
+        let allow = system.buttons["Allow All Photos"].firstMatch
+        if allow.waitForExistence(timeout: 8) {
+            let title = system.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "QRCatcher", "photo library")).firstMatch
+            XCTAssertTrue(title.exists, "Only QRCatcher's explicit Photos request may be accepted: \(system.debugDescription)")
+            print("TV_OBSERVED_SYSTEM_PHOTOS_DIALOG:", system.debugDescription)
+            focusAndSelect(allow, root: system)
+        } else {
+            print("TV_PHOTOS_PERMISSION_SYSTEM_UI:", system.debugDescription)
+        }
+    }
     private func capture(_ name: String) {
         guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { return }
         XCTAssertLessThanOrEqual(data.count, 800 * 1024)
@@ -44,9 +48,9 @@ final class QRCatcherTVUITests: XCTestCase {
     }
     func testActualPhotosDecodeExportVerificationAndOfflineReopen() {
         focusAndSelect(app.buttons["tv.photos"])
-        // A directional event lets XCTest inspect an expected system permission
-        // interruption without blindly activating any alert or source control.
-        XCUIRemote.shared.press(.down)
+        // The actual tvOS 27 permission dialog belongs to the system app, not
+        // the target app's accessibility subtree. Exact title/button only.
+        respondToExactPhotosPermissionIfPresent()
         let photo = app.buttons["tv.asset.0"]
         XCTAssertTrue(photo.waitForExistence(timeout: 20), app.debugDescription)
         focusAndSelect(photo)

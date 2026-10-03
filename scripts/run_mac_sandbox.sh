@@ -13,7 +13,6 @@ from pathlib import Path
 values=plistlib.loads(Path('QRCatcherMac/QRCatcherMac.entitlements').read_bytes())
 values['com.apple.security.get-task-allow']=True
 Path('build/mac-sandbox-runtime.entitlements').write_bytes(plistlib.dumps(values))
-Path('build/MacSandbox/Build/Products/Debug/qrcatcher-unselected-read.txt').write_text('synthetic sandbox read sentinel')
 PYCODE
 codesign --force --sign - --timestamp=none --entitlements build/mac-sandbox-runtime.entitlements "$APP"
 codesign --verify --deep --strict "$APP"

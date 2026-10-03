@@ -2,7 +2,7 @@
 
 ## Baseline and current milestone
 
-The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. The native iPad split workflow is implemented in this branch and is under validation. Vision has an initial import-first executable slice awaiting compiler/runtime proof. TV now has an initial PhotoKit/limited-metadata slice awaiting compiler/runtime proof. Watch remains staged and is not implemented.
+The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. At exact checkpoint `0eebd8f` / run `37124136942`, iOS units12, Pro Max UI8 and native iPad Pro UI3 passed. Vision compiled and passed4 hosted tests; real Photos/decode/copy/reopen assertions ran but its UI test exceeded the initial time allowance. TV compiled and passed4 hosted tests; the UI stopped at the actual system Photos permission dialog. The following changes add a substantive Watch source slice awaiting its first compiler/runtime pass. The combined workflow is not yet green.
 
 Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. Release verification remains unsigned. A separate local ad-hoc Debug sandbox test is described below; no Store records, Apple-account signing resources or registered persistent capabilities are created.
 
@@ -93,7 +93,7 @@ the prior result/history on failure. Existing normal golden QR fixtures continue
 to test UIKit/shared-codec equivalence.
 
 Final combined validation must re-enable `RUN_EXTENDED_IOS_MATRIX` and pass the
-same head on Pro Max, SE3, iPad Pro 13-inch and iPad mini. Focused repair runs do
+same head on Pro Max, SE3, iPad Pro 13-inch and iPad mini. The next workflow re-enables this full matrix. Focused repair runs do
 not fulfill those final gates. The genuine iOS 15.5 launch and physical capture,
 Watch pairing, TV library availability and Vision interaction gates remain distinct.
 
@@ -114,3 +114,38 @@ and a quota case accounting for other preferences. Native unit/UI execution, Pho
 permission/focus behavior, export/refetch and relaunch are required CI gates, not
 inferred from the SDK. TV artwork packaging, Chinese critical-flow review, optional
 physical Continuity Camera and further accessibility audits remain separate gates.
+
+## Native Watch implementation and remaining physical gates
+
+The new Watch source (first QRCatcher compiler/runtime pass still pending) uses watchOS 27's Swift `DetectBarcodesRequest` behind an
+availability check, not unavailable legacy VN/Core Image APIs. It imports a
+bounded selected Photos file, normalizes a real source image with ImageIO,
+retains that source and all decoded payloads in a quota-bounded atomic archive,
+and provides offline viewing, zoom, confirmed removal and the approved policy.
+Unreadable archives are never overwritten. Older watchOS versions retain the
+selected photo and offer explicit paired-iPhone processing.
+
+The paired phone processor consumes only explicit request files. It verifies
+version, UUIDs, image fingerprint, bounded regular non-symlink file contents and
+same-ID conflicts, then runs the actual shared QR decoder without writing to the
+phone's original history. Session epochs suppress stale results after counterpart
+changes. Activation never automatically replays retained jobs; retry is explicit.
+Pending originals are retained on errors and cancelled delivery. A completed file
+transfer is not treated as an acknowledgement of a decoded result.
+
+Cloud test scopes are deliberately distinct:
+- Hosted Watch tests exercise actual local QR decoding, source-image readback,
+  duplicate/date retention, archive reopen, quotas, corruption and reply state
+- Native Watch UI tests exercise empty/policy screens and a clearly labeled
+  fixture-fed offline collection prepared by the real hosted decoder
+- The actual Watch Photos picker reports that Photos cannot load in Simulator;
+  the QRCatcher test targets its unavailable/Close path; selection requires a physical Watch
+- Apple excludes background WCSession file/user-info delivery from Simulator
+  support; cross-device transport requires a paired physical iPhone and Watch
+- An older-watchOS launch and weak-link/device Release packaging remain separate
+  gates, as do physical scannability of the displayed original photo and camera
+  capture where a platform has a camera workflow
+
+No App IDs, certificates, provisioning profiles or Store records were registered
+for these source targets. All native platform builds/tests use the one bounded
+standard cloud runner lane.

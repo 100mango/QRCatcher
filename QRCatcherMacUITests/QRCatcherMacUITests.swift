@@ -7,6 +7,7 @@ import Security
 final class QRCatcherMacUITests: XCTestCase {
     private var app: XCUIApplication!
     private var folder: URL!
+    private var boundaryFolder: URL?
     private var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent() }
 
     override func setUpWithError() throws {
@@ -20,6 +21,13 @@ final class QRCatcherMacUITests: XCTestCase {
             // container. No absolute /tmp override or broad file grant is used.
             app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
             app.launchEnvironment["QRCATCHER_SANDBOX_PROOF"] = "1"
+            let boundary = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent("QRCatcherBoundaryProbe-" + UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: boundary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            let bytes = Data("synthetic sandbox read sentinel".utf8)
+            XCTAssertTrue(FileManager.default.createFile(atPath: boundary.appendingPathComponent("synthetic-read.txt").path, contents: bytes, attributes: [.posixPermissions: 0o600]))
+            XCTAssertEqual(try Data(contentsOf: boundary.appendingPathComponent("synthetic-read.txt")), bytes)
+            boundaryFolder = boundary
+            app.launchEnvironment["QRCATCHER_SANDBOX_BOUNDARY"] = boundary.path
         } else { app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path }
         dismissObservedRealityWidgetsCrash()
         app.launch(); verifyRunningApplication()
@@ -27,7 +35,7 @@ final class QRCatcherMacUITests: XCTestCase {
     }
     override func tearDownWithError() throws {
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); try? screenshot("mac-failure") }
-        app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }
+        app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }; if let boundaryFolder { try? FileManager.default.removeItem(at: boundaryFolder) }
     }
 
     private var expectedApplicationURL: URL {
@@ -194,7 +202,7 @@ final class QRCatcherMacUITests: XCTestCase {
         let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: first)) as? [String: Any])
         let proof = try XCTUnwrap(saved["sandboxDiagnostics"] as? [String: Any])
         XCTAssertEqual(proof["sandboxed"] as? Bool, true)
-        XCTAssertEqual(proof["unselectedReadRejected"] as? Bool, true, "The app must not have Xcode's broad root-read exception: \(proof)")
+        XCTAssertEqual(proof["unselectedReadRejected"] as? Bool, true, "The unrelated, never-selected synthetic home folder must remain unreadable: \(proof)")
         XCTAssertEqual(proof["unselectedWriteRejected"] as? Bool, true, "The process must be constrained by the actual sandbox: \(proof)")
         let home = try XCTUnwrap(proof["home"] as? String)
         XCTAssertEqual(proof["actualStoreURL"] as? String, home + "/Documents/coredata.sqlite")
@@ -212,6 +220,44 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual((final["records"] as? [[String: Any]])?.count, 3)
         print("ACTUAL_SANDBOX_E2E_PROOF:", proof)
         try screenshot("mac-sandbox-legacy-reopened")
+    }
+
+    func testSystemPhotosImportThenRealAppPicker() throws {
+        try XCTSkipUnless(isSandboxedProduct, "Run populated system Photos selection once in the minimally entitled sandbox lane")
+        let photos = XCUIApplication(bundleIdentifier: "com.apple.Photos")
+        photos.launch()
+        defer { photos.terminate() }
+        // Only the normal first-use library start is accepted. Account, iCloud,
+        // Intelligence and permission setup prompts are never blindly accepted.
+        if photos.buttons["Get Started"].waitForExistence(timeout: 5) { photos.buttons["Get Started"].click() }
+        print("PHOTOS_LIBRARY_INITIAL_UI:", photos.debugDescription)
+        let file = photos.menuBarItems["File"]
+        XCTAssertTrue(file.waitForExistence(timeout: 15), photos.debugDescription); file.click()
+        let importMenu = photos.menuItems.matching(NSPredicate(format: "label BEGINSWITH %@", "Import")).firstMatch
+        XCTAssertTrue(importMenu.isEnabled, photos.debugDescription); importMenu.click()
+        photos.typeKey("g", modifierFlags: [.command, .shift])
+        let path = photos.sheets.textFields.firstMatch
+        XCTAssertTrue(path.waitForExistence(timeout: 5), photos.debugDescription)
+        path.typeKey("a", modifierFlags: .command); path.typeText(root.appendingPathComponent("Tests/Fixtures/unicode.png").path)
+        photos.typeKey(.return, modifierFlags: [])
+        let open = photos.dialogs.buttons["OKButton"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), photos.debugDescription); open.click()
+        let review = photos.buttons["Review for Import"]
+        if review.waitForExistence(timeout: 3) { review.click() }
+        let importAll = photos.buttons["Import All New Photos"]
+        XCTAssertTrue(importAll.waitForExistence(timeout: 15), photos.debugDescription); importAll.click()
+        let imported = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: importAll)
+        XCTAssertEqual(XCTWaiter.wait(for: [imported], timeout: 20), .completed, photos.debugDescription)
+        print("PHOTOS_LIBRARY_AFTER_IMPORT:", photos.debugDescription)
+        app.activate(); verifyRunningApplication()
+        app.buttons["mac.photos"].click()
+        print("SYSTEM_PHOTOS_PICKER_UI:", app.debugDescription)
+        let image = app.images["PXGGridLayout-Info"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 15), app.debugDescription); image.click()
+        XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 20), app.debugDescription)
+        let payload = app.staticTexts["mac.payload"]
+        XCTAssertEqual((payload.value as? String) ?? payload.label, "QRCatcher 你好 🌈 123")
+        try screenshot("mac-real-photos-import")
     }
 
     func testChineseCriticalFlow() throws {

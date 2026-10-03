@@ -45,8 +45,14 @@ enum MacSandboxDiagnostics {
     static func evidence(actualStoreURL: URL?) -> [String: Any] {
         var result: [String: Any] = ["sandboxed": sandboxed, "home": NSHomeDirectory(), "actualStoreURL": actualStoreURL?.path ?? "unavailable"]
         guard requested, sandboxed else { return result }
-        let folder = Bundle.main.bundleURL.deletingLastPathComponent()
-        let unselectedRead = folder.appendingPathComponent("qrcatcher-unselected-read.txt")
+        // The executable's containing directory was observed readable under the
+        // exact minimal sandbox. It is not a valid negative file-access probe.
+        guard let path = ProcessInfo.processInfo.environment["QRCATCHER_SANDBOX_BOUNDARY"],
+              URL(fileURLWithPath: path).lastPathComponent.hasPrefix("QRCatcherBoundaryProbe-"),
+              UUID(uuidString: String(URL(fileURLWithPath: path).lastPathComponent.dropFirst("QRCatcherBoundaryProbe-".count))) != nil else { return result }
+        let folder = URL(fileURLWithPath: path, isDirectory: true)
+        result["unselectedProbeFolder"] = folder.path
+        let unselectedRead = folder.appendingPathComponent("synthetic-read.txt")
         do { _ = try Data(contentsOf: unselectedRead); result["unselectedReadRejected"] = false }
         catch {
             let error = error as NSError

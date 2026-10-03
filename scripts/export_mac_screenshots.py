@@ -21,7 +21,7 @@ def records(value):
  elif isinstance(value,list):
   for child in value:yield from records(child)
 screenshots=[];warnings=[]
-names=['mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
+names=['mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
 # Prefer the stricter sandbox's actual pixels; keep both full structured summaries.
 for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.xcresult','native')]:
  if not pathlib.Path(result,'Info.plist').is_file():
@@ -36,7 +36,7 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
   if not name:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
-  if len(screenshots)>=9 or sum(p.stat().st_size for p in out.iterdir())+len(data)>6*1024*1024-256*1024:
+  if len(screenshots)>=12 or sum(p.stat().st_size for p in out.iterdir())+len(data)>6*1024*1024-256*1024:
    print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
   filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
   item={'name':filename,'scope':label,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};screenshots.append(item);print(json.dumps(item),flush=True)

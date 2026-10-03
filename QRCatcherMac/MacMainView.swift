@@ -94,7 +94,7 @@ struct MacMainView: View {
         guard let photo else { return }
         let token = workspace.beginExternalLoad()
         do {
-            let data = try await photo.loadTransferable(type: Data.self)
+            let data = try await photo.loadTransferable(type: QRSelectedPhotoFile.self)?.data
             if !Task.isCancelled { workspace.completeExternalLoad(token, data: data, error: nil) }
         } catch { if !Task.isCancelled { workspace.completeExternalLoad(token, data: nil, error: error) } }
     }

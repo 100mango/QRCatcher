@@ -10,9 +10,22 @@ final class TVPhotoLibrary: ObservableObject {
     @Published private(set) var hasMore = false
     private var fetch: PHFetchResult<PHAsset>?
     private var shown = 0
+    private var requesting = false
     func requestAccess() {
+        guard !requesting else { return }
+        let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if current == .authorized || current == .limited { reload(); return }
+        requesting = true
+        status = QRL("Waiting for Photos permission. Respond to the system request to continue.")
+        #if DEBUG
+        print("TV_PHOTOS_AUTH_REQUEST", current.rawValue)
+        #endif
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { result in
             Task { @MainActor in
+                self.requesting = false
+                #if DEBUG
+                print("TV_PHOTOS_AUTH_RESULT", result.rawValue)
+                #endif
                 guard result == .authorized || result == .limited else {
                     self.status = QRL("Photos access is unavailable. You can change access in Settings, then choose Retry."); self.assets = []; return
                 }

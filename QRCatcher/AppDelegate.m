@@ -1,4 +1,5 @@
 #import "AppDelegate.h"
+#import "QRWatchPhoneService.h"
 @implementation AppDelegate
 + (AppDelegate *)appDelegate { return (AppDelegate *)UIApplication.sharedApplication.delegate; }
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
@@ -15,6 +16,7 @@
     }
 #endif
     self.historyStore = [[QRHistoryStore alloc] initWithURL:URL];
+    [[QRWatchPhoneService shared] activate];
     return YES;
 }
 - (NSManagedObjectContext *)managedObjectContext { return self.historyStore.context; }

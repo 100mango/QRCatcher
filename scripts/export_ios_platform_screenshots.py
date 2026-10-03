@@ -4,19 +4,22 @@ import hashlib,json,os,pathlib,subprocess
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
 summary={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{}}
 for path in pathlib.Path('build/vision-runtime').glob('*'):
+ if path.is_file() and path.suffix in {'.json','.jpg','.log'}:
+  data=path.read_bytes();assert len(data)<=800*1024;(out/('vision-'+path.name)).write_bytes(data)
+for path in pathlib.Path('build/watch-runtime').glob('*'):
  if path.is_file():
-  data=path.read_bytes();assert len(data)<=512*1024;(out/('vision-'+path.name)).write_bytes(data)
-for name in ['tv-test-build.log','tv-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log']:
+  data=path.read_bytes();assert len(data)<=512*1024;(out/('watch-'+path.name)).write_bytes(data)
+for name in ['watch-test-build.log','watch-unit.log','watch-ui.log','tv-test-build.log','tv-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log']:
  path=pathlib.Path(name)
  if path.is_file():(out/name).write_bytes(path.read_bytes()[-128*1024:])
-names=('tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
+names=('watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
   for child in value.values():yield from records(child)
  elif isinstance(value,list):
   for child in value:yield from records(child)
-for result,label in [('TVTestResults.xcresult','apple-tv'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
+for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('TVTestResults.xcresult','apple-tv'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
  if not pathlib.Path(result,'Info.plist').is_file():
   summary['results'][label]={'not_produced':True};continue
  report=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
@@ -25,13 +28,18 @@ for result,label in [('TVTestResults.xcresult','apple-tv'),('VisionTestResults.x
  subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
  for entry in records(json.loads((folder/'manifest.json').read_text())):
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
-  if not name:continue
+  if not name or 'accessibility' in text:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
-  data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024,'Invalid or oversized synthetic screenshot'
+  data=path.read_bytes()
+  if data.startswith(b'\x89PNG'):
+   converted=path.with_suffix('.bounded.jpg')
+   subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','55','-Z','1440',str(path),'--out',str(converted)],check=True,capture_output=True)
+   data=converted.read_bytes()
+  assert data.startswith(b'\xff\xd8') and len(data)<=800*1024,'Invalid or oversized synthetic screenshot'
   filename=f'{label}-{name}-{len(summary["screenshots"])+1}.jpg'
   # Reserve 512 KiB for structured summaries, keeping the entire artifact <=6 MiB.
   used=sum(p.stat().st_size for p in out.iterdir())
-  if used+len(data)>6*1024*1024-512*1024 or len(summary['screenshots'])>=20:
+  if used+len(data)>6*1024*1024-512*1024 or len(summary['screenshots'])>=28:
    summary['omitted'].append({'name':filename,'reason':'bounded evidence cap'});print('OMITTED_AT_CAP',filename,flush=True);continue
   (out/filename).write_bytes(data)
   item={'name':filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};summary['screenshots'].append(item);print(json.dumps(item),flush=True)

@@ -136,7 +136,7 @@ for key,name,kind in [('tv','QRCatcherTV','application'),('tvunit','QRCatcherTVT
         src+=sharedSources+nativeSharedSources;files+=sharedFiles+nativeSharedFiles
         for path in ['QRCatcherMac/MacLocalization.swift']:
             r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
-        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('QRCatcherTV/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
         localized=add('tvlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('tvvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
@@ -148,6 +148,32 @@ for key,name,kind in [('tv','QRCatcherTV','application'),('tvunit','QRCatcherTVT
         else:common.update(TEST_TARGET_NAME='QRCatcherTV')
         proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=tvID,remoteInfo='QRCatcherTV')
         deps=[add(key+'dependency','PBXTargetDependency',target=tvID,targetProxy=proxy)]
+    groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
+    targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# Native single-target Watch app. Source IDs are drafts; no portal registration.
+watchID=uid('watch')
+for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRCatcherWatchTests','bundle.unit-test'),('watchui','QRCatcherWatchUITests','bundle.ui-testing')]:
+    app=key=='watch';ext='app' if app else 'xctest'
+    product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
+    files=[];src=[];res=[];deps=[]
+    for path in sorted((root/name).glob('*.swift')):
+        r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
+    common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher.watchkitapp' if app else '100mango.'+name,'SDKROOT':'watchos','SUPPORTED_PLATFORMS':'watchos watchsimulator','TARGETED_DEVICE_FAMILY':'4','WATCHOS_DEPLOYMENT_TARGET':'9.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
+    if app:
+        common.update(INFOPLIST_FILE='QRCatcherWatch/Info.plist',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        localized=add('watchlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherWatch/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
+        variant=add('watchvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
+        r=file('Shared/Services/QRPrivacyText.swift','sourcecode.swift');files.append(r);src.append(build(r))
+        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+    else:
+        common.update(GENERATE_INFOPLIST_FILE='YES')
+        if key=='watchunit':
+            common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherWatch.app/QRCatcherWatch',BUNDLE_LOADER='$(TEST_HOST)')
+            for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
+                r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
+        else:common.update(TEST_TARGET_NAME='QRCatcherWatch')
+        proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=watchID,remoteInfo='QRCatcherWatch')
+        deps=[add(key+'dependency','PBXTargetDependency',target=watchID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 # A file reference has one navigator owner even when several targets compile it.
@@ -189,3 +215,6 @@ sandboxScheme.write_text(macScheme.read_text().replace(f'<TestableReference skip
 
 tvScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherTV.xcscheme'
 tvScheme.write_text(scheme.read_text().replace(uid('app'),uid('tv')).replace(uid('unit'),uid('tvunit')).replace(uid('ui'),uid('tvui')).replace('QRCatcherTests','QRCatcherTVTests').replace('QRCatcherUITests','QRCatcherTVUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherTV.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherTV"'))
+
+watchScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherWatch.xcscheme'
+watchScheme.write_text(scheme.read_text().replace(uid('app'),uid('watch')).replace(uid('unit'),uid('watchunit')).replace(uid('ui'),uid('watchui')).replace('QRCatcherTests','QRCatcherWatchTests').replace('QRCatcherUITests','QRCatcherWatchUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherWatch.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherWatch"'))
