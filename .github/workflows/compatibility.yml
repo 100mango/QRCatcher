@@ -9,43 +9,118 @@ concurrency:
   group: supplemental-ios-compatibility
   cancel-in-progress: false
 jobs:
-  inventory:
+  regression:
+    name: ${{ matrix.app }} / ${{ matrix.device }}
     runs-on: macos-14
-    timeout-minutes: 12
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - app: QRCatcher
+            repository: 100mango/QRCatcher
+            sha: 98f48f0505889d05b85b5699c62cd626bdcf6835
+            device: iPhone SE (3rd generation)
+          - app: TouchColor
+            repository: 100mango/ColorPicker
+            sha: 3e5d4a78a7f33e5a7b4e7b92b961b31767fbad0a
+            device: iPhone SE (3rd generation)
+          - app: Celluloid
+            repository: 100mango/Celluloid
+            sha: b521da3b2444465c02353075e15ff94eacdd9b80
+            device: iPhone SE (3rd generation)
+          - app: Celluloid
+            repository: 100mango/Celluloid
+            sha: b521da3b2444465c02353075e15ff94eacdd9b80
+            device: iPad mini (6th generation)
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
+      APP_REPOSITORY: ${{ matrix.repository }}
+      APP_SHA: ${{ matrix.sha }}
+      DEVICE_NAME: ${{ matrix.device }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # official v4.2.2
         with:
           ref: ${{ github.sha }}
+          path: controller
           persist-credentials: false
-      - name: Verify controller
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ matrix.repository }}
+          ref: ${{ matrix.sha }}
+          path: app
+          persist-credentials: false
+      - name: Verify exact controller and app source
+        id: validate
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
           test "$GITHUB_REF" = refs/heads/codex/compatibility-matrix
           test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --exit-code HEAD --
-          echo "Controller $(git rev-parse HEAD) tree $(git rev-parse 'HEAD^{tree}')"
-          shasum -a 256 .github/workflows/compatibility.yml
-      - name: Record actual standard runner toolchain and simulator inventory
+          test "$(git -C controller rev-parse HEAD)" = "$GITHUB_SHA"
+          git -C controller diff --exit-code HEAD --
+          echo "CONTROLLER_PROVENANCE commit=$GITHUB_SHA tree=$(git -C controller rev-parse 'HEAD^{tree}')"
+          shasum -a 256 controller/.github/workflows/compatibility.yml controller/.github/compatibility/run.sh
+          bash controller/.github/compatibility/run.sh validate
+      - name: Build unmodified simulator test products
+        id: build
+        timeout-minutes: 12
+        run: bash controller/.github/compatibility/run.sh build
+      - name: Warm simulator and seed synthetic fixtures
+        id: warm
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 10
+        run: bash controller/.github/compatibility/run.sh prepare
+      - name: Run existing unit suite
+        if: ${{ !cancelled() && steps.warm.outcome == 'success' }}
+        timeout-minutes: 12
+        run: bash controller/.github/compatibility/run.sh unit
+      - name: Run existing UI suite
+        if: ${{ !cancelled() && steps.warm.outcome == 'success' }}
+        timeout-minutes: 15
+        run: bash controller/.github/compatibility/run.sh ui
+      - name: Summarize exact test evidence and assert unchanged source
+        if: always()
+        timeout-minutes: 3
+        run: |
+          bash controller/.github/compatibility/run.sh summarize
+          git -C controller diff --exit-code HEAD --
+          shasum -a 256 controller/.github/workflows/compatibility.yml controller/.github/compatibility/run.sh
+      - name: Shut down simulator
+        if: always()
+        timeout-minutes: 2
+        run: bash controller/.github/compatibility/run.sh shutdown
+  official-runtime-probe:
+    needs: regression
+    if: ${{ !cancelled() }}
+    runs-on: macos-14
+    timeout-minutes: 12
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
+    steps:
+      - name: Probe official Apple CLI downloads for older runtimes without credentials
         run: |
           set -euo pipefail
-          sw_vers
-          uname -m
-          printf 'Installed Xcodes\n'
-          ls -d /Applications/Xcode*.app
-          test -d "$DEVELOPER_DIR"
           xcodebuild -version
-          xcodebuild -showsdks
-          xcrun simctl list runtimes -j
-          xcrun simctl list devices available
-          xcrun simctl list devicetypes | grep -E 'iPhone SE|iPad mini'
-          xcodebuild -help > /tmp/xcode-help.txt 2>&1 || true
-          grep -E 'downloadPlatform|buildVersion|importPlatform|architectureVariant' /tmp/xcode-help.txt
-          xcrun simctl help runtime
-          echo 'Inventory only: no app execution or minimum-OS pass claimed.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Verify controller stayed unchanged
-        if: always()
-        run: git diff --exit-code HEAD --
+          df -h /
+          python3 - <<'PY'
+          import pathlib,subprocess,tempfile
+          # Exact versions; bounded official Apple commands, no alternate binaries or login.
+          for version,timeout in [('15.0',90),('16.0',420)]:
+              destination=pathlib.Path(tempfile.mkdtemp(prefix='runtime-'+version+'-'))
+              cmd=['xcodebuild','-downloadPlatform','iOS','-buildVersion',version,'-exportPath',str(destination)]
+              print('OFFICIAL_DOWNLOAD_PROBE',cmd,flush=True)
+              try:
+                  result=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout)
+                  print('EXIT',result.returncode)
+                  print(result.stdout[-18000:])
+              except subprocess.TimeoutExpired as error:
+                  print('TIME_LIMIT',timeout,'seconds; timeout is not evidence of runtime unavailability')
+                  output=error.stdout or b''
+                  print(output.decode(errors='replace')[-10000:] if isinstance(output,bytes) else output[-10000:])
+              print('EXPORTED_FILES',[(str(p.name),p.stat().st_size) for p in destination.glob('*') if p.is_file()])
+          PY
+          xcrun simctl list runtimes
+          echo 'Runtime download feasibility only; no iOS 15/16 app or XCTest pass claimed.' >> "$GITHUB_STEP_SUMMARY"
