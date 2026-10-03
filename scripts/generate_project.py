@@ -72,7 +72,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'macosx','SUPPORTED_PLATFORMS':'macosx','MACOSX_DEPLOYMENT_TARGET':'13.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks','CODE_SIGN_STYLE':'Automatic','ENABLE_HARDENED_RUNTIME':'NO'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR='all',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
             r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
@@ -90,6 +90,34 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         else:common.update(TEST_TARGET_NAME='QRCatcherMac')
         proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=macID,remoteInfo='QRCatcherMac')
         deps=[add(key+'dependency','PBXTargetDependency',target=macID,targetProxy=proxy)]
+    groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
+    targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# Native visionOS has an import-first workflow; there is no passthrough-camera claim.
+visionID=uid('vision')
+for key,name,kind in [('vision','QRCatcherVision','application'),('visionunit','QRCatcherVisionTests','bundle.unit-test'),('visionui','QRCatcherVisionUITests','bundle.ui-testing')]:
+    app=key=='vision';ext='app' if app else 'xctest'
+    product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
+    files=[];src=[];res=[];deps=[]
+    for path in sorted((root/name).glob('*.swift')):
+        r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
+    common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'xros','SUPPORTED_PLATFORMS':'xros xrsimulator','TARGETED_DEVICE_FAMILY':'7','XROS_DEPLOYMENT_TARGET':'1.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
+    if app:
+        common.update(INFOPLIST_FILE='QRCatcherVision/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherVision/QRCatcherVision-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
+        for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m','QRCatcherMac/MacHistory.swift','QRCatcherMac/MacLocalization.swift']:
+            r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
+        r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        localized=add('visionlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
+        variant=add('visionvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
+    else:
+        common.update(GENERATE_INFOPLIST_FILE='YES')
+        if key=='visionunit':
+            common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherVision.app/QRCatcherVision',BUNDLE_LOADER='$(TEST_HOST)')
+            for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
+                r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
+        else:common.update(TEST_TARGET_NAME='QRCatcherVision')
+        proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=visionID,remoteInfo='QRCatcherVision')
+        deps=[add(key+'dependency','PBXTargetDependency',target=visionID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 # A file reference has one navigator owner even when several targets compile it.
@@ -121,3 +149,6 @@ scheme.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 
 macScheme=(root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme')
 macScheme.write_text(scheme.read_text().replace(uid('app'),uid('mac')).replace(uid('unit'),uid('macunit')).replace(uid('ui'),uid('macui')).replace('QRCatcherTests','QRCatcherMacTests').replace('QRCatcherUITests','QRCatcherMacUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherMac.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherMac"'))
+
+visionScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherVision.xcscheme'
+visionScheme.write_text(scheme.read_text().replace(uid('app'),uid('vision')).replace(uid('unit'),uid('visionunit')).replace(uid('ui'),uid('visionui')).replace('QRCatcherTests','QRCatcherVisionTests').replace('QRCatcherUITests','QRCatcherVisionUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherVision.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherVision"'))

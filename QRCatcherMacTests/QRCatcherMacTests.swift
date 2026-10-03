@@ -114,6 +114,23 @@ final class QRCatcherMacTests: XCTestCase {
         XCTAssertFalse(workspace.isReading)
     }
 
+    func testLatePhotoProviderCannotReplaceASelectedResult() async throws {
+        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let workspace = MacWorkspace(history: history)
+        let data = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "unicode", withExtension: "png")))
+        let stale = workspace.beginExternalLoad()
+        workspace.accept(["Keep my latest selection"])
+        workspace.completeExternalLoad(stale, data: data, error: nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(workspace.payload, "Keep my latest selection")
+        XCTAssertEqual(history.items.count, 1)
+        let current = workspace.beginExternalLoad()
+        workspace.completeExternalLoad(current, data: data, error: nil)
+        for _ in 0..<50 { if !workspace.isReading { break }; try await Task.sleep(nanoseconds: 100_000_000) }
+        XCTAssertEqual(workspace.payload, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(history.items.count, 2)
+    }
+
     func testImageDropUsesRealPixelsAndRejectsLateDelivery() async throws {
         let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history)
@@ -196,5 +213,107 @@ private final class DecodeConcurrencyProbe: @unchecked Sendable {
             guard release.wait(timeout: .now() + 5) == .success else { throw CocoaError(.userCancelled) }
         }
         return [value]
+    }
+}
+
+@MainActor
+final class QRCatcherHistoryLocationTests: XCTestCase {
+    private func fixture() throws -> (root: URL, docs: URL, modern: URL, locations: QRHistoryLocations) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("Library/Containers/100mango.QRCatcher/Data")
+        let docs = root.appendingPathComponent("Documents", isDirectory: true)
+        let folder = root.appendingPathComponent("Library/Application Support/100mango.QRCatcher", isDirectory: true)
+        try FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()) }
+        let modern = folder.appendingPathComponent("coredata.sqlite")
+        let owned = try XCTUnwrap(QRHistoryLocations.validatedDocuments(home: root, documents: docs, sandboxed: true))
+        return (root, docs, modern, QRHistoryLocations(nativeURL: modern, previousURL: owned.appendingPathComponent("coredata.sqlite"), selectionURL: folder.appendingPathComponent("history-location.json")))
+    }
+    private func files(_ url: URL) -> [String: Data] {
+        Dictionary(uniqueKeysWithValues: ["", "-wal", "-shm"].compactMap { suffix in
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: url.path + suffix)) else { return nil }
+            return (suffix, data)
+        })
+    }
+    func testOfflinePolicyUsesApprovedMinimalBilingualCopy() {
+        XCTAssertTrue(QRPrivacyText.english.hasSuffix("Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings."))
+        XCTAssertTrue(QRPrivacyText.simplifiedChinese.hasSuffix("本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。"))
+        XCTAssertTrue(QRPrivacyText.english.contains("system services such as iCloud sync"))
+        XCTAssertTrue(QRPrivacyText.simplifiedChinese.contains("系统 iCloud 同步"))
+        for text in [QRPrivacyText.english, QRPrivacyText.simplifiedChinese] { XCTAssertTrue(text.contains("100mango@gmail.com")) }
+    }
+    func testSameOwnedContainerSelectsOriginalStoreWithSidecarsAndValuesIntact() throws {
+        let f = try fixture(); let legacy = try XCTUnwrap(f.locations.previousURL)
+        let old = QRHistoryStore(url: legacy)
+        let context = try XCTUnwrap(old.context)
+        for (text, seconds) in [("duplicate", 1431993600.0), ("duplicate",1431993500.0), ("text 你好",0.0)] {
+            let row = NSEntityDescription.insertNewObject(forEntityName: "URLEntity", into: context) as! URLEntity
+            row.url = text; row.createDate = Date(timeIntervalSince1970: seconds)
+        }
+        try old.save()
+        let before = files(legacy)
+        XCTAssertNotNil(before["-wal"]); XCTAssertNotNil(before["-shm"])
+        XCTAssertEqual(try f.locations.resolve(), legacy)
+        XCTAssertEqual(files(legacy), before, "Location selection must not copy, rename, checkpoint or delete store files")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
+        let opened = MacHistory(url: try f.locations.resolve())
+        XCTAssertNil(opened.error)
+        XCTAssertEqual(opened.items.map(\.payload), ["duplicate", "duplicate", "text 你好"])
+        XCTAssertEqual(opened.items.compactMap { $0.createdAt?.timeIntervalSince1970 }, [1431993600,1431993500,0])
+        XCTAssertTrue(opened.record("new native scan"))
+        XCTAssertEqual(MacHistory(url: legacy).items.count, 4)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
+    }
+    func testBothStoresRequireExplicitChoiceAndNeverOverwriteEither() throws {
+        let f = try fixture(); let previous = try XCTUnwrap(f.locations.previousURL)
+        let old = QRHistoryStore(url: previous); try old.record(payload: "previous payload")
+        let new = QRHistoryStore(url: f.modern); try new.record(payload: "native payload")
+        let a = files(previous), b = files(f.modern)
+        XCTAssertThrowsError(try f.locations.resolve()) { error in
+            guard let locationError = error as? QRHistoryLocationError else { return XCTFail("Expected a location error") }
+            if case .conflict = locationError {} else { XCTFail("Expected an explicit location conflict") }
+        }
+        XCTAssertEqual(files(previous), a); XCTAssertEqual(files(f.modern), b)
+        let choice = try XCTUnwrap(f.locations.choices.first(where: { $0.id == .previousApp }))
+        try f.locations.remember(choice)
+        XCTAssertEqual(try f.locations.resolve(), previous)
+        XCTAssertEqual(files(previous), a); XCTAssertEqual(files(f.modern), b)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: f.modern.path))
+    }
+    func testMissingExplicitSelectionNeverCreatesAnEmptyReplacement() throws {
+        let f = try fixture(); let previous = try XCTUnwrap(f.locations.previousURL)
+        try Data("previous store bytes".utf8).write(to: previous)
+        try Data("native store bytes".utf8).write(to: f.modern)
+        let choice = try XCTUnwrap(f.locations.choices.first(where: { $0.id == .previousApp }))
+        try f.locations.remember(choice)
+        // Synthetic test-only removal emulates an unavailable selected file.
+        try FileManager.default.removeItem(at: previous)
+        XCTAssertThrowsError(try f.locations.resolve()) { error in
+            guard let locationError = error as? QRHistoryLocationError else { return XCTFail("Expected a location error") }
+            if case .selectedStoreMissing = locationError {} else { XCTFail("Must not silently switch histories") }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: previous.path))
+        XCTAssertEqual(try Data(contentsOf: f.modern), Data("native store bytes".utf8))
+    }
+    func testUnreadableLegacyStoreIsSelectedButNeverReplaced() throws {
+        let f = try fixture(); let previous = try XCTUnwrap(f.locations.previousURL)
+        let original = Data("unreadable original store".utf8); try original.write(to: previous)
+        XCTAssertEqual(try f.locations.resolve(), previous)
+        let history = MacHistory(url: previous)
+        XCTAssertNotNil(history.error); XCTAssertFalse(history.record("cannot save"))
+        XCTAssertEqual(try Data(contentsOf: previous), original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
+    }
+    func testUnsandboxedGeneralDocumentsAndEscapingLinksAreNotRead() throws {
+        let f = try fixture()
+        XCTAssertNil(QRHistoryLocations.validatedDocuments(home: f.root, documents: f.docs, sandboxed: false))
+        let unrelated = f.root.deletingLastPathComponent().appendingPathComponent("unrelated.sqlite")
+        try Data("do not read".utf8).write(to: unrelated)
+        let previous = try XCTUnwrap(f.locations.previousURL)
+        try FileManager.default.createSymbolicLink(at: previous, withDestinationURL: unrelated)
+        XCTAssertThrowsError(try f.locations.resolve())
+        XCTAssertEqual(try Data(contentsOf: unrelated), Data("do not read".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
     }
 }

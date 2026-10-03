@@ -6,11 +6,7 @@ struct QRCatcherMacApp: App {
     @StateObject private var workspace: MacWorkspace
 
     init() {
-        // An unavailable directory must show an error, never switch silently to an empty store.
-        let url: URL
-        do { url = try MacHistory.defaultURL() }
-        catch { url = URL(fileURLWithPath: "/QRCatcher-unavailable/coredata.sqlite") }
-        _workspace = StateObject(wrappedValue: MacWorkspace(history: MacHistory(url: url)))
+        _workspace = StateObject(wrappedValue: MacWorkspace(history: MacHistory.applicationHistory()))
     }
 
     var body: some Scene {

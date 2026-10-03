@@ -14,6 +14,7 @@ final class MacWorkspace: ObservableObject {
     private let decoder: QRDecodeWorker
     private var generation = UUID()
     private var task: Task<Void, Never>?
+    private var providerProgress: Progress?
 
     init(history: MacHistory, decoder: QRDecodeWorker = .shared) { self.history = history; self.decoder = decoder }
 
@@ -28,7 +29,21 @@ final class MacWorkspace: ObservableObject {
         generation = UUID()
         task?.cancel()
         task = nil
+        providerProgress?.cancel(); providerProgress = nil
         isReading = false
+    }
+
+    func beginExternalLoad() -> UUID {
+        cancelRead(); isReading = true; status = QRL("Reading image…"); return generation
+    }
+
+    func completeExternalLoad(_ token: UUID, data: Data?, error: Error?) {
+        guard token == generation else { return }
+        if let data { read(data: data) }
+        else {
+            isReading = false
+            self.error = QRF("Photo could not be loaded. %@", error?.localizedDescription ?? QRL("The image could not be read."))
+        }
     }
 
     func importFile() {
@@ -146,7 +161,7 @@ final class MacWorkspace: ObservableObject {
             return true
         }
         guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) else { return false }
-        provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, failure in
+        providerProgress = provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, failure in
             Task { @MainActor in
                 guard self.generation == token else { return }
                 if let data { self.read(data: data) }

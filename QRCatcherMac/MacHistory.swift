@@ -19,7 +19,9 @@ struct HistoryItem: Identifiable {
 final class MacHistory: ObservableObject {
     @Published private(set) var items: [HistoryItem] = []
     @Published private(set) var error: String?
-    private let store: QRHistoryStore
+    @Published private(set) var locationChoices: [QRHistoryLocationChoice] = []
+    private var store: QRHistoryStore?
+    private var locations: QRHistoryLocations?
 
     static func defaultURL() throws -> URL {
         #if DEBUG
@@ -27,10 +29,46 @@ final class MacHistory: ObservableObject {
             return URL(fileURLWithPath: path)
         }
         #endif
-        let folder = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("100mango.QRCatcher", isDirectory: true)
+        let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let folder = support.appendingPathComponent("100mango.QRCatcher", isDirectory: true)
+        let expected = support.resolvingSymlinksInPath().appendingPathComponent("100mango.QRCatcher", isDirectory: true).standardizedFileURL
+        guard folder.resolvingSymlinksInPath().standardizedFileURL.path == expected.path else { throw QRHistoryLocationError.unsafePath }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder.appendingPathComponent("coredata.sqlite")
+        #if DEBUG
+        if let name = ProcessInfo.processInfo.environment["QRCATCHER_TEST_STORE_NAME"], UUID(uuidString: name) != nil {
+            return folder.appendingPathComponent("ui-testing-\(name).sqlite")
+        }
+        #endif
+        return try QRHistoryLocations.runtime(nativeURL: folder.appendingPathComponent("coredata.sqlite")).resolve()
+    }
+
+    static func applicationHistory() -> MacHistory {
+        do { return MacHistory(url: try defaultURL()) }
+        catch QRHistoryLocationError.conflict(let locations) { return MacHistory(conflict: locations) }
+        catch { return MacHistory(loadFailure: error.localizedDescription) }
+    }
+
+    private init(loadFailure: String) { error = loadFailure }
+    private init(conflict: QRHistoryLocations) {
+        locations = conflict
+        locationChoices = conflict.choices
+        error = QRHistoryLocationError.conflict(conflict).localizedDescription
+    }
+
+    func chooseLocation(_ choice: QRHistoryLocationChoice) {
+        guard let locations, locationChoices.contains(where: { $0.id == choice.id }) else { return }
+        do {
+            let selectedURL = try locations.validatedExistingChoice(choice)
+            let candidate = QRHistoryStore(url: selectedURL)
+            guard candidate.loadError == nil else {
+                error = QRL("The chosen history could not be loaded. Neither history file has been replaced or erased.")
+                return
+            }
+            try locations.remember(choice)
+            store = candidate
+            locationChoices = []
+            reload()
+        } catch { self.error = error.localizedDescription }
     }
 
     init(url: URL) {
@@ -39,7 +77,8 @@ final class MacHistory: ObservableObject {
     }
 
     func reload() {
-        guard let context = store.context else {
+        guard let context = store?.context else {
+            if store == nil, error != nil { return }
             error = QRL("History could not be loaded. Your saved data has not been erased. You can still copy or export a scanned result. Restart to retry.")
             return
         }
@@ -57,6 +96,7 @@ final class MacHistory: ObservableObject {
 
     @discardableResult
     func record(_ payload: String) -> Bool {
+        guard let store else { return false }
         do {
             try store.record(payload: payload)
             reload()
@@ -68,7 +108,7 @@ final class MacHistory: ObservableObject {
     }
 
     func delete(_ item: HistoryItem) {
-        guard let context = store.context,
+        guard let store, let context = store.context,
               let url = URL(string: item.id),
               let id = context.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: url) else { return }
         do {

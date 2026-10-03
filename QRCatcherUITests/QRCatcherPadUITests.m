@@ -24,7 +24,7 @@
     XCTAssertTrue(self.app.staticTexts[@"scan.result"].exists);
     XCTAssertFalse(self.app.tabBars.firstMatch.exists, @"Native iPad must use the split workflow, not the phone tab shell.");
     XCUIDevice.sharedDevice.orientation = UIDeviceOrientationLandscapeLeft;
-    NSPredicate *landscape = [NSPredicate predicateWithBlock:^BOOL(XCUIElement *app, NSDictionary *bindings) { return app.frame.size.width > app.frame.size.height; }];
+    NSPredicate *landscape = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) { XCUIElement *app = object; return app.frame.size.width > app.frame.size.height; }];
     [self expectationForPredicate:landscape evaluatedWithObject:self.app handler:nil]; [self waitForExpectationsWithTimeout:8 handler:nil];
     XCTAssertTrue(history.hittable);
     [history.cells.firstMatch tap];
@@ -33,7 +33,7 @@
     XCUIElement *share = self.app.buttons[@"scan.share"];
     if (!share.hittable) [self.app.scrollViews.firstMatch swipeUp];
     XCTAssertTrue(share.hittable); [share tap];
-    XCTAssertTrue([self.app.otherElements[@"ActivityListView"] waitForExistenceWithTimeout:5] || self.app.buttons[@"Copy"].exists, self.app.debugDescription);
+    XCTAssertTrue([self.app.otherElements[@"ActivityListView"] waitForExistenceWithTimeout:5] || self.app.buttons[@"Copy"].exists, @"%@", self.app.debugDescription);
     [self capture:@"ipad-anchored-share"];
     // Dismiss the popover by tapping outside it, retaining the selected payload.
     [history.cells.firstMatch tap];
@@ -55,7 +55,7 @@
     XCTAssertTrue(import.hittable); [import tap];
     [self.app.buttons[@"Photo Library"] tap];
     XCUIElement *photo = self.app.collectionViews.cells.firstMatch;
-    XCTAssertTrue([photo waitForExistenceWithTimeout:15], self.app.debugDescription);
+    XCTAssertTrue([photo waitForExistenceWithTimeout:15], @"%@", self.app.debugDescription);
     [photo tap];
     NSPredicate *decoded = [NSPredicate predicateWithFormat:@"label == %@", @"QRCatcher 你好 🌈 123"];
     [self expectationForPredicate:decoded evaluatedWithObject:self.app.staticTexts[@"scan.result"] handler:nil];

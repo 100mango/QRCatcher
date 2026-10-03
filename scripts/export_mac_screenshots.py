@@ -28,10 +28,10 @@ def records(value):
 manifest=json.loads((destination/'manifest.json').read_text());screenshots=[]
 for item in records(manifest):
  label=' '.join(v for v in item.values() if isinstance(v,str))
- name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure'] if n in label),None)
+ name=next((n for n in ['mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure'] if n in label),None)
  if not name:continue
- if len(screenshots)>=6:
-  print('Additional named screenshot omitted at the six-image evidence limit:',name,flush=True);continue
+ if len(screenshots)>=8:
+  print('Additional named screenshot omitted at the eight-image evidence limit:',name,flush=True);continue
  path=(destination/item['exportedFileName']).resolve();assert path.is_relative_to(destination.resolve())
  data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
  name=f'{len(screenshots)+1}-{name}.jpg';(evidence/name).write_bytes(data)

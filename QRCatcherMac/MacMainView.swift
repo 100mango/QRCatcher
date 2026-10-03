@@ -25,14 +25,29 @@ struct MacMainView: View {
                     }
                 }
                 .accessibilityIdentifier("mac.history")
-                .overlay { if filtered.isEmpty { Text(QRL(history.items.isEmpty ? "Your QR history appears here" : "No matching results")).foregroundStyle(.secondary).padding() } }
+                .overlay { if filtered.isEmpty { Text(QRL(history.error != nil ? "History could not be loaded" : history.items.isEmpty ? "Your QR history appears here" : "No matching results")).foregroundStyle(.secondary).padding() } }
                 .searchable(text: $workspace.search, prompt: "Search history")
-                Text("\(history.items.count) saved on this Mac").font(.caption).foregroundStyle(.secondary).padding()
+                Group {
+                    if history.error != nil { Text("History unavailable") }
+                    else { Text("\(history.items.count) saved on this Mac") }
+                }.font(.caption).foregroundStyle(.secondary).padding()
             }
             .navigationTitle("History")
             .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 380)
         } detail: {
-            QRResultView(workspace: workspace, historyError: history.error)
+            VStack(spacing: 0) {
+                if !history.locationChoices.isEmpty {
+                    VStack(spacing: 12) {
+                        Text("Choose an existing history").font(.headline)
+                        Text("Both files stay in place. Future scans will be saved to the history you select.").multilineTextAlignment(.center)
+                        ForEach(history.locationChoices) { choice in
+                            Button(choice.title) { history.chooseLocation(choice) }
+                                .accessibilityIdentifier("mac.historyChoice." + choice.id.rawValue)
+                        }
+                    }.padding()
+                }
+                QRResultView(workspace: workspace, historyError: history.error)
+            }
                 .background(targeted ? Color.accentColor.opacity(0.08) : Color.clear)
                 .onDrop(of: [UTType.fileURL, UTType.image], isTargeted: $targeted, perform: workspace.dropped)
         }
@@ -77,10 +92,11 @@ struct MacMainView: View {
 
     private func readPhoto() async {
         guard let photo else { return }
+        let token = workspace.beginExternalLoad()
         do {
-            guard let data = try await photo.loadTransferable(type: Data.self), !Task.isCancelled else { return }
-            workspace.read(data: data)
-        } catch { if !Task.isCancelled { workspace.error = QRF("Photo could not be loaded. %@", error.localizedDescription) } }
+            let data = try await photo.loadTransferable(type: Data.self)
+            if !Task.isCancelled { workspace.completeExternalLoad(token, data: data, error: nil) }
+        } catch { if !Task.isCancelled { workspace.completeExternalLoad(token, data: nil, error: error) } }
     }
 }
 
@@ -152,10 +168,8 @@ private struct MacPrivacyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Privacy").font(.title.bold())
-            Text("QR decoding and history storage happen on this device. Imported images are processed locally. Camera access is requested only when you choose Camera. History is not automatically synchronized with your other devices.")
-            Text("Copying, exporting or opening a website is an explicit action. A website you open is handled by your system browser and its own privacy practices.")
+            Text(QRPrivacyText.body).accessibilityIdentifier("privacy.offlineBody")
             Link("Read the privacy policy", destination: URL(string: "https://100mango.github.io/app-privacy/")!)
-            Text("Questions: 100mango@gmail.com").textSelection(.enabled)
             Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
         }.padding(28).frame(width: 480)
     }

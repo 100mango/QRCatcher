@@ -70,7 +70,18 @@
 "Cancel" = "取消";
 "OK" = "好";
 "Photo could not be loaded. %@" = "无法载入照片：%@";
-"QR decoding and history storage happen on this device. Imported images are processed locally. Camera access is requested only when you choose Camera. History is not automatically synchronized with your other devices." = "二维码识别和历史记录存储均在本机完成，导入的图片仅在本地处理。只有选择摄像头功能时才会请求访问权限，历史记录不会自动同步到其他设备。";
-"Copying, exporting or opening a website is an explicit action. A website you open is handled by your system browser and its own privacy practices." = "复制、导出和打开网站均需由您主动操作。打开的网站由系统浏览器处理，并适用该网站自身的隐私政策。";
 "Read the privacy policy" = "阅读隐私政策";
-"Questions: 100mango@gmail.com" = "如有疑问，请联系：100mango@gmail.com";
+
+"Use previous app history" = "使用旧版应用的历史记录";
+"Use native app history" = "使用原生应用的历史记录";
+"Two histories were found in this app’s container. Choose which history to use. Neither file has been replaced or erased." = "在本应用容器中找到了两份历史记录，请选择要使用的一份。两份文件均未被替换或删除。";
+"A history path points outside its app-owned folder. Nothing has been opened or changed." = "历史记录路径指向了应用所属目录之外，未打开或更改任何文件。";
+"The saved history-location choice could not be read. Your existing history files have not been replaced or erased." = "无法读取已保存的历史记录位置选择，原有历史文件均未被替换或删除。";
+"The selected history file is unavailable. An empty replacement has not been created." = "所选历史文件不可用，未创建空白替代文件。";
+"The chosen history could not be loaded. Neither history file has been replaced or erased." = "无法载入所选历史记录，两份历史文件均未被替换或删除。";
+"Choose an existing history" = "选择已有的历史记录";
+"Both files stay in place. Future scans will be saved to the history you select." = "两份文件都会保留在原处，后续扫描结果将保存到您选择的历史记录中。";
+
+"History could not be loaded" = "无法载入历史记录";
+"History unavailable" = "历史记录暂不可用";
+"The image could not be read." = "无法读取这张图片。";

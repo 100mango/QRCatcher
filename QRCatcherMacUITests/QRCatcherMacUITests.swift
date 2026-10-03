@@ -158,6 +158,14 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mac.copy"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["mac.copy"].label, "复制")
         try screenshot("mac-chinese-reopened")
+        app.buttons["mac.privacy"].click()
+        let body = app.staticTexts["privacy.offlineBody"]
+        XCTAssertTrue(body.waitForExistence(timeout: 5))
+        let text = (body.value as? String) ?? body.label
+        XCTAssertTrue(text.contains("本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。"))
+        XCTAssertTrue(text.contains("系统 iCloud 同步"))
+        try screenshot("mac-chinese-policy")
+        app.buttons["完成"].firstMatch.click()
     }
 
     func testNativeWindowResizeKeepsFullActionTitles() throws {
@@ -206,7 +214,12 @@ final class QRCatcherMacUITests: XCTestCase {
         try screenshot("mac-camera-unavailable")
         app.buttons["Done"].firstMatch.click()
         app.buttons["mac.privacy"].click()
-        XCTAssertTrue(app.staticTexts["Questions: 100mango@gmail.com"].waitForExistence(timeout: 5))
+        let policy = app.staticTexts["privacy.offlineBody"]
+        XCTAssertTrue(policy.waitForExistence(timeout: 5))
+        let text = (policy.value as? String) ?? policy.label
+        XCTAssertTrue(text.contains("100mango@gmail.com"))
+        XCTAssertTrue(text.contains("Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings."))
+        try screenshot("mac-english-policy")
         app.buttons["Done"].firstMatch.click()
         XCTAssertTrue(app.buttons["mac.import"].exists)
     }
