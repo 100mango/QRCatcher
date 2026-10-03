@@ -44,8 +44,15 @@
     [privacy tap];
     XCUIElement *done = self.app.buttons[@"Done"];
     XCTAssertTrue([done waitForExistenceWithTimeout:15]);
+    NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
+    [self logSyntheticScreenshot:@"privacy-open-diagnostic"];
     [done tap];
-    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5]);
+    BOOL returnedToScanner = [self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5];
+    if (!returnedToScanner) {
+        NSLog(@"PRIVACY_RETURN_UI:%@", self.app.debugDescription);
+        [self logSyntheticScreenshot:@"privacy-return-diagnostic"];
+    }
+    XCTAssertTrue(returnedToScanner);
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
     XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);
