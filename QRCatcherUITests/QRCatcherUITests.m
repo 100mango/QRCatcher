@@ -1,0 +1,55 @@
+#import <XCTest/XCTest.h>
+@interface QRCatcherUITests : XCTestCase
+@property XCUIApplication *app;
+@end
+@implementation QRCatcherUITests
+- (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
+- (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
+- (void)testDeniedCameraAndEmptyHistory {
+    [self launch:@[@"-reset-history", @"-camera-denied"]];
+    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
+    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
+    [self.app.tabBars.buttons[@"scan.tab"] tap];
+    XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);
+}
+- (void)testScannedTextPersistsAcrossRelaunchAndBackground {
+    NSString *payload = @"QRCatcher regression text";
+    [self launch:@[@"-reset-history", @"-fixture-payload", payload]];
+    XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
+    XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, payload);
+    XCTAssertFalse(self.app.buttons[@"scan.open"].exists);
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.tables.cells.staticTexts[payload] waitForExistenceWithTimeout:5]);
+    [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
+    XCTAssertTrue([self.app.tables.cells.staticTexts[payload] waitForExistenceWithTimeout:5]);
+    [self.app terminate]; [self launch:@[]];
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.tables.cells.staticTexts[payload] waitForExistenceWithTimeout:5]);
+    [self.app.tables.cells.staticTexts[payload] tap];
+    XCTAssertTrue(self.app.alerts.buttons[@"Copy Result"].exists);
+    [self.app.alerts.buttons[@"Cancel"] tap];
+    [self.app.tables.cells.firstMatch swipeLeft];
+    [self.app.buttons[@"Delete"] tap];
+    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
+    [self.app terminate]; [self launch:@[]];
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
+}
+- (void)testWebsiteRequiresExplicitOpenAndCanScanAgain {
+    [self launch:@[@"-reset-history", @"-fixture-payload", @"https://example.com/regression"]];
+    XCTAssertTrue([self.app.buttons[@"scan.open"] waitForExistenceWithTimeout:10]);
+    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+    [self.app swipeUp]; [self.app.buttons[@"scan.again"] tap];
+    XCTAssertFalse(self.app.staticTexts[@"scan.result"].exists);
+    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"No camera"]);
+}
+- (void)testLargeTextLayoutKeepsControlsReachable {
+    [self launch:@[@"-reset-history", @"-UIPreferredContentSizeCategoryName", @"UICTContentSizeCategoryAccessibilityXXXL", @"-fixture-payload", @"Long QR text that must wrap without hiding navigation or losing access to the scan again control."]];
+    XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
+    [self.app swipeUp]; [self.app swipeUp];
+    XCTAssertTrue(self.app.buttons[@"scan.again"].hittable);
+    XCTAssertTrue(self.app.tabBars.buttons[@"history.tab"].hittable);
+}
+@end

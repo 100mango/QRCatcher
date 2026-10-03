@@ -1,0 +1,52 @@
+name: iOS regression
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  simulator:
+    runs-on: xcode-27
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify stable cloud toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+          xcodebuild -version | grep -E '^Xcode 27(\.0)?$'
+          xcodebuild -version | grep '27A266a'
+      - name: Validate project and select iOS 27 simulator
+        run: |
+          python3 scripts/generate_project.py
+          git diff --exit-code -- QRCatcher.xcodeproj
+          plutil -lint QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
+          xcodebuild -list -project QRCatcher.xcodeproj
+          python3 - <<'PY'
+          import json,subprocess,os
+          data=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          candidates=[d for r,devices in data['devices'].items() if r.endswith('iOS-27-0') for d in devices if d['name'].startswith('iPhone')]
+          assert candidates, 'Stable iOS 27.0 iPhone simulator unavailable'
+          d=sorted(candidates,key=lambda d:('Pro Max' not in d['name'],d['name']))[0]
+          print('Selected',d)
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('SIMULATOR_ID='+d['udid']+'\n')
+          PY
+      - name: Build and run unit and UI regression tests
+        run: |
+          set -o pipefail
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee test.log
+      - name: Build unsigned device Release
+        run: xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+      - name: Summarize test evidence
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then xcrun xcresulttool get test-results summary --path TestResults.xcresult; fi
+          echo 'Physical-device camera, signing, App Store metadata and release approval remain separate gates.' >> "$GITHUB_STEP_SUMMARY"

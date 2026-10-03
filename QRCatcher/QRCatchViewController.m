@@ -1,222 +1,291 @@
-//
-//  ViewController.m
-//  QRCatcher
-//
-//  Created by Mango on 15/4/1.
-//  Copyright (c) 2015年 Mango. All rights reserved.
-//
-
 #import "QRCatchViewController.h"
 #import "AppDelegate.h"
-//cocoa
-@import AVFoundation;
-@import QuartzCore;
-//tools
-#import "NSObject+Macro.h"
 #import "NSString+Tools.h"
-#import "Masonry.h"
-//model
-#import "URLEntity.h"
+#import "QRCodeCodec.h"
+#import <AVFoundation/AVFoundation.h>
+#import <QuartzCore/QuartzCore.h>
 
-
-@interface QRCatchViewController ()<AVCaptureMetadataOutputObjectsDelegate>
-@property (weak, nonatomic) IBOutlet UILabel *stringLabel;
-@property (weak, nonatomic) IBOutlet UIView *preview;
-@property (weak, nonatomic) IBOutlet UIVisualEffectView *blurView;
-@property (weak, nonatomic) IBOutlet UIImageView *catcherIndicator;
-@property (weak, nonatomic) IBOutlet UIView *borderView;
-@property (strong,nonatomic) CAShapeLayer *mask;
-
-//AVFoundation
-@property (strong,nonatomic) AVCaptureSession *session;
-@property (strong,nonatomic) AVCaptureVideoPreviewLayer *previewLayer;
-
+@interface QRCatchViewController () <AVCaptureMetadataOutputObjectsDelegate>
+@property (nonatomic, strong) UIView *preview;
+@property (nonatomic, strong) UIImageView *catcherIndicator;
+@property (nonatomic, strong) UILabel *statusLabel;
+@property (nonatomic, strong) UILabel *resultLabel;
+@property (nonatomic, strong) UIButton *settingsButton;
+@property (nonatomic, strong) UIButton *openButton;
+@property (nonatomic, strong) UIButton *againButton;
+@property (nonatomic, strong) UIButton *copyButton;
+@property (nonatomic, strong) CAShapeLayer *ripple;
+@property (nonatomic, strong) AVCaptureSession *session;
+@property (nonatomic, strong) AVCaptureVideoPreviewLayer *previewLayer;
+@property (nonatomic, strong) dispatch_queue_t sessionQueue;
+@property (atomic) BOOL visible;
+@property (atomic) BOOL ready;
+@property (atomic) BOOL wantsCamera;
+@property (nonatomic) BOOL hasResult;
+@property (nonatomic) BOOL appliedFixture;
+@property (nonatomic, copy) NSString *payload;
 @end
 
 @implementation QRCatchViewController
-
-#pragma mark View Life Cycle
-
+- (UIButton *)button:(NSString *)title identifier:(NSString *)identifier action:(SEL)action {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    [button setTitle:NSLocalizedString(title, nil) forState:UIControlStateNormal];
+    button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    button.titleLabel.adjustsFontForContentSizeCategory = YES;
+    button.titleLabel.numberOfLines = 0;
+    button.accessibilityIdentifier = identifier;
+    [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+    return button;
+}
+- (void)loadView {
+    self.view = [UIView new];
+    self.view.backgroundColor = UIColor.systemBackgroundColor;
+    UIScrollView *scroll = [UIScrollView new];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:scroll];
+    self.preview = [UIView new];
+    self.preview.backgroundColor = UIColor.blackColor;
+    self.preview.clipsToBounds = YES;
+    self.preview.layer.cornerRadius = 20;
+    self.preview.accessibilityIdentifier = @"scan.preview";
+    self.catcherIndicator = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"catcher6_0000_scanning2x"]];
+    self.catcherIndicator.contentMode = UIViewContentModeScaleAspectFit;
+    self.catcherIndicator.translatesAutoresizingMaskIntoConstraints = NO;
+    self.catcherIndicator.isAccessibilityElement = NO;
+    [self.preview addSubview:self.catcherIndicator];
+    self.statusLabel = [UILabel new];
+    self.statusLabel.text = NSLocalizedString(@"Point the camera at a QR code", nil);
+    self.statusLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    self.statusLabel.adjustsFontForContentSizeCategory = YES;
+    self.statusLabel.numberOfLines = 0;
+    self.statusLabel.textAlignment = NSTextAlignmentCenter;
+    self.statusLabel.accessibilityIdentifier = @"scan.status";
+    self.resultLabel = [UILabel new];
+    self.resultLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    self.resultLabel.adjustsFontForContentSizeCategory = YES;
+    self.resultLabel.numberOfLines = 0;
+    self.resultLabel.lineBreakMode = NSLineBreakByCharWrapping;
+    self.resultLabel.accessibilityIdentifier = @"scan.result";
+    self.resultLabel.hidden = YES;
+    self.settingsButton = [self button:@"Open Settings" identifier:@"scan.settings" action:@selector(openSettings)];
+    self.openButton = [self button:@"Open Website" identifier:@"scan.open" action:@selector(openWebsite)];
+    self.copyButton = [self button:@"Copy Result" identifier:@"scan.copy" action:@selector(copyResult)];
+    self.againButton = [self button:@"Scan Again" identifier:@"scan.again" action:@selector(scanAgain)];
+    self.settingsButton.hidden = self.openButton.hidden = self.againButton.hidden = self.copyButton.hidden = YES;
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.preview, self.statusLabel, self.resultLabel, self.settingsButton, self.openButton, self.copyButton, self.againButton]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 16;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [scroll addSubview:stack];
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.topAnchor constraintEqualToAnchor:safe.topAnchor], [scroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor], [scroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
+        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],
+        [stack.centerXAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.centerXAnchor],
+        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32],
+        [self.preview.heightAnchor constraintEqualToAnchor:self.preview.widthAnchor multiplier:0.7],
+        [self.catcherIndicator.topAnchor constraintEqualToAnchor:self.preview.topAnchor],
+        [self.catcherIndicator.bottomAnchor constraintEqualToAnchor:self.preview.bottomAnchor],
+        [self.catcherIndicator.leadingAnchor constraintEqualToAnchor:self.preview.leadingAnchor],
+        [self.catcherIndicator.trailingAnchor constraintEqualToAnchor:self.preview.trailingAnchor]
+    ]];
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
-    
-    [self setupAVFoundation];
-    [self setupLabelBorder];
-    [self setupRippleAnimation];
-    
-    //add blur view mask
-    self.mask = [CAShapeLayer layer];
-    self.mask.fillRule = kCAFillRuleEvenOdd;
-    self.blurView.layer.mask = self.mask;
-    
+    self.title = @"QRCatcher";
+    self.sessionQueue = dispatch_queue_create("com.100mango.QRCatcher.camera", DISPATCH_QUEUE_SERIAL);
+    self.session = [AVCaptureSession new];
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    [center addObserver:self selector:@selector(resumeCamera) name:UIApplicationDidBecomeActiveNotification object:nil];
+    [center addObserver:self selector:@selector(pauseCamera) name:UIApplicationWillResignActiveNotification object:nil];
+    [center addObserver:self selector:@selector(resumeCamera) name:UISceneDidActivateNotification object:nil];
+    [center addObserver:self selector:@selector(pauseCamera) name:UISceneWillDeactivateNotification object:nil];
+    [center addObserver:self selector:@selector(captureInterrupted:) name:AVCaptureSessionWasInterruptedNotification object:self.session];
+    [center addObserver:self selector:@selector(resumeCamera) name:AVCaptureSessionInterruptionEndedNotification object:self.session];
+    [center addObserver:self selector:@selector(captureFailed:) name:AVCaptureSessionRuntimeErrorNotification object:self.session];
+    [center addObserver:self selector:@selector(updateRipple) name:UIAccessibilityReduceMotionStatusDidChangeNotification object:nil];
+    [self updateRipple];
 }
-
-//使用Autolayout布局,我们在viewDidLayoutSubviews才能获取布局后的正确frame
-- (void)viewDidLayoutSubviews
-{
-    [super viewDidLayoutSubviews];
-    
-    //layout preview layer
-    self.previewLayer.bounds = self.preview.bounds;
-    self.previewLayer.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
-    
-    //configure blur view mask layer
-    self.mask.frame = self.blurView.bounds;
-
-    UIBezierPath *outRectangle = [UIBezierPath bezierPathWithRect:self.blurView.bounds];
-    CGRect inRect;
-    if (IS_IPHONE_6P)
-    {
-        inRect = [self.catcherIndicator convertRect:CGRectMake(72, 72, 272, 272) toView:self.blurView];
-    }
-    else
-    {
-        inRect = [self.catcherIndicator convertRect:CGRectMake(52, 52, 272, 272) toView:self.blurView];
-    }
-    UIBezierPath *inRectangle = [UIBezierPath bezierPathWithRect:inRect];
-    
-    [outRectangle appendPath:inRectangle];
-    outRectangle.usesEvenOddFillRule = YES;
-    self.mask.path = outRectangle.CGPath;
-}
-
-- (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
-}
-
-#pragma mark -  view did load setup
-- (void)setupAVFoundation
-{
-    //session
-    self.session = [[AVCaptureSession alloc] init];
-    //device
-    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    NSError *error = nil;
-    //input
-    AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:device error:&error];
-    if(input) {
-        [self.session addInput:input];
-    } else {
-        NSLog(@"%@", error);
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    self.visible = YES;
+#if DEBUG
+    NSArray *args = NSProcessInfo.processInfo.arguments;
+    NSUInteger index = [args indexOfObject:@"-fixture-payload"];
+    if ([args containsObject:@"-ui-testing"] && !self.appliedFixture && index != NSNotFound && index + 1 < args.count) {
+        self.appliedFixture = YES;
+        UIImage *QR = [QRCodeCodec imageForPayload:args[index + 1]];
+        NSString *decoded = [[QRCodeCodec payloadsInImage:QR] firstObject];
+        [self handlePayload:decoded];
         return;
     }
-    //output
-    AVCaptureMetadataOutput *output = [[AVCaptureMetadataOutput alloc] init];
+#endif
+    [self resumeCamera];
+}
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    self.visible = NO;
+    [self pauseCamera];
+}
+- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    self.previewLayer.frame = self.preview.bounds;
+    self.ripple.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
+}
+- (void)updateRipple {
+    [self.ripple removeFromSuperlayer];
+    if (UIAccessibilityIsReduceMotionEnabled() || self.hasResult) return;
+    self.ripple = [CAShapeLayer layer];
+    self.ripple.path = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(-2, -2, 4, 4)].CGPath;
+    self.ripple.strokeColor = UIColor.systemBlueColor.CGColor;
+    self.ripple.fillColor = UIColor.clearColor.CGColor;
+    self.ripple.lineWidth = 0.2;
+    [self.preview.layer addSublayer:self.ripple];
+    CABasicAnimation *scale = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    scale.fromValue = @1; scale.toValue = @60;
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = @1; fade.toValue = @0;
+    CAAnimationGroup *group = [CAAnimationGroup animation];
+    group.animations = @[scale, fade]; group.duration = 1.5; group.repeatCount = HUGE_VALF;
+    [self.ripple addAnimation:group forKey:@"scanPulse"];
+    [self.view setNeedsLayout];
+}
+- (void)showCameraUnavailable:(BOOL)denied {
+    self.statusLabel.text = NSLocalizedString(denied ? @"Camera access is off. Enable it in Settings to scan QR codes." : @"No camera is available. Your saved history is still available.", nil);
+    self.settingsButton.hidden = !denied;
+    [self.ripple removeAllAnimations];
+}
+- (void)resumeCamera {
+    if (!self.visible || self.hasResult || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+#if DEBUG
+    NSArray *args = NSProcessInfo.processInfo.arguments;
+    if ([args containsObject:@"-ui-testing"]) {
+        [self showCameraUnavailable:[args containsObject:@"-camera-denied"]];
+        return;
+    }
+#endif
+    AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+    if (status == AVAuthorizationStatusNotDetermined) {
+        __weak typeof(self) weakSelf = self;
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf resumeCamera]; });
+        }];
+        return;
+    }
+    if (status != AVAuthorizationStatusAuthorized) { [self showCameraUnavailable:YES]; return; }
+    self.settingsButton.hidden = YES;
+    self.statusLabel.text = NSLocalizedString(@"Point the camera at a QR code", nil);
+    self.wantsCamera = YES;
+    dispatch_async(self.sessionQueue, ^{
+        if (!self.ready && ![self configureSession]) return;
+        if (self.wantsCamera && !self.session.isRunning) [self.session startRunning];
+    });
+}
+- (BOOL)configureSession {
+    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    NSError *error;
+    AVCaptureDeviceInput *input = device ? [AVCaptureDeviceInput deviceInputWithDevice:device error:&error] : nil;
+    AVCaptureMetadataOutput *output = [AVCaptureMetadataOutput new];
+    [self.session beginConfiguration];
+    if (!input || ![self.session canAddInput:input]) {
+        [self.session commitConfiguration];
+        dispatch_async(dispatch_get_main_queue(), ^{ [self showCameraUnavailable:NO]; });
+        return NO;
+    }
+    [self.session addInput:input];
+    if (![self.session canAddOutput:output]) {
+        [self.session removeInput:input];
+        [self.session commitConfiguration];
+        dispatch_async(dispatch_get_main_queue(), ^{ [self showCameraUnavailable:NO]; });
+        return NO;
+    }
     [self.session addOutput:output];
-    [output setMetadataObjectTypes:@[AVMetadataObjectTypeQRCode]];
+    if (![output.availableMetadataObjectTypes containsObject:AVMetadataObjectTypeQRCode]) {
+        [self.session removeOutput:output]; [self.session removeInput:input];
+        [self.session commitConfiguration];
+        dispatch_async(dispatch_get_main_queue(), ^{ [self showCameraUnavailable:NO]; });
+        return NO;
+    }
+    output.metadataObjectTypes = @[AVMetadataObjectTypeQRCode];
     [output setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
-    
-    //add preview layer
-    self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
-    [self.preview.layer addSublayer:self.previewLayer];
-    
-    //start
-    [self.session startRunning];
+    [self.session commitConfiguration];
+    self.ready = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
+        self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+        [self.preview.layer insertSublayer:self.previewLayer atIndex:0];
+        AVCaptureConnection *connection = self.previewLayer.connection;
+        if (@available(iOS 17.0, *)) {
+            if ([connection isVideoRotationAngleSupported:90]) connection.videoRotationAngle = 90;
+        } else if (connection.isVideoOrientationSupported) {
+            connection.videoOrientation = AVCaptureVideoOrientationPortrait;
+        }
+        [self.view setNeedsLayout];
+    });
+    return YES;
 }
-
-- (void)setupLabelBorder
-{
-    self.borderView.layer.borderWidth = 1;
-    self.borderView.layer.borderColor = [[UIColor colorWithRed:65/225.0 green:182/255.0 blue:251 alpha:1] CGColor];
-    self.borderView.backgroundColor = [UIColor colorWithRed:23/255.0 green:133/255.0 blue:251/255.0 alpha:0.3];
-    self.borderView.hidden = YES;
+- (void)pauseCamera {
+    self.wantsCamera = NO;
+    dispatch_async(self.sessionQueue, ^{ if (self.session.isRunning) [self.session stopRunning]; });
 }
-
-- (void)setupRippleAnimation
-{
-    CGFloat width = 4;
-    CGRect pathFrame = CGRectMake(0,0, width, width);
-    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:pathFrame cornerRadius:width/2];
-    
-    CAShapeLayer *shapeLayer = [CAShapeLayer layer];
-    shapeLayer.position = self.view.center;
-    shapeLayer.bounds = path.bounds;
-    shapeLayer.path = [path CGPath];
-    shapeLayer.strokeColor = [[UIColor colorWithRed:65/225.0 green:182/255.0 blue:251 alpha:1] CGColor];
-    shapeLayer.fillColor = [[UIColor clearColor] CGColor];
-    shapeLayer.lineWidth = 0.2;
-    [self.view.layer addSublayer:shapeLayer];
-    
-    CABasicAnimation *scaleAnimation = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
-    scaleAnimation.fromValue = [NSValue valueWithCATransform3D:CATransform3DIdentity];
-    scaleAnimation.toValue = [NSValue valueWithCATransform3D:CATransform3DMakeScale(60, 60, 1)];
-    
-    CABasicAnimation *alphaAnimation = [CABasicAnimation animationWithKeyPath:@"opacity"];
-    alphaAnimation.fromValue = @1;
-    alphaAnimation.toValue = @0;
-    
-    CAAnimationGroup *animation = [CAAnimationGroup animation];
-    animation.animations = @[scaleAnimation, alphaAnimation];
-    animation.duration = 1;
-    animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-    animation.repeatCount =  HUGE_VALF;
-    animation.removedOnCompletion = NO;
-    [shapeLayer addAnimation:animation forKey:nil];
-    
-    NSLog(@"%@",NSStringFromCGRect(shapeLayer.frame));
-    
+- (void)captureInterrupted:(NSNotification *)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{ if (!self.hasResult) self.statusLabel.text = NSLocalizedString(@"Camera interrupted. Scanning will resume when available.", nil); });
 }
-
-#pragma mark - AVCaptureMetadataOutputObjectsDelegate
-- (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection
-{
-    for (AVMetadataMachineReadableCodeObject *metadata in metadataObjects) {
-        if ([metadata.type isEqualToString:AVMetadataObjectTypeQRCode]) {
-            
-            self.borderView.hidden = NO;
-            if ([metadata.stringValue isURL])
-            {
-                [[UIApplication sharedApplication] openURL:[NSString HTTPURLFromString:metadata.stringValue]];
-                [self insertURLEntityWithURL:metadata.stringValue];
-                self.stringLabel.text = metadata.stringValue;
-            }
-            else
-            {
-                self.stringLabel.text = metadata.stringValue;
-            }
+- (void)captureFailed:(NSNotification *)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.hasResult) {
+            self.statusLabel.text = NSLocalizedString(@"The camera could not start. Try scanning again.", nil);
+            self.againButton.hidden = NO;
+        }
+    });
+}
+- (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection {
+    if (!self.visible || self.hasResult || !self.wantsCamera) return;
+    for (AVMetadataObject *object in metadataObjects) {
+        if ([object.type isEqualToString:AVMetadataObjectTypeQRCode] && [object isKindOfClass:AVMetadataMachineReadableCodeObject.class]) {
+            [self handlePayload:((AVMetadataMachineReadableCodeObject *)object).stringValue];
+            break;
         }
     }
 }
-
-#pragma mark - core data
-- (void)insertURLEntityWithURL:(NSString*)URL
-{
-    NSManagedObjectContext *context = [[AppDelegate appDelegate] managedObjectContext];
-    
-    //确保插入不重复URL
-    if ([self getURLEntityWithURL:URL] == nil)
-    {
-        URLEntity *object = [NSEntityDescription insertNewObjectForEntityForName:@"URLEntity" inManagedObjectContext:context];
-        object.url = URL;
-        object.createDate = [NSDate date];
+- (void)handlePayload:(NSString *)payload {
+    if (self.hasResult) return;
+    if (!payload.length) {
+        self.statusLabel.text = NSLocalizedString(@"This QR code is empty or could not be read. Try another code.", nil);
+        self.againButton.hidden = NO;
+        return;
     }
+    self.hasResult = YES;
+    self.payload = payload;
+    [self pauseCamera];
+    [self.ripple removeAllAnimations];
+    self.resultLabel.text = payload;
+    self.resultLabel.hidden = self.againButton.hidden = self.copyButton.hidden = NO;
+    self.settingsButton.hidden = YES;
+    self.openButton.hidden = [NSString HTTPURLFromString:payload] == nil;
+    NSError *error;
+    BOOL saved = [[AppDelegate appDelegate].historyStore recordPayload:payload error:&error];
+    self.statusLabel.text = NSLocalizedString(saved ? @"QR code saved to History" : @"QR code read, but history could not be saved. Your existing history has not been erased.", nil);
+    UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, self.statusLabel.text);
 }
-
-- (URLEntity*)getURLEntityWithURL:(NSString*)URL
-{
-    NSManagedObjectContext *context = [[AppDelegate appDelegate] managedObjectContext];
-
-    NSFetchRequest *requset = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
-    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"%K == %@",@"url",URL];
-    requset.predicate = predicate;
-    
-    NSError *error = nil;
-    NSArray *result = [context executeFetchRequest:requset error:&error];
-    if (error) {
-        NSLog(@"%@",error);
-        return nil;
-    }
-    else
-    {
-        if (result && result.count > 0) {
-            return result.firstObject;
-        }
-        else
-        {
-            return nil;
-        }
-    }
+- (void)scanAgain {
+    self.hasResult = NO; self.payload = nil;
+    self.resultLabel.hidden = self.openButton.hidden = self.copyButton.hidden = self.againButton.hidden = YES;
+    [self updateRipple]; [self resumeCamera];
 }
-
+- (void)copyResult { if (self.payload) UIPasteboard.generalPasteboard.string = self.payload; }
+- (void)openWebsite {
+    NSURL *URL = [NSString HTTPURLFromString:self.payload];
+    if (!URL) return;
+    [UIApplication.sharedApplication openURL:URL options:@{} completionHandler:^(BOOL success) {
+        if (!success) self.statusLabel.text = NSLocalizedString(@"This website could not be opened.", nil);
+    }];
+}
+- (void)openSettings {
+    [UIApplication.sharedApplication openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString] options:@{} completionHandler:nil];
+}
 @end
