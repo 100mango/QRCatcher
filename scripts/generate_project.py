@@ -23,6 +23,9 @@ for path in sorted((root/'Shared').rglob('*')):
     if path.suffix in ['.h','.m']:
         r=file(str(path.relative_to(root)),'sourcecode.c.objc' if path.suffix=='.m' else 'sourcecode.c.h');sharedFiles.append(r)
         if path.suffix=='.m':sharedSources.append(build(r))
+nativeSharedSources=[];nativeSharedFiles=[]
+for path in sorted((root/'Shared').rglob('*.swift')):
+    r=file(str(path.relative_to(root)),'sourcecode.swift');nativeSharedFiles.append(r);nativeSharedSources.append(build(r))
 source+=sharedSources;appfiles+=sharedFiles
 for path in sorted((root/'QRCatcher').glob('*')):
     if path.suffix in ['.h','.m']:
@@ -68,10 +71,13 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'macosx','SUPPORTED_PLATFORMS':'macosx','MACOSX_DEPLOYMENT_TARGET':'13.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks','CODE_SIGN_STYLE':'Automatic','ENABLE_HARDENED_RUNTIME':'NO'}
     if app:
         common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
-        src+=sharedSources+[build(model)];files+=sharedFiles+[model]
+        src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
             r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
         r=file('QRCatcher/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        for localizedName in ['Localizable.strings','InfoPlist.strings']:
+            localized=add('maclocalized:'+localizedName,'PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/'+localizedName,sourceTree='<group>')
+            variant=add('macvariant:'+localizedName,'PBXVariantGroup',children=[localized],name=localizedName,sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES')
         if key=='macunit':

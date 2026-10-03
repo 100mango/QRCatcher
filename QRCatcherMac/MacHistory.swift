@@ -6,7 +6,7 @@ struct HistoryItem: Identifiable {
     let id: String
     let payload: String?
     let createdAt: Date?
-    var text: String { payload ?? "(Empty legacy record)" }
+    var text: String { payload ?? QRL("(Empty legacy record)") }
     var webURL: URL? { payload.flatMap { QRPayload.safeWebURL($0) } }
     var exportValue: [String: Any] {
         QRHistoryValue(identifier: id, payload: payload, createdAt: createdAt).export()
@@ -40,7 +40,7 @@ final class MacHistory: ObservableObject {
 
     func reload() {
         guard let context = store.context else {
-            error = "History could not be loaded. Your saved data has not been erased. You can still copy or export a scanned result. Restart to retry."
+            error = QRL("History could not be loaded. Your saved data has not been erased. You can still copy or export a scanned result. Restart to retry.")
             return
         }
         do {
@@ -51,7 +51,7 @@ final class MacHistory: ObservableObject {
             }
             error = nil
         } catch {
-            self.error = "History could not be read: \(error.localizedDescription)"
+            self.error = QRF("History could not be read: %@", error.localizedDescription)
         }
     }
 
@@ -62,7 +62,7 @@ final class MacHistory: ObservableObject {
             reload()
             return true
         } catch {
-            self.error = "QR code read, but history could not be saved. Your existing history has not been erased. \(error.localizedDescription)"
+            self.error = QRF("QR code read, but history could not be saved. Your existing history has not been erased. %@", error.localizedDescription)
             return false
         }
     }
@@ -77,13 +77,13 @@ final class MacHistory: ObservableObject {
             reload()
         } catch {
             context.rollback()
-            self.error = "The record could not be deleted. \(error.localizedDescription)"
+            self.error = QRF("The record could not be deleted. %@", error.localizedDescription)
         }
     }
 
     func exportData() throws -> Data {
         guard error == nil else {
-            throw NSError(domain: "QRCatcher.History", code: 2, userInfo: [NSLocalizedDescriptionKey: "History is unavailable. Export the current QR result instead; your saved data has not been erased."])
+            throw NSError(domain: "QRCatcher.History", code: 2, userInfo: [NSLocalizedDescriptionKey: QRL("History is unavailable. Export the current QR result instead; your saved data has not been erased.")])
         }
         // Export all records in displayed order, including null legacy values, without deduplication.
         return try JSONSerialization.data(withJSONObject: ["format": "QRCatcher.history", "version": 1,

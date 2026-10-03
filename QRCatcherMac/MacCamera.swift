@@ -4,7 +4,7 @@ import CoreImage
 
 /// Actual video frames use the same QR decoder as imported images. No simulator substitution.
 final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    @Published private(set) var status = "Choose Start Camera when you are ready."
+    @Published private(set) var status = QRL("Choose Start Camera when you are ready.")
     @Published private(set) var devices = MacCamera.discoverDevices()
     @Published private(set) var running = false
     let session = AVCaptureSession()
@@ -32,12 +32,12 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
                 self.devices = Self.discoverDevices()
-                self.stop(message: "Camera connection changed. Choose a camera and start again.")
+                self.stop(message: QRL("Camera connection changed. Choose a camera and start again."))
             })
         }
         for name in [AVCaptureSession.runtimeErrorNotification, AVCaptureSession.wasInterruptedNotification, NSApplication.didResignActiveNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: name == NSApplication.didResignActiveNotification ? nil : session, queue: .main) { [weak self] _ in
-                self?.stop(message: "Camera paused or interrupted. Choose Start Camera to retry.")
+                self?.stop(message: QRL("Camera paused or interrupted. Choose Start Camera to retry."))
             })
         }
     }
@@ -46,12 +46,12 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
 
     func start(deviceID: String?) {
         guard let device = devices.first(where: { $0.uniqueID == deviceID }) ?? devices.first else {
-            status = "No camera is available. Connect a camera, or import an image instead."
+            status = QRL("No camera is available. Connect a camera, or import an image instead.")
             return
         }
         deliveryID = UUID()
         let delivery = deliveryID
-        status = "Preparing camera…"
+        status = QRL("Preparing camera…")
         queue.async {
             self.generation += 1
             let token = self.generation
@@ -62,15 +62,15 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
                     self.queue.async {
                         guard token == self.generation else { return }
                         if granted { self.configure(device: device, token: token, delivery: delivery) }
-                        else { self.publish("Camera access was denied. You can enable it in System Settings > Privacy & Security > Camera, or import an image.", running: false) }
+                        else { self.publish(QRL("Camera access was denied. You can enable it in System Settings > Privacy & Security > Camera, or import an image."), running: false) }
                     }
                 }
-            default: self.publish("Camera access is unavailable. Check System Settings > Privacy & Security > Camera, or import an image.", running: false)
+            default: self.publish(QRL("Camera access is unavailable. Check System Settings > Privacy & Security > Camera, or import an image."), running: false)
             }
         }
     }
 
-    func stop(message: String = "Camera stopped") {
+    func stop(message: String = QRL("Camera stopped")) {
         deliveryID = UUID()
         queue.async {
             self.generation += 1
@@ -93,7 +93,7 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             guard session.canAddInput(input), session.canAddOutput(output) else {
                 session.commitConfiguration()
-                publish("This camera cannot provide video frames. Try another camera or import an image.", running: false)
+                publish(QRL("This camera cannot provide video frames. Try another camera or import an image."), running: false)
                 return
             }
             session.addInput(input); session.addOutput(output)
@@ -103,10 +103,10 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
             activeDeliveryID = delivery
             acceptsFrames = true; lastFrame = .zero
             session.startRunning()
-            publish("Point the camera at a QR code. Nothing opens automatically.", running: session.isRunning)
+            publish(QRL("Point the camera at a QR code. Nothing opens automatically."), running: session.isRunning)
         } catch {
             session.commitConfiguration()
-            publish("Camera could not start: \(error.localizedDescription)", running: false)
+            publish(QRF("Camera could not start: %@", error.localizedDescription), running: false)
         }
     }
 

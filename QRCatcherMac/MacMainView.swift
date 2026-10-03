@@ -25,7 +25,7 @@ struct MacMainView: View {
                     }
                 }
                 .accessibilityIdentifier("mac.history")
-                .overlay { if filtered.isEmpty { Text(history.items.isEmpty ? "Your QR history appears here" : "No matching results").foregroundStyle(.secondary).padding() } }
+                .overlay { if filtered.isEmpty { Text(QRL(history.items.isEmpty ? "Your QR history appears here" : "No matching results")).foregroundStyle(.secondary).padding() } }
                 .searchable(text: $workspace.search, prompt: "Search history")
                 Text("\(history.items.count) saved on this Mac").font(.caption).foregroundStyle(.secondary).padding()
             }
@@ -69,7 +69,7 @@ struct MacMainView: View {
         do {
             guard let data = try await photo.loadTransferable(type: Data.self), !Task.isCancelled else { return }
             workspace.read(data: data)
-        } catch { if !Task.isCancelled { workspace.error = "Photo could not be loaded. \(error.localizedDescription)" } }
+        } catch { if !Task.isCancelled { workspace.error = QRF("Photo could not be loaded. %@", error.localizedDescription) } }
     }
 }
 
@@ -95,7 +95,7 @@ private struct QRResultView: View {
         ScrollView {
             VStack(spacing: 22) {
                 Image(systemName: "qrcode.viewfinder").font(.system(size: 40)).foregroundStyle(Color.accentColor)
-                Text(workspace.payload == nil ? "Read a QR code" : "QR Result").font(.largeTitle.bold())
+                Text(QRL(workspace.payload == nil ? "Read a QR code" : "QR Result")).font(.largeTitle.bold())
                 if let payload = workspace.payload {
                     if let image {
                         Image(nsImage: image).interpolation(.none).resizable().scaledToFit().frame(width: 200, height: 200)

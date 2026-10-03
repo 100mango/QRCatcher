@@ -25,7 +25,7 @@ def records(value):
 manifest=json.loads((destination/'manifest.json').read_text());screenshots=[]
 for item in records(manifest):
  label=' '.join(v for v in item.values() if isinstance(v,str))
- name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-failure'] if n in label),None)
+ name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-failure'] if n in label),None)
  if not name:continue
  assert len(screenshots)<6,'Screenshot evidence budget exceeded'
  path=(destination/item['exportedFileName']).resolve();assert path.is_relative_to(destination.resolve())

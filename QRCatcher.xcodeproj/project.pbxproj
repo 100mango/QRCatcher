@@ -37,6 +37,16 @@
 "isa" = "PBXBuildFile";
 "fileRef" = "01C646F0E5AF845D09D8CA90";
 };
+"37132CF9D3E5BE31201ED554" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "Shared/Services/QRDecodeWorker.swift";
+"sourceTree" = "<group>";
+};
+"FF552536EE8CC4ED22FDA606" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "37132CF9D3E5BE31201ED554";
+};
 "768A3FF69F7211E2E0C56F98" = {
 "isa" = "PBXFileReference";
 "lastKnownFileType" = "sourcecode.c.h";
@@ -699,6 +709,16 @@
 "isa" = "PBXBuildFile";
 "fileRef" = "D35798B414237512D8BA4BF0";
 };
+"0ADEE6BD9C641DD592878806" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "sourcecode.swift";
+"path" = "QRCatcherMac/MacLocalization.swift";
+"sourceTree" = "<group>";
+};
+"0000E00D492245F3D87B5911" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "0ADEE6BD9C641DD592878806";
+};
 "CCAE3FEF80AB87C9C9D01450" = {
 "isa" = "PBXFileReference";
 "lastKnownFileType" = "sourcecode.swift";
@@ -729,9 +749,43 @@
 "isa" = "PBXBuildFile";
 "fileRef" = "AF2CF6477AE94F75A3D40BD6";
 };
+"C1FD5EAC370747984AEADBE5" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "text.plist.strings";
+"name" = "zh-Hans";
+"path" = "QRCatcherMac/zh-Hans.lproj/Localizable.strings";
+"sourceTree" = "<group>";
+};
+"FEA19A73DDDF85DFC85F47C9" = {
+"isa" = "PBXVariantGroup";
+"children" = ("C1FD5EAC370747984AEADBE5");
+"name" = "Localizable.strings";
+"sourceTree" = "<group>";
+};
+"112A576504AECF4E0838EE64" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "FEA19A73DDDF85DFC85F47C9";
+};
+"FD6F38FC8E3C2AD825FA6BB2" = {
+"isa" = "PBXFileReference";
+"lastKnownFileType" = "text.plist.strings";
+"name" = "zh-Hans";
+"path" = "QRCatcherMac/zh-Hans.lproj/InfoPlist.strings";
+"sourceTree" = "<group>";
+};
+"960D8D4FBEAD12671A81084A" = {
+"isa" = "PBXVariantGroup";
+"children" = ("FD6F38FC8E3C2AD825FA6BB2");
+"name" = "InfoPlist.strings";
+"sourceTree" = "<group>";
+};
+"4E3FD6272F72580F312CB8B8" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "960D8D4FBEAD12671A81084A";
+};
 "0D069BD07DDE7BEE712E9AFD" = {
 "isa" = "PBXGroup";
-"children" = ("3F0F64C36D736D3143CC40CE","D35798B414237512D8BA4BF0","CCAE3FEF80AB87C9C9D01450","6A69186CF15960F05C2CAB5C","AF2CF6477AE94F75A3D40BD6");
+"children" = ("3F0F64C36D736D3143CC40CE","D35798B414237512D8BA4BF0","0ADEE6BD9C641DD592878806","CCAE3FEF80AB87C9C9D01450","6A69186CF15960F05C2CAB5C","AF2CF6477AE94F75A3D40BD6","37132CF9D3E5BE31201ED554","FEA19A73DDDF85DFC85F47C9","960D8D4FBEAD12671A81084A");
 "name" = "QRCatcherMac";
 "sourceTree" = "<group>";
 };
@@ -795,7 +849,7 @@
 "EB058EA1A3046EF3757FC407" = {
 "isa" = "PBXSourcesBuildPhase";
 "buildActionMask" = 2147483647;
-"files" = ("8E32D4C73271D3998869B56B","D73C10694522D43D26B759C8","AF57C3A7B3D90DC8116CAE7D","8B512853F1B60F94309608EF","535AACE02ADC5D9F5473D10A","4E491B841D544FD9B037C269","9B800BA5FDFFBACCA8FB989A","951B841214A878ABBE70B631","271326F45D34CF1DF1ED1F53","E845CA8D4126BB948EA24CED");
+"files" = ("8E32D4C73271D3998869B56B","D73C10694522D43D26B759C8","0000E00D492245F3D87B5911","AF57C3A7B3D90DC8116CAE7D","8B512853F1B60F94309608EF","535AACE02ADC5D9F5473D10A","4E491B841D544FD9B037C269","9B800BA5FDFFBACCA8FB989A","FF552536EE8CC4ED22FDA606","951B841214A878ABBE70B631","271326F45D34CF1DF1ED1F53","E845CA8D4126BB948EA24CED");
 "runOnlyForDeploymentPostprocessing" = 0;
 };
 "AE6B80E7E080D3852FD3EA4A" = {
@@ -807,7 +861,7 @@
 "A6EF452BE7FE7F6D4D3FB160" = {
 "isa" = "PBXResourcesBuildPhase";
 "buildActionMask" = 2147483647;
-"files" = ("1B04573B35B1E9AC13531FBF");
+"files" = ("1B04573B35B1E9AC13531FBF","112A576504AECF4E0838EE64","4E3FD6272F72580F312CB8B8");
 "runOnlyForDeploymentPostprocessing" = 0;
 };
 "347EAD6348E936507920C15D" = {

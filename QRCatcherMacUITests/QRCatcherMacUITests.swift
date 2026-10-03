@@ -12,6 +12,7 @@ final class QRCatcherMacUITests: XCTestCase {
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcherUITest-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path
         app.launch()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
@@ -24,10 +25,9 @@ final class QRCatcherMacUITests: XCTestCase {
     private func fileDialog(path: String, button: String) {
         let url = URL(fileURLWithPath: path)
         if button == "Save" {
-            print("SAVE_PANEL_AX:", app.debugDescription)
-            // NSSavePanel initially focuses its selected Save As name.
-            app.typeKey("a", modifierFlags: .command)
-            app.typeText(url.lastPathComponent)
+            let name = app.dialogs.textFields["saveAsNameTextField"]
+            XCTAssertTrue(name.waitForExistence(timeout: 5))
+            name.click(); name.typeKey("a", modifierFlags: .command); name.typeText(url.lastPathComponent)
         }
         app.typeKey("g", modifierFlags: [.command, .shift])
         let field = app.sheets.textFields.firstMatch
@@ -75,14 +75,14 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual((export["records"] as? [[String:Any]])?.first?["payload"] as? String, "QRCatcher 你好 🌈 123")
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
-        let row = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "QRCatcher 你好")).firstMatch
+        let row = app.staticTexts.containing(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "QRCatcher 你好", "QRCatcher 你好")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.click()
         XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 5))
         app.buttons["mac.import"].click(); fileDialog(path: png.path, button: "Read QR Code")
         XCTAssertTrue(app.staticTexts["mac.status"].waitForExistence(timeout: 5))
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.exists); search.click(); search.typeText("does-not-exist")
-        XCTAssertTrue(app.staticTexts["No matching results"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", "No matching results", "No matching results")).firstMatch.waitForExistence(timeout: 5))
         search.typeKey("a", modifierFlags: .command); search.typeKey(.delete, modifierFlags: [])
         try screenshot("mac-reopened-history")
     }
@@ -101,6 +101,27 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.copy"].click()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
         try screenshot("mac-pasted-url")
+    }
+
+    func testChineseCriticalFlow() throws {
+        app.terminate()
+        app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
+        importImage("unicode")
+        XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons["mac.copy"].label, "复制")
+        app.buttons["mac.copy"].click()
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "QRCatcher 你好 🌈 123")
+        let png = folder.appendingPathComponent("chinese-result.png")
+        app.buttons["mac.exportQR"].click(); fileDialog(path: png.path, button: "Save")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: png.path))
+        app.terminate(); app.launch()
+        let row = app.staticTexts.matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "QRCatcher 你好", "QRCatcher 你好")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.click()
+        XCTAssertTrue(app.buttons["mac.copy"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["mac.copy"].label, "复制")
+        try screenshot("mac-chinese-reopened")
     }
 
     func testInvalidImageCancelAndCameraAbsence() throws {

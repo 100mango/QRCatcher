@@ -5,22 +5,23 @@ import UniformTypeIdentifiers
 @MainActor
 final class MacWorkspace: ObservableObject {
     @Published var payload: String?
-    @Published var status = "Open, drop or paste an image containing a QR code."
+    @Published var status = QRL("Open, drop or paste an image containing a QR code.")
     @Published var isReading = false
     @Published var selection: String?
     @Published var search = ""
     @Published var error: String?
     let history: MacHistory
+    private let decoder: QRDecodeWorker
     private var generation = UUID()
     private var task: Task<Void, Never>?
 
-    init(history: MacHistory) { self.history = history }
+    init(history: MacHistory, decoder: QRDecodeWorker = .shared) { self.history = history; self.decoder = decoder }
 
     func select(_ item: HistoryItem) {
         cancelRead()
         selection = item.id
         payload = item.payload
-        status = "Saved on this Mac"
+        status = QRL("Saved on this Mac")
     }
 
     func cancelRead() {
@@ -34,14 +35,14 @@ final class MacWorkspace: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
-        panel.prompt = "Read QR Code"
-        panel.message = "Choose an image containing one or more QR codes."
+        panel.prompt = QRL("Read QR Code")
+        panel.message = QRL("Choose an image containing one or more QR codes.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         read(url: url)
     }
 
     func read(url: URL) {
-        guard url.isFileURL else { error = "Only local image files can be imported."; return }
+        guard url.isFileURL else { error = QRL("Only local image files can be imported."); return }
         beginRead {
             let access = url.startAccessingSecurityScopedResource()
             defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -57,22 +58,19 @@ final class MacWorkspace: ObservableObject {
         cancelRead()
         let token = generation
         isReading = true
-        status = "Reading image…"
+        status = QRL("Reading image…")
         task = Task {
             do {
-                let result = try await Task.detached(priority: .userInitiated) {
-                    try Task.checkCancellation()
-                    return try QRImageCodec.decode(data: load())
-                }.value
+                let result = try await decoder.decode(load: load)
                 guard !Task.isCancelled, token == generation else { return }
                 isReading = false
-                guard !result.isEmpty else { status = "No QR code was found. Try a clearer image with the whole code visible."; return }
+                guard !result.isEmpty else { status = QRL("No QR code was found. Try a clearer image with the whole code visible."); return }
                 accept(result)
             } catch {
                 guard !Task.isCancelled, token == generation else { return }
                 isReading = false
                 self.error = error.localizedDescription
-                status = "Image could not be read. Your previous result is still available."
+                status = QRL("Image could not be read. Your previous result is still available.")
             }
         }
     }
@@ -85,12 +83,12 @@ final class MacWorkspace: ObservableObject {
         var saved = true
         for value in nonempty { if !history.record(value) { saved = false } }
         selection = history.items.first(where: { $0.payload == first })?.id
-        status = saved ? (nonempty.count == 1 ? "QR code read and saved on this Mac" : "\(nonempty.count) QR codes read. Select any result in History.") : "QR code read. Copy or export it now; history could not be saved."
+        status = saved ? (nonempty.count == 1 ? QRL("QR code read and saved on this Mac") : QRF("%ld QR codes read. Select any result in History.", nonempty.count)) : QRL("QR code read. Copy or export it now; history could not be saved.")
     }
 
     func pasteImage() {
         guard let image = NSImage(pasteboard: .general), let data = image.tiffRepresentation else {
-            error = "The clipboard does not contain an image. Copy an image, then choose Paste Image."
+            error = QRL("The clipboard does not contain an image. Copy an image, then choose Paste Image.")
             return
         }
         read(data: data)
@@ -100,24 +98,24 @@ final class MacWorkspace: ObservableObject {
         guard let payload else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(payload, forType: .string)
-        status = "Result copied"
+        status = QRL("Result copied")
     }
 
     func openWebsite() {
         guard let payload, let url = QRPayload.safeWebURL(payload) else { return }
         // This is reached only by an explicit user action; no WebView or automatic navigation.
-        if !NSWorkspace.shared.open(url) { error = "The system browser could not open this website." }
+        if !NSWorkspace.shared.open(url) { error = QRL("The system browser could not open this website.") }
     }
 
     func exportQR() {
         guard let payload, let data = QRImageCodec.png(payload: payload) else {
-            error = "This payload could not be represented as a QR image."; return
+            error = QRL("This payload could not be represented as a QR image."); return
         }
         save(data, type: .png, name: "QRCatcher.png")
     }
 
     func exportHistory() {
-        do { save(try history.exportData(), type: .json, name: "QRCatcher History.json") }
+        do { save(try history.exportData(), type: .json, name: QRL("QRCatcher History.json")) }
         catch { self.error = error.localizedDescription }
     }
 
@@ -128,8 +126,8 @@ final class MacWorkspace: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url, options: .atomic)
-            status = "Exported \(url.lastPathComponent)"
-        } catch { self.error = "Export failed. \(error.localizedDescription)" }
+            status = QRF("Exported %@", url.lastPathComponent)
+        } catch { self.error = QRF("Export failed. %@", error.localizedDescription) }
     }
 
     func dropped(_ providers: [NSItemProvider]) -> Bool {
@@ -142,7 +140,7 @@ final class MacWorkspace: ObservableObject {
                 Task { @MainActor in
                     guard self.generation == token else { return }
                     if let url { self.read(url: url) }
-                    else { self.error = failure?.localizedDescription ?? "The dropped file could not be opened." }
+                    else { self.error = failure?.localizedDescription ?? QRL("The dropped file could not be opened.") }
                 }
             }
             return true
@@ -152,7 +150,7 @@ final class MacWorkspace: ObservableObject {
             Task { @MainActor in
                 guard self.generation == token else { return }
                 if let data { self.read(data: data) }
-                else { self.error = failure?.localizedDescription ?? "The dropped image could not be read." }
+                else { self.error = failure?.localizedDescription ?? QRL("The dropped image could not be read.") }
             }
         }
         return true
@@ -161,5 +159,5 @@ final class MacWorkspace: ObservableObject {
 
 enum ImageReadError: LocalizedError {
     case tooLarge
-    var errorDescription: String? { "Choose an image smaller than 50 MB." }
+    var errorDescription: String? { QRL("Choose an image smaller than 50 MB.") }
 }

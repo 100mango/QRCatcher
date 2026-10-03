@@ -141,6 +141,27 @@ final class QRCatcherMacTests: XCTestCase {
         XCTAssertEqual(workspace.payload, "Newer explicit selection")
     }
 
+    func testRepeatedImportsCancelQueuedWorkAndBoundHeavyConcurrency() async throws {
+        let entered = expectation(description: "First heavy operation started")
+        let probe = DecodeConcurrencyProbe(started: entered)
+        let decoder = QRDecodeWorker(operation: probe.process)
+        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let workspace = MacWorkspace(history: history, decoder: decoder)
+        workspace.read(data: Data("first".utf8))
+        await fulfillment(of: [entered], timeout: 5)
+        for index in 0..<30 { workspace.read(data: Data("discarded-\(index)".utf8)) }
+        workspace.read(data: Data("latest".utf8))
+        probe.release.signal()
+        for _ in 0..<50 {
+            if workspace.payload == "latest" { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertEqual(workspace.payload, "latest")
+        XCTAssertEqual(history.items.map(\.payload), ["latest"])
+        XCTAssertEqual(probe.snapshot.started, ["first", "latest"])
+        XCTAssertEqual(probe.snapshot.maximumConcurrent, 1)
+    }
+
     func testCameraAbsenceIsExplicit() throws {
         let camera = MacCamera()
         print("Actual camera inventory:", camera.devices.map(\.localizedName))
@@ -151,5 +172,29 @@ final class QRCatcherMacTests: XCTestCase {
         } else {
             throw XCTSkip("Physical camera absence cannot be asserted on this runner")
         }
+    }
+}
+
+/// A synchronous controllable engine, injected only by this test bundle.
+private final class DecodeConcurrencyProbe: @unchecked Sendable {
+    let release = DispatchSemaphore(value: 0)
+    private let started: XCTestExpectation
+    private let lock = NSLock()
+    private var active = 0
+    private var maximumConcurrent = 0
+    private var values: [String] = []
+    init(started: XCTestExpectation) { self.started = started }
+    var snapshot: (started: [String], maximumConcurrent: Int) {
+        lock.lock(); defer { lock.unlock() }; return (values, maximumConcurrent)
+    }
+    func process(_ data: Data) throws -> [String] {
+        let value = String(decoding: data, as: UTF8.self)
+        lock.lock(); active += 1; maximumConcurrent = max(maximumConcurrent, active); values.append(value); lock.unlock()
+        defer { lock.lock(); active -= 1; lock.unlock() }
+        if value == "first" {
+            started.fulfill()
+            guard release.wait(timeout: .now() + 5) == .success else { throw CocoaError(.userCancelled) }
+        }
+        return [value]
     }
 }
