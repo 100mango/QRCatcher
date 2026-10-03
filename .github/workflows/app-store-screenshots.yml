@@ -1,0 +1,77 @@
+name: App Store screenshots
+on:
+  push:
+    branches: [codex/app-store-screenshots]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-store-screenshots
+  cancel-in-progress: true
+jobs:
+  capture:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      RELEASE_SOURCE: 98f48f0505889d05b85b5699c62cd626bdcf6835
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify screenshot-only source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/app-store-screenshots
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          import os,subprocess
+          base=os.environ['RELEASE_SOURCE']
+          names=set(subprocess.check_output(['git','diff','--name-only',base,'HEAD']).decode().splitlines())
+          allowed={'QRCatcherUITests/QRCatcherUITests.m','.github/workflows/app-store-screenshots.yml'}
+          assert names <= allowed, 'Unexpected capture-branch changes: '+repr(names-allowed)
+          print('Capture-only delta:', sorted(names))
+          PY
+          git diff --exit-code "$RELEASE_SOURCE" HEAD -- QRCatcher QRCatcher.xcodeproj QRCatcher.xcworkspace scripts .github/workflows/ios.yml
+          echo "Release source: $RELEASE_SOURCE"
+          echo "Unmodified application tree: $(git rev-parse HEAD:QRCatcher)"
+          echo 'Capture uses existing Debug-only synthetic QR seeding; no live camera feed is represented.'
+      - name: Verify stable toolchain and large iPhone
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcodebuild -version | grep -E '^Xcode 27(\.0)?$'
+          xcodebuild -version | grep '27A266a'
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+          python3 - <<'PY'
+          import json,subprocess,os
+          data=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          devices=[d for r,ds in data['devices'].items() if r.endswith('iOS-27-0') for d in ds if d['name']=='iPhone 18 Pro Max']
+          assert len(devices)==1, 'Required stable iPhone 18 Pro Max unavailable'
+          print('Capture device:',devices[0])
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('SIMULATOR_ID='+devices[0]['udid']+'\n')
+          PY
+      - name: Warm up screenshot simulator
+        timeout-minutes: 10
+        run: |
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl spawn "$SIMULATOR_ID" launchctl print system >/dev/null
+      - name: Capture four actual Chinese app screens
+        timeout-minutes: 15
+        run: |
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/capture -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests/testCaptureStoreScreenshots -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 -resultBundlePath build/StoreScreenshots.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Verify capture did not change source
+        run: git diff --exit-code HEAD --
+      - name: Record capture results
+        if: always()
+        timeout-minutes: 2
+        run: |
+          if [ -f build/StoreScreenshots.xcresult/Info.plist ]; then xcrun xcresulttool get test-results summary --path build/StoreScreenshots.xcresult; fi
+          xcrun simctl shutdown "$SIMULATOR_ID" || true
+          echo 'Four 1320x2868 JPEG screenshots use synthetic QR content through the existing Debug seam. No image resizing, overlays, live-camera fabrication, artifact storage, signing or upload.' >> "$GITHUB_STEP_SUMMARY"
