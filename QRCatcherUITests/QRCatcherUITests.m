@@ -12,7 +12,7 @@
     NSData *JPEG = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image, 0.55);
     XCTAssertLessThanOrEqual(JPEG.length, 500 * 1024);
     if (JPEG.length > 500 * 1024) return;
-    XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:JPEG uniformTypeIdentifier:@"public.jpeg"];
+    XCTAttachment *attachment = [XCTAttachment attachmentWithData:JPEG uniformTypeIdentifier:@"public.jpeg"];
     attachment.name = name;
     attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:attachment];
