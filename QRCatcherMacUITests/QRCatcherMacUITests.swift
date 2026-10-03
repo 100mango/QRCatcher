@@ -139,6 +139,9 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertLessThanOrEqual(jpeg.count, 800 * 1024)
         let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
+        if name != "mac-failure" {
+            try app.performAccessibilityAudit(for: .all) { issue in print("MAC_ACCESSIBILITY_ISSUE", issue.compactDescription); return false }
+        }
     }
 
     func testImportCopyExportReopenAndSearch() throws {

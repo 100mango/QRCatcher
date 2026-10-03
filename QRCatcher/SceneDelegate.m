@@ -15,7 +15,12 @@
     self.scanController = scan;
     QRURLViewController *history = [QRURLViewController new];
     for (UIViewController *controller in @[scan, history]) {
-        UIBarButtonItem *privacy = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"Privacy Policy", nil) style:UIBarButtonItemStylePlain target:self action:@selector(showPrivacyPolicy)];
+        UIBarButtonItem *privacy;
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+            privacy = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"hand.raised"] style:UIBarButtonItemStylePlain target:self action:@selector(showPrivacyPolicy)];
+        } else {
+            privacy = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"Privacy Policy", nil) style:UIBarButtonItemStylePlain target:self action:@selector(showPrivacyPolicy)];
+        }
         privacy.accessibilityLabel = NSLocalizedString(@"Privacy Policy", nil);
         privacy.accessibilityIdentifier = @"privacy.policy";
         controller.navigationItem.rightBarButtonItem = privacy;

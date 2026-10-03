@@ -41,6 +41,10 @@ final class QRCatcherTVUITests: XCTestCase {
         }
     }
     private func capture(_ name: String) {
+        if name != "tv-failure" {
+            do { try app.performAccessibilityAudit(for: .all) { issue in print("TV_ACCESSIBILITY_ISSUE", issue.compactDescription); return false } }
+            catch { XCTFail("TV accessibility audit failed: \(error)") }
+        }
         guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { return }
         XCTAssertLessThanOrEqual(data.count, 800 * 1024)
         let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg")

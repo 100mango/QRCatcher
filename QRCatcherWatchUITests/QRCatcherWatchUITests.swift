@@ -8,7 +8,12 @@ import XCTest
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]; app.launch()
     }
     override func tearDownWithError() throws { if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); capture("watch-failure") }; app.terminate() }
-    private func capture(_ name: String) { let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment) }
+    private func capture(_ name: String) {
+        if name != "watch-failure" && name != "watch-system-picker-unavailable" {
+            do { try app.performAccessibilityAudit(for: .all) { issue in print("WATCH_ACCESSIBILITY_ISSUE", issue.compactDescription); return false } }
+            catch { XCTFail("Watch accessibility audit failed: \(error)") }
+        }
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment) }
     func testNativeEmptyCollectionAndOfflinePolicy() {
         XCTAssertTrue(app.buttons["watch.photos"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["watch.store-error"].exists)

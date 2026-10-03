@@ -16,6 +16,10 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.terminate()
     }
     private func capture(_ name: String) {
+        if name != "vision-failure" {
+            do { try app.performAccessibilityAudit(for: .all) { issue in print("VISION_ACCESSIBILITY_ISSUE", issue.compactDescription); return false } }
+            catch { XCTFail("VISION accessibility audit failed: \(error)") }
+        }
         // Native Vision XCTest explicitly reports manual screenshots unsupported.
         // The cloud script takes actual public simctl pixels at this checkpoint.
         let description = String(app.debugDescription.prefix(20000))

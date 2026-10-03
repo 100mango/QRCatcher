@@ -81,5 +81,12 @@
     [self.app.navigationBars.buttons[@"privacy.close"] tap];
     XCTAssertTrue([self.app.tables[@"history.table"] waitForExistenceWithTimeout:5]);
     [self capture:@"ipad-large-text"];
+    XCUIElement *title = self.app.navigationBars[@"History"].staticTexts[@"History"];
+    XCTAssertTrue(title.exists, @"History title remains accessible at largest text");
+    XCTAssertEqualObjects(title.label, @"History");
+    CGFloat minimumWidth = [@"History" sizeWithAttributes:@{NSFontAttributeName:[UIFont boldSystemFontOfSize:17]}].width;
+    XCTAssertGreaterThanOrEqual(title.frame.size.width + 0.5, minimumWidth, @"The visible title must fit, not merely expose a complete AX label");
+    NSError *error = nil;
+    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"iPad largest-text split/result accessibility audit: %@", error);
 }
 @end
