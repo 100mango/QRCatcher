@@ -50,7 +50,7 @@ Permission states are injected for determinism because simulator camera hardware
 2. Real iPhone: clean-install permission prompt, deny, Settings re-enable, camera foreground/background, tab switching, interruption, repeated scan, Unicode and malformed QR, close/far/low-light focus; verify no automatic external launch
 3. Upgrade archived published build; validate old history, delete/add/relaunch and failure recovery; retain a backup before migration checks
 4. Test supported oldest iOS on physical hardware or available compatible simulator; VoiceOver, Reduce Motion, large text, small and large phone layouts
-5. Obtain an original high-resolution **1024×1024 marketing icon**. The repository's largest existing icon is only 180×180; an upscaled copy is not an original high-resolution source
+5. Confirm the recovered **1024×1024 marketing icon** visually against the approved store identity. The asset now included is Apple-served artwork for this published app, recovered on 2026-10-03 without local resizing or redesign. It is an Apple CDN derivative, not a proven designer-original source. Existing device icons remain unchanged; the older store artwork has a slightly different glow
 6. Verify App Store Connect ownership, current released version/build, signing team, current privacy declarations, support/privacy-policy URLs, screenshots, export-compliance answers and review notes. The App Store Connect account check on 2026-10-03 confirmed the existing release is version 1.0/build 1; candidate version 1.1/build 2 is higher, and must be rechecked immediately before upload
 7. Review the privacy manifest against the final binary. Current app has no tracking, network SDK or collected data, and declares no directly used required-reason APIs; all scan history remains local. Opening a chosen website exposes that request to the destination/browser
 8. Sign/archive/upload only through explicitly authorized Apple account access. Resolve agreements/credentials through the account owner. Keep this PR in draft and do not merge/publish without release approval
@@ -61,3 +61,13 @@ Permission states are injected for determinism because simulator camera hardware
 - https://developer.apple.com/documentation/uikit/transitioning-to-the-uikit-scene-based-life-cycle
 - https://developer.apple.com/documentation/technotes/tn3208-preparing-your-apps-launch-screen-to-meet-app-store-requirements
 - https://developer.apple.com/documentation/avfoundation/avcam-building-a-camera-app
+
+
+## Recovered marketing icon provenance
+
+- Resource: `QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png`
+- Source: https://is1-ssl.mzstatic.com/image/thumb/Purple2/v4/79/4a/49/794a49fc-e040-14bf-0cf9-baa32b28c58e/pr_source.png/1024x1024bb.png
+- Retrieved via the existing App Store Connect record's artwork on 2026-10-03, then visually verified against the QRCatcher store identity
+- Dimensions/format: 1024 × 1024, opaque RGB PNG
+- SHA-256: `dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4`
+- Provenance limit: Apple-served 1024px derivative; original designer master has not been recovered
