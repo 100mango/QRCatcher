@@ -46,22 +46,27 @@ jobs:
           xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Release -derivedDataPath build/MacRelease -destination 'generic/platform=macOS' ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tee mac-build.log
           APP=build/MacRelease/Build/Products/Release/QRCatcherMac.app
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" = '100mango.QRCatcher'
-          lipo "$APP/Contents/MacOS/QRCatcherMac" -verify_arch arm64 x86_64
-          lipo -info "$APP/Contents/MacOS/QRCatcherMac"
+          ARCHITECTURES=$(xcrun lipo -archs "$APP/Contents/MacOS/QRCatcherMac")
+          echo "Verified native slices: $ARCHITECTURES"
+          [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]]
+          xcrun lipo -info "$APP/Contents/MacOS/QRCatcherMac"
           strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
           if grep -E -- 'QRCATCHER_TEST_STORE|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
       - name: Execute native Mac unit and UI tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 20
         run: |
           set -o pipefail
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
       - name: Verify iOS release and unchanged store model
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: |
           xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/iOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
           git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '100mango.QRCatcher'
       - name: Run iOS codec equivalence and existing unit regression
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
         run: |
           SIMULATOR_ID=$(python3 - <<'PY'
