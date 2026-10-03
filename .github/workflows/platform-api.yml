@@ -1,0 +1,53 @@
+name: Apple platform API typecheck probe
+on:
+  push:
+    branches: [codex/platform-api-probe]
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-platform-api-probe
+  cancel-in-progress: true
+jobs:
+  typecheck:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+      - name: Verify exact probe source and unchanged app
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/platform-api-probe
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 83fa7469dbf01b89cfb99b8ca226f26f64bf0719
+          git diff --exit-code HEAD --
+          python3 - <<'PY'
+          import subprocess
+          paths=subprocess.check_output(['git','diff','--name-only','HEAD^','HEAD'],text=True).splitlines()
+          assert paths and all(p=='.github/workflows/platform-api.yml' or p.startswith('PlatformAPIProbe/') for p in paths), paths
+          print('APP_SOURCE_UNCHANGED_FROM_BASE: 83fa7469dbf01b89cfb99b8ca226f26f64bf0719')
+          print('CHANGED_PATHS:',paths)
+          PY
+          git rev-parse HEAD 'HEAD^{tree}'
+          sw_vers
+          uname -m
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list runtimes
+          xcodebuild -version | grep '^Xcode 27.0$'
+          xcodebuild -version | grep '27A266a'
+      - name: Typecheck candidate APIs without executing or signing apps
+        timeout-minutes: 13
+        run: python3 PlatformAPIProbe/run-probes.py
+      - name: Verify final source unchanged
+        if: always()
+        run: git diff --exit-code HEAD --
