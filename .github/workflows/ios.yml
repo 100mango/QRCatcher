@@ -12,7 +12,7 @@ concurrency:
 jobs:
   simulator:
     runs-on: xcode-27
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
     steps:
@@ -90,12 +90,11 @@ jobs:
           print('Embedded framework inventory: '+text)
           PYINVENTORY
       - name: Warm up large-phone simulator
-        timeout-minutes: 6
+        timeout-minutes: 10
         run: |
           xcrun simctl boot "$SIMULATOR_ID" || true
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcrun simctl spawn "$SIMULATOR_ID" launchctl print system >/dev/null
-          xcodebuild -project QRCatcher.xcodeproj -scheme QRCatcher -showdestinations
       - name: Build and run unit regression tests
         timeout-minutes: 12
         run: |
@@ -107,7 +106,7 @@ jobs:
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/DerivedData -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherUITests -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 180 -parallel-testing-enabled NO -resultBundlePath TestResults.xcresult CODE_SIGNING_ALLOWED=NO
       - name: Warm up compact-phone simulator
-        timeout-minutes: 6
+        timeout-minutes: 10
         run: |
           xcrun simctl shutdown "$SIMULATOR_ID" || true
           xcrun simctl boot "$COMPACT_SIMULATOR_ID" || true
@@ -126,7 +125,7 @@ jobs:
         run: |
           xcrun simctl list devices booted
           vm_stat
-          ps -axo pid,pcpu,pmem,comm | sort -k 2 -nr | head -n 20
+          ps -axo pid,pcpu,pmem,comm | sort -k 2 -nr | sed -n '1,20p'
           for DEVICE in "$SIMULATOR_ID" "${COMPACT_SIMULATOR_ID:-}"; do
             if [ -n "$DEVICE" ]; then
               xcrun simctl spawn "$DEVICE" log show --last 2m --style compact --predicate 'process == "QRCatcher" OR process == "QRCatcherUITests-Runner" OR process == "testmanagerd"' | tail -n 150 || true
