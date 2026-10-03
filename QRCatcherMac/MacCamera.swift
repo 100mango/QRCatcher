@@ -120,7 +120,10 @@ final class MacCamera: NSObject, ObservableObject, AVCaptureVideoDataOutputSampl
         guard CMTimeGetSeconds(CMTimeSubtract(time, lastFrame)) >= 0.3,
               let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         lastFrame = time
-        let values = QRImageCodec.payloads(in: CIImage(cvPixelBuffer: buffer))
+        let image = CIImage(cvPixelBuffer: buffer)
+        let scale = min(1, 1920 / max(image.extent.width, image.extent.height))
+        let bounded = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let values = QRImageCodec.payloads(in: bounded)
         guard !values.isEmpty else { return }
         acceptsFrames = false
         let token = generation

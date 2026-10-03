@@ -22,13 +22,24 @@ final class QRCatcherMacUITests: XCTestCase {
     }
 
     private func fileDialog(path: String, button: String) {
+        let url = URL(fileURLWithPath: path)
+        if button == "Save" {
+            print("SAVE_PANEL_AX:", app.debugDescription)
+            // NSSavePanel initially focuses its selected Save As name.
+            app.typeKey("a", modifierFlags: .command)
+            app.typeText(url.lastPathComponent)
+        }
         app.typeKey("g", modifierFlags: [.command, .shift])
         let field = app.sheets.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
-        field.typeText(path)
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText(button == "Save" ? url.deletingLastPathComponent().path : path)
         app.typeKey(.return, modifierFlags: [])
-        let confirm = app.buttons[button].firstMatch
+        // The visible AppKit panel and Touch Bar expose duplicate titles.
+        // Use the actual panel control identifier observed in the AX hierarchy.
+        let confirm = app.dialogs.buttons["OKButton"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(confirm.isEnabled, app.debugDescription)
         confirm.click()
     }
     private func importImage(_ name: String) {
@@ -85,15 +96,16 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mac.openWebsite"].exists)
         XCTAssertEqual(app.state, .runningForeground)
         app.buttons["mac.exportQR"].click()
-        app.buttons["Cancel"].firstMatch.click()
+        app.dialogs.buttons["CancelButton"].firstMatch.click()
         XCTAssertTrue(app.buttons["mac.copy"].exists)
         app.buttons["mac.copy"].click()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
+        try screenshot("mac-pasted-url")
     }
 
     func testInvalidImageCancelAndCameraAbsence() throws {
         app.buttons["mac.import"].click()
-        app.buttons["Cancel"].firstMatch.click()
+        app.dialogs.buttons["CancelButton"].firstMatch.click()
         XCTAssertFalse(app.staticTexts["mac.payload"].exists)
         importImage("invalid")
         let noCode = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "No QR code", "No QR code")
