@@ -9,5 +9,6 @@
 #import <UIKit/UIKit.h>
 
 @interface QRURLViewController : UIViewController
+@property (nonatomic, copy, nullable) void (^selectedPayloadHandler)(NSString *payload);
 
 @end

@@ -6,7 +6,7 @@ import hashlib,json,os,pathlib,subprocess
 result='MacTestResults.xcresult'
 evidence=pathlib.Path('build/mac-evidence');evidence.mkdir(parents=True,exist_ok=True)
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
-icon=pathlib.Path('build/icon-verification/AppIcon.iconset/icon_512x512@2x.png')
+icon=pathlib.Path('build/icon-verification/mac-bundled-icon.png')
 if icon.exists():
  data=icon.read_bytes();assert len(data)<=600*1024;(evidence/'mac-bundled-icon.png').write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
 (evidence/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')

@@ -23,3 +23,10 @@
 "Close" = "关闭";
 "Retry" = "重试";
 "The privacy policy could not load. Check your connection and try again." = "无法载入隐私政策，请检查网络连接后重试。";
+"Import Image" = "导入图片";
+"Photo Library" = "照片图库";
+"Choose File" = "选择文件";
+"Share QR Image" = "分享二维码图片";
+"No QR code was found. Try a clearer image." = "未找到二维码，请尝试更清晰的图片。";
+"This image could not be read. Choose an image smaller than 50 MB." = "无法读取此图片，请选择小于 50 MB 的图片。";
+"This result could not be exported as a QR image." = "无法将此结果导出为二维码图片。";

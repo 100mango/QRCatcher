@@ -36,3 +36,5 @@ test.log
 Tests/Fixtures/*.png
 
 QRCatcherMac/Assets.xcassets/AppIcon.appiconset/*.png
+
+QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-*.png

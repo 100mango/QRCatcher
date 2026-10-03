@@ -66,6 +66,7 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     URLEntity *record = [self.fetchedResultsController objectAtIndexPath:indexPath];
+    if (self.selectedPayloadHandler && record.url.length) { self.selectedPayloadHandler(record.url); return; }
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"QR Code", nil) message:record.url preferredStyle:UIAlertControllerStyleAlert];
     NSURL *URL = [NSString HTTPURLFromString:record.url];
     if (URL) [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Open Website", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {

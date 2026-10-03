@@ -144,7 +144,7 @@ final class QRCatcherMacTests: XCTestCase {
     func testRepeatedImportsCancelQueuedWorkAndBoundHeavyConcurrency() async throws {
         let entered = expectation(description: "First heavy operation started")
         let probe = DecodeConcurrencyProbe(started: entered)
-        let decoder = QRDecodeWorker(operation: probe.process)
+        let decoder = QRDecodeWorker(operation: { data in try probe.process(data) })
         let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history, decoder: decoder)
         workspace.read(data: Data("first".utf8))

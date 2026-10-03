@@ -44,7 +44,7 @@ projectID=uid('project'); appID=uid('app')
 for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','application'),('unit','QRCatcherTests','100mango.QRCatcherTests','bundle.unit-test'),('ui','QRCatcherUITests','100mango.QRCatcherUITests','bundle.ui-testing')]:
     ext='app' if key=='app' else 'xctest'
     product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if key=='app' else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
-    common={'HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':bundle,'CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
+    common={'HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':bundle,'CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1,2','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
     if key=='app':
         common.update(INFOPLIST_FILE='QRCatcher/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src=source;res=resources;files=appfiles;deps=[]
@@ -52,7 +52,9 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
         common.update(GENERATE_INFOPLIST_FILE='YES',HEADER_SEARCH_PATHS=['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],IPHONEOS_DEPLOYMENT_TARGET='17.0')
         if key=='unit':common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcher.app/QRCatcher',BUNDLE_LOADER='$(TEST_HOST)')
         else:common.update(TEST_TARGET_NAME='QRCatcher')
-        test=file(name+'/'+name+'.m','sourcecode.c.objc');files=[test];src=[build(test)];res=[]
+        files=[];src=[];res=[]
+        for path in sorted((root/name).glob('*.m')):
+            test=file(str(path.relative_to(root)),'sourcecode.c.objc');files.append(test);src.append(build(test))
         if key=='unit':
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
@@ -80,7 +82,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
             localized=add('maclocalized:'+localizedName,'PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/'+localizedName,sourceTree='<group>')
             variant=add('macvariant:'+localizedName,'PBXVariantGroup',children=[localized],name=localizedName,sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
-        common.update(GENERATE_INFOPLIST_FILE='YES')
+        common.update(GENERATE_INFOPLIST_FILE='YES',MACOSX_DEPLOYMENT_TARGET='14.0')
         if key=='macunit':
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):

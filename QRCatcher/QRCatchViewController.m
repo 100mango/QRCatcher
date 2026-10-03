@@ -2,10 +2,15 @@
 #import "AppDelegate.h"
 #import "NSString+Tools.h"
 #import "QRCodeCodec.h"
+#import "QRImageCodec.h"
+#import "QRImageImportQueue.h"
+#import "QRActionButton.h"
+#import <PhotosUI/PhotosUI.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 
-@interface QRCatchViewController () <AVCaptureMetadataOutputObjectsDelegate>
+@interface QRCatchViewController () <AVCaptureMetadataOutputObjectsDelegate, PHPickerViewControllerDelegate, UIDocumentPickerDelegate>
 @property (nonatomic, strong) UIView *preview;
 @property (nonatomic, strong) UIImageView *catcherIndicator;
 @property (nonatomic, strong) UILabel *statusLabel;
@@ -14,6 +19,12 @@
 @property (nonatomic, strong) UIButton *openButton;
 @property (nonatomic, strong) UIButton *againButton;
 @property (nonatomic, strong) UIButton *resultCopyButton;
+@property (nonatomic, strong) UIButton *importButton;
+@property (nonatomic, strong) UIButton *shareButton;
+@property (nonatomic) BOOL importing;
+@property (nonatomic) NSUInteger importGeneration;
+@property (nonatomic, strong) NSOperation *importOperation;
+@property (nonatomic, strong) NSProgress *photoProgress;
 @property (nonatomic, strong) CAShapeLayer *ripple;
 @property (nonatomic, strong) AVCaptureSession *session;
 @property (nonatomic, strong) AVCaptureVideoPreviewLayer *previewLayer;
@@ -29,13 +40,15 @@
 
 @implementation QRCatchViewController
 - (UIButton *)button:(NSString *)title identifier:(NSString *)identifier action:(SEL)action {
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIButton *button = [QRActionButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:NSLocalizedString(title, nil) forState:UIControlStateNormal];
     button.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
     button.titleLabel.adjustsFontForContentSizeCategory = YES;
     button.titleLabel.numberOfLines = 0;
+    button.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    button.titleLabel.textAlignment = NSTextAlignmentCenter;
     button.accessibilityIdentifier = identifier;
-    [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    if (action) [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     NSLayoutConstraint *minimumHeight = [button.heightAnchor constraintGreaterThanOrEqualToConstant:44];
     // Hidden arranged subviews must be allowed to collapse without conflicting with UIStackView.
     minimumHeight.priority = UILayoutPriorityRequired - 1;
@@ -75,9 +88,18 @@
     self.settingsButton = [self button:@"Open Settings" identifier:@"scan.settings" action:@selector(openSettings)];
     self.openButton = [self button:@"Open Website" identifier:@"scan.open" action:@selector(openWebsite)];
     self.resultCopyButton = [self button:@"Copy Result" identifier:@"scan.copy" action:@selector(copyResult)];
+    self.importButton = [self button:@"Import Image" identifier:@"scan.import" action:NULL];
+    __weak typeof(self) weakSelf = self;
+    self.importButton.menu = [UIMenu menuWithChildren:@[
+        [UIAction actionWithTitle:NSLocalizedString(@"Photo Library", nil) image:[UIImage systemImageNamed:@"photo"] identifier:nil handler:^(UIAction *action) { [weakSelf choosePhoto]; }],
+        [UIAction actionWithTitle:NSLocalizedString(@"Choose File", nil) image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *action) { [weakSelf chooseFile]; }]
+    ]];
+    self.importButton.showsMenuAsPrimaryAction = YES;
+    self.shareButton = [self button:@"Share QR Image" identifier:@"scan.share" action:@selector(shareResult)];
+    self.shareButton.hidden = YES;
     self.againButton = [self button:@"Scan Again" identifier:@"scan.again" action:@selector(scanAgain)];
     self.settingsButton.hidden = self.openButton.hidden = self.againButton.hidden = self.resultCopyButton.hidden = YES;
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.preview, self.statusLabel, self.resultLabel, self.settingsButton, self.openButton, self.resultCopyButton, self.againButton]];
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[self.preview, self.statusLabel, self.resultLabel, self.settingsButton, self.openButton, self.resultCopyButton, self.shareButton, self.againButton, self.importButton]];
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 16;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -140,10 +162,11 @@
     self.visible = NO;
     [self pauseCamera];
 }
-- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+- (void)dealloc { [self.photoProgress cancel]; [self.importOperation cancel]; [NSNotificationCenter.defaultCenter removeObserver:self]; }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.previewLayer.frame = self.preview.bounds;
+    [self updatePreviewOrientation];
     self.ripple.position = CGPointMake(CGRectGetMidX(self.preview.bounds), CGRectGetMidY(self.preview.bounds));
 }
 - (void)updateRipple {
@@ -175,7 +198,7 @@
     if (presented) [self pauseCamera]; else [self resumeCamera];
 }
 - (void)resumeCamera {
-    if (!self.visible || self.hasResult || self.privacyPolicyPresented || self.presentedViewController) return;
+    if (!self.visible || self.hasResult || self.importing || self.privacyPolicyPresented || self.presentedViewController) return;
 #if DEBUG
     // Hosted unit tests do not exercise camera hardware. Avoid a system permission
     // alert competing with the separate UI-test runner's automation session.
@@ -240,15 +263,42 @@
         self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
         self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
         [self.preview.layer insertSublayer:self.previewLayer atIndex:0];
-        AVCaptureConnection *connection = self.previewLayer.connection;
-        if (@available(iOS 17.0, *)) {
-            if ([connection isVideoRotationAngleSupported:90]) connection.videoRotationAngle = 90;
-        } else if (connection.isVideoOrientationSupported) {
-            connection.videoOrientation = AVCaptureVideoOrientationPortrait;
-        }
+        [self updatePreviewOrientation];
         [self.view setNeedsLayout];
     });
     return YES;
+}
+// Use the window's orientation, not the physical device orientation. This also
+// works while an iPad window is resized or a keyboard keeps the device upright.
++ (CGFloat)previewRotationForOrientation:(UIInterfaceOrientation)orientation {
+    switch (orientation) {
+        case UIInterfaceOrientationLandscapeLeft: return 0;
+        case UIInterfaceOrientationLandscapeRight: return 180;
+        case UIInterfaceOrientationPortraitUpsideDown: return 270;
+        default: return 90;
+    }
+}
+- (void)updatePreviewOrientation {
+    AVCaptureConnection *connection = self.previewLayer.connection;
+    UIInterfaceOrientation orientation = self.view.window.windowScene.interfaceOrientation;
+    if (@available(iOS 17.0, *)) {
+        CGFloat angle = [self.class previewRotationForOrientation:orientation];
+        if ([connection isVideoRotationAngleSupported:angle]) connection.videoRotationAngle = angle;
+    } else if (connection.isVideoOrientationSupported) {
+        switch (orientation) {
+            case UIInterfaceOrientationLandscapeLeft: connection.videoOrientation = AVCaptureVideoOrientationLandscapeLeft; break;
+            case UIInterfaceOrientationLandscapeRight: connection.videoOrientation = AVCaptureVideoOrientationLandscapeRight; break;
+            case UIInterfaceOrientationPortraitUpsideDown: connection.videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown; break;
+            default: connection.videoOrientation = AVCaptureVideoOrientationPortrait;
+        }
+    }
+}
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        [self updatePreviewOrientation];
+        [self.view setNeedsLayout];
+    } completion:nil];
 }
 - (void)pauseCamera {
     self.wantsCamera = NO;
@@ -266,7 +316,7 @@
     });
 }
 - (void)captureOutput:(AVCaptureOutput *)output didOutputMetadataObjects:(NSArray *)metadataObjects fromConnection:(AVCaptureConnection *)connection {
-    if (!self.visible || self.hasResult || self.privacyPolicyPresented || self.presentedViewController || !self.wantsCamera) return;
+    if (!self.visible || self.hasResult || self.privacyPolicyPresented || self.presentedViewController || self.importing || !self.wantsCamera) return;
     for (AVMetadataObject *object in metadataObjects) {
         if ([object.type isEqualToString:AVMetadataObjectTypeQRCode] && [object isKindOfClass:AVMetadataMachineReadableCodeObject.class]) {
             [self handlePayload:((AVMetadataMachineReadableCodeObject *)object).stringValue];
@@ -274,7 +324,15 @@
         }
     }
 }
-- (void)handlePayload:(NSString *)payload {
+- (void)handlePayload:(NSString *)payload { [self displayPayload:payload saveToHistory:YES]; }
+- (void)showSavedPayload:(NSString *)payload {
+    [self loadViewIfNeeded];
+    [self.importOperation cancel]; [self.photoProgress cancel];
+    self.importGeneration += 1; self.importing = NO;
+    self.hasResult = NO;
+    [self displayPayload:payload saveToHistory:NO];
+}
+- (void)displayPayload:(NSString *)payload saveToHistory:(BOOL)save {
     if (self.hasResult) return;
     if (!payload.length) {
         self.hasResult = YES;
@@ -289,18 +347,110 @@
     [self pauseCamera];
     [self.ripple removeAllAnimations];
     self.resultLabel.text = payload;
-    self.resultLabel.hidden = self.againButton.hidden = self.resultCopyButton.hidden = NO;
+    self.resultLabel.hidden = self.againButton.hidden = self.resultCopyButton.hidden = self.shareButton.hidden = NO;
     self.settingsButton.hidden = YES;
     self.openButton.hidden = [NSString HTTPURLFromString:payload] == nil;
     NSError *error;
-    BOOL saved = [[AppDelegate appDelegate].historyStore recordPayload:payload error:&error];
+    BOOL saved = !save || [[AppDelegate appDelegate].historyStore recordPayload:payload error:&error];
     self.statusLabel.text = NSLocalizedString(saved ? @"QR code saved to History" : @"QR code read, but history could not be saved. Your existing history has not been erased.", nil);
     UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, self.statusLabel.text);
 }
 - (void)scanAgain {
+    [self.importOperation cancel]; [self.photoProgress cancel];
+    self.importGeneration += 1; self.importing = NO;
     self.hasResult = NO; self.payload = nil;
-    self.resultLabel.hidden = self.openButton.hidden = self.resultCopyButton.hidden = self.againButton.hidden = YES;
+    self.resultLabel.hidden = self.openButton.hidden = self.resultCopyButton.hidden = self.shareButton.hidden = self.againButton.hidden = YES;
     [self updateRipple]; [self resumeCamera];
+}
+- (NSArray<UIKeyCommand *> *)keyCommands {
+    return @[
+        [UIKeyCommand keyCommandWithInput:@"c" modifierFlags:UIKeyModifierCommand action:@selector(copyResult)],
+        [UIKeyCommand keyCommandWithInput:@"n" modifierFlags:UIKeyModifierCommand action:@selector(scanAgain)],
+        [UIKeyCommand keyCommandWithInput:@"o" modifierFlags:UIKeyModifierCommand action:@selector(chooseFile)]
+    ];
+}
+- (void)choosePhoto {
+    if (self.presentedViewController) return;
+    [self.importOperation cancel]; [self.photoProgress cancel];
+    self.importGeneration += 1; self.importing = YES; [self pauseCamera];
+    PHPickerConfiguration *configuration = [[PHPickerConfiguration alloc] init];
+    configuration.filter = PHPickerFilter.imagesFilter; configuration.selectionLimit = 1;
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:configuration];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+- (void)chooseFile {
+    if (self.presentedViewController) return;
+    [self.importOperation cancel]; [self.photoProgress cancel];
+    self.importGeneration += 1; self.importing = YES; [self pauseCamera];
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeImage] asCopy:NO];
+    picker.delegate = self; picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller { self.importing = NO; [self resumeCamera]; }
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)URLs {
+    NSURL *URL = URLs.firstObject;
+    if (!URL) { self.importing = NO; [self resumeCamera]; return; }
+    NSUInteger generation = self.importGeneration;
+    __weak typeof(self) weakSelf = self;
+    self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) {
+        BOOL access = [URL startAccessingSecurityScopedResource];
+        NSNumber *size; [URL getResourceValue:&size forKey:NSURLFileSizeKey error:error];
+        NSData *data = (size.unsignedLongLongValue <= 50 * 1024 * 1024) ? [NSData dataWithContentsOfURL:URL options:NSDataReadingMappedIfSafe error:error] : nil;
+        if (access) [URL stopAccessingSecurityScopedResource];
+        return data;
+    } completion:^(NSArray<NSString *> *values, NSError *error) {
+        [weakSelf finishImportedValues:values error:error generation:generation];
+    }];
+}
+
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    [picker dismissViewControllerAnimated:YES completion:^{ if (!results.count) { self.importing = NO; [self resumeCamera]; } }];
+    if (!results.count) return;
+    NSUInteger generation = self.importGeneration;
+    NSItemProvider *provider = results.firstObject.itemProvider;
+    NSString *type = nil;
+    for (NSString *identifier in provider.registeredTypeIdentifiers) {
+        if ([[UTType typeWithIdentifier:identifier] conformsToType:UTTypeImage]) { type = identifier; break; }
+    }
+    if (!type) { [self decodeImportedData:nil generation:generation]; return; }
+    self.photoProgress = [provider loadDataRepresentationForTypeIdentifier:type completionHandler:^(NSData *data, NSError *error) {
+        [self decodeImportedData:data generation:generation];
+    }];
+}
+- (void)decodeImportedData:(NSData *)data generation:(NSUInteger)generation {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (generation != self.importGeneration) return;
+        __weak typeof(self) weakSelf = self;
+        self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) { return data; } completion:^(NSArray<NSString *> *values, NSError *error) {
+            [weakSelf finishImportedValues:values error:error generation:generation];
+        }];
+    });
+}
+- (void)finishImportedValues:(NSArray<NSString *> *)values error:(NSError *)error generation:(NSUInteger)generation {
+    if (generation != self.importGeneration) return;
+    self.importing = NO;
+    if (!values.count) {
+        self.statusLabel.text = NSLocalizedString(values && !error ? @"No QR code was found. Try a clearer image." : @"This image could not be read. Choose an image smaller than 50 MB.", nil);
+        self.againButton.hidden = NO;
+        return;
+    }
+    self.hasResult = NO;
+    [self handlePayload:values.firstObject];
+    for (NSString *payload in [values subarrayWithRange:NSMakeRange(1, values.count - 1)]) {
+        NSError *saveError;
+        if (![[AppDelegate appDelegate].historyStore recordPayload:payload error:&saveError]) self.statusLabel.text = NSLocalizedString(@"QR code read, but history could not be saved. Your existing history has not been erased.", nil);
+    }
+}
+- (void)shareResult {
+    if (!self.payload || self.presentedViewController) return;
+    NSData *PNG = [QRImageCodec PNGForPayload:self.payload];
+    UIImage *image = PNG ? [UIImage imageWithData:PNG] : nil;
+    if (!image) { self.statusLabel.text = NSLocalizedString(@"This result could not be exported as a QR image.", nil); return; }
+    UIActivityViewController *activity = [[UIActivityViewController alloc] initWithActivityItems:@[image, self.payload] applicationActivities:nil];
+    activity.popoverPresentationController.sourceView = self.shareButton;
+    activity.popoverPresentationController.sourceRect = self.shareButton.bounds;
+    [self presentViewController:activity animated:YES completion:nil];
 }
 - (void)copyResult { if (self.payload) UIPasteboard.generalPasteboard.string = self.payload; }
 - (void)openWebsite {

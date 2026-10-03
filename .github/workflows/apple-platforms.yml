@@ -36,6 +36,7 @@ jobs:
           test "$(uname -m)" = arm64
           python3 scripts/materialize_qr_fixtures.py
           python3 scripts/materialize_mac_icons.py
+          python3 scripts/materialize_ipad_icons.py
           python3 scripts/generate_project.py
           git diff --exit-code -- QRCatcher.xcodeproj
           plutil -lint QRCatcherMac/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
@@ -57,8 +58,7 @@ jobs:
           test -s "$ICON_PATH"
           shasum -a 256 "$ICON_PATH"
           mkdir -p build/icon-verification
-          iconutil -c iconset "$ICON_PATH" -o build/icon-verification/AppIcon.iconset
-          test -s build/icon-verification/AppIcon.iconset/icon_512x512@2x.png
+          xcrun swift scripts/verify_mac_icon.swift "$ICON_PATH" build/icon-verification/mac-bundled-icon.png
           strings "$APP/Contents/MacOS/QRCatcherMac" > build/mac-release-strings.txt
           if grep -E -- 'QRCATCHER_TEST_STORE|fixture-payload|reset-history' build/mac-release-strings.txt; then exit 1; fi
       - name: Execute native Mac unit and UI tests
@@ -87,24 +87,54 @@ jobs:
           xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Release -derivedDataPath build/iOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
           git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '100mango.QRCatcher'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist)" = '15.0'
+          /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily' build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist
+          strings build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/QRCatcher > build/ios-release-strings.txt
+          if grep -E -- '-ui-testing|-fixture-payload|-fixture-empty|-reset-history' build/ios-release-strings.txt; then exit 1; fi
+      - name: Select installed phone and iPad matrix
+        if: ${{ !cancelled() }}
+        run: python3 scripts/select_ios_platform_matrix.py
       - name: Run iOS codec equivalence and existing unit regression
         if: ${{ !cancelled() }}
         timeout-minutes: 15
         run: |
-          SIMULATOR_ID=$(python3 - <<'PY'
-          import json,subprocess
-          d=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
-          print(next(x['udid'] for r,ds in d['devices'].items() if r.endswith('iOS-27-0') for x in ds if x['name'].startswith('iPhone')))
-          PY
-          )
           xcrun simctl boot "$SIMULATOR_ID" || true
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO
+      - name: Run large-phone UI regression
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
+      - name: Run compact-phone UI regression
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests "$SIMULATOR_ID"
+      - name: Run native 13-inch iPad workflows
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: bash scripts/run_ios_platform_ui.sh "$IPAD_SIMULATOR_ID" PadUIResults.xcresult QRCatcherPadUITests "$COMPACT_SIMULATOR_ID"
+      - name: Run native iPad mini workflows
+        if: ${{ !cancelled() }}
+        timeout-minutes: 12
+        run: bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests "$IPAD_SIMULATOR_ID"
+      - name: Export bounded phone and iPad evidence
+        if: always()
+        timeout-minutes: 3
+        run: python3 -u scripts/export_ios_platform_screenshots.py
+      - name: Retain small phone and iPad evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qrcatcher-phone-ipad-evidence
+          path: build/ios-platform-evidence
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
       - name: Summarize executed evidence
         if: always()
         timeout-minutes: 3
         run: |
-          for RESULT in MacTestResults.xcresult iOSUnitResults.xcresult; do
+          for RESULT in MacTestResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
             if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
           done
           echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect, signed sandbox, distribution and other platform targets remain separate gates.' >> "$GITHUB_STEP_SUMMARY"

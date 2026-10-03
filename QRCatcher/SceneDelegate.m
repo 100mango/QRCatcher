@@ -3,6 +3,7 @@
 #import "QRCatchViewController.h"
 #import "QRURLViewController.h"
 #import "QRPrivacyViewController.h"
+#import "QRPadSplitViewController.h"
 @interface SceneDelegate ()
 @property (nonatomic, weak) QRCatchViewController *scanController;
 @end
@@ -25,16 +26,27 @@
     historyNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:NSLocalizedString(@"History", nil) image:[UIImage imageNamed:@"catcher6_0001_history_white_2x"] selectedImage:[UIImage imageNamed:@"catcher6_0002_history_blue_2x"]];
     scanNav.tabBarItem.accessibilityIdentifier = @"scan.tab";
     historyNav.tabBarItem.accessibilityIdentifier = @"history.tab";
-    UITabBarController *tabs = [UITabBarController new];
-    tabs.viewControllers = @[scanNav, historyNav];
     self.window.tintColor = UIColor.systemBlueColor;
-    self.window.rootViewController = tabs;
+    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        QRPadSplitViewController *split = [QRPadSplitViewController new];
+        [split setViewController:historyNav forColumn:UISplitViewControllerColumnPrimary];
+        [split setViewController:scanNav forColumn:UISplitViewControllerColumnSecondary];
+        __weak QRCatchViewController *weakScan = scan;
+        __weak QRPadSplitViewController *weakSplit = split;
+        history.selectedPayloadHandler = ^(NSString *payload) {
+            [weakScan showSavedPayload:payload];
+            [weakSplit showColumn:UISplitViewControllerColumnSecondary];
+        };
+        self.window.rootViewController = split;
+    } else {
+        UITabBarController *tabs = [UITabBarController new];
+        tabs.viewControllers = @[scanNav, historyNav];
+        self.window.rootViewController = tabs;
+    }
     [self.window makeKeyAndVisible];
 }
 - (void)showPrivacyPolicy {
-    UITabBarController *tabs = (UITabBarController *)self.window.rootViewController;
-    UINavigationController *navigation = (UINavigationController *)tabs.selectedViewController;
-    UIViewController *presenter = navigation.visibleViewController;
+    UIViewController *presenter = self.window.rootViewController;
     if (presenter.presentedViewController) return;
     QRPrivacyViewController *privacy = [QRPrivacyViewController new];
     __weak typeof(self) weakSelf = self;

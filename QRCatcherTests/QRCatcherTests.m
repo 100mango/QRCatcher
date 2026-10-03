@@ -15,6 +15,7 @@
 @interface QRCatchViewController (RegressionTesting)
 - (void)handlePayload:(NSString *)payload;
 - (void)copyResult;
+- (void)shareResult;
 @end
 @interface QRPrivacyViewController (RegressionTesting) <WKNavigationDelegate>
 - (void)loadPolicy;
@@ -71,6 +72,81 @@
         XCTAssertEqualObjects([NSSet setWithArray:portable], [NSSet setWithArray:oracle]);
         XCTAssertEqualObjects([QRCodeCodec payloadsInImage:image], oracle);
         XCTAssertEqual(oracle.count, [name isEqualToString:@"invalid"] ? 0 : [name isEqualToString:@"multiple"] ? 2 : 1);
+    }
+}
+- (void)testPreviewRotationMappingAndSavedSelectionPreserveHistory {
+    XCTAssertEqual([QRCatchViewController previewRotationForOrientation:UIInterfaceOrientationPortrait], 90);
+    XCTAssertEqual([QRCatchViewController previewRotationForOrientation:UIInterfaceOrientationLandscapeLeft], 0);
+    XCTAssertEqual([QRCatchViewController previewRotationForOrientation:UIInterfaceOrientationLandscapeRight], 180);
+    XCTAssertEqual([QRCatchViewController previewRotationForOrientation:UIInterfaceOrientationPortraitUpsideDown], 270);
+    QRHistoryStore *original = AppDelegate.appDelegate.historyStore;
+    @try {
+        QRHistoryStore *history = [[QRHistoryStore alloc] initWithURL:nil];
+        AppDelegate.appDelegate.historyStore = history;
+        NSError *error;
+        XCTAssertTrue([history recordPayload:@"Selected old payload" error:&error]);
+        NSFetchRequest *request = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
+        NSArray<URLEntity *> *before = [history.context executeFetchRequest:request error:&error];
+        NSDate *date = before.firstObject.createDate;
+        QRCatchViewController *scanner = [QRCatchViewController new];
+        [scanner showSavedPayload:@"Selected old payload"];
+        UILabel *result = (UILabel *)[self viewWithIdentifier:@"scan.result" inView:scanner.view];
+        XCTAssertEqualObjects(result.text, @"Selected old payload");
+        [scanner showSavedPayload:@"Another saved selection"];
+        XCTAssertEqualObjects(result.text, @"Another saved selection");
+        XCTAssertEqual([history.context countForFetchRequest:request error:&error], 1);
+        XCTAssertEqualObjects(before.firstObject.createDate, date);
+        XCTAssertFalse([self viewWithIdentifier:@"scan.share" inView:scanner.view].hidden);
+    } @finally { AppDelegate.appDelegate.historyStore = original; }
+}
+- (void)testSmallestHistoricalPhoneGeometryWithLargestText {
+    for (NSValue *sizeValue in @[[NSValue valueWithCGSize:CGSizeMake(320,568)], [NSValue valueWithCGSize:CGSizeMake(568,320)]]) {
+        CGSize size = sizeValue.CGSizeValue;
+        UIViewController *host = [UIViewController new];
+        host.view = [[UIView alloc] initWithFrame:(CGRect){CGPointZero, size}];
+        QRCatchViewController *scanner = [QRCatchViewController new];
+        [host addChildViewController:scanner];
+        UITraitCollection *traits = [UITraitCollection traitCollectionWithTraitsFromCollections:@[
+            [UITraitCollection traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassCompact],
+            [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]
+        ]];
+        [host setOverrideTraitCollection:traits forChildViewController:scanner];
+        [traits performAsCurrent:^{
+            [scanner loadViewIfNeeded];
+            scanner.view.frame = host.view.bounds;
+            [host.view addSubview:scanner.view]; [scanner didMoveToParentViewController:host];
+            [scanner showSavedPayload:@"Long QR text 你好 that must remain readable and keep copy, share, scan again and import reachable at the smallest historical phone geometry."];
+        }];
+        [host.view layoutIfNeeded]; [scanner.view layoutIfNeeded];
+        UIScrollView *scroll = (UIScrollView *)scanner.view.subviews.firstObject;
+        XCTAssertTrue([scroll isKindOfClass:UIScrollView.class]);
+        [scroll layoutIfNeeded];
+        UILabel *result = (UILabel *)[self viewWithIdentifier:@"scan.result" inView:scanner.view];
+        XCTAssertGreaterThan(result.font.pointSize, 17);
+        XCTAssertGreaterThan(scroll.contentSize.height, scroll.bounds.size.height);
+        for (NSString *identifier in @[@"scan.copy", @"scan.share", @"scan.again", @"scan.import"]) {
+            UIView *control = [self viewWithIdentifier:identifier inView:scanner.view];
+            XCTAssertNotNil(control); XCTAssertFalse(control.hidden);
+            CGRect rect = [control convertRect:control.bounds toView:scroll];
+            XCTAssertGreaterThanOrEqual(CGRectGetMinX(rect), 0);
+            XCTAssertLessThanOrEqual(CGRectGetMaxX(rect), scroll.bounds.size.width + 0.5);
+            XCTAssertGreaterThanOrEqual(rect.size.height, 43.5);
+            XCTAssertTrue([control isKindOfClass:NSClassFromString(@"QRActionButton")]);
+            UIButton *button = (UIButton *)control;
+            [button layoutIfNeeded];
+            CGSize fullTitle = [button.titleLabel sizeThatFits:CGSizeMake(button.titleLabel.bounds.size.width, CGFLOAT_MAX)];
+            XCTAssertGreaterThanOrEqual(button.titleLabel.bounds.size.height + 0.5, fullTitle.height, @"The entire title must fit vertically: %@", button.currentTitle);
+            XCTAssertGreaterThanOrEqual(button.titleLabel.bounds.size.width + 0.5, fullTitle.width, @"The entire title must fit horizontally: %@", button.currentTitle);
+            XCTAssertTrue(CGRectContainsRect(CGRectInset(button.bounds, -0.5, -0.5), [button.titleLabel convertRect:button.titleLabel.bounds toView:button]), @"Title escaped button bounds: %@", button.currentTitle);
+            [scroll scrollRectToVisible:rect animated:NO]; [scroll layoutIfNeeded];
+            XCTAssertGreaterThanOrEqual(CGRectGetHeight(CGRectIntersection(rect, scroll.bounds)), rect.size.height - 0.5);
+        }
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size];
+        UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) { [scanner.view.layer renderInContext:context.CGContext]; }];
+        XCTAttachment *attachment = [XCTAttachment attachmentWithData:UIImageJPEGRepresentation(image, 0.6) uniformTypeIdentifier:@"public.jpeg"];
+        attachment.name = size.width == 320 ? @"view-layout-320x568-largest-text" : @"view-layout-568x320-largest-text";
+        attachment.lifetime = XCTAttachmentLifetimeKeepAlways; [self addAttachment:attachment];
+        [scanner willMoveToParentViewController:nil]; [scanner.view removeFromSuperview]; [scanner removeFromParentViewController];
     }
 }
 - (void)testEmptyQR {
