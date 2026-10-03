@@ -1,11 +1,13 @@
 name: iOS regression
 on:
-  pull_request:
+  push:
+    branches: [codex/ios-modernization]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: qrcatcher-${{ github.ref }}
+  # Retain the legacy PR #1 key so this push also cancels superseded PR runs.
+  group: qrcatcher-refs/pull/1/merge
   cancel-in-progress: true
 jobs:
   simulator:
@@ -19,11 +21,14 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Verify exact tested commit
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_EVENT_NAME" = push || test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+          test "$GITHUB_REF" = refs/heads/codex/ios-modernization
+          test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --exit-code HEAD --
           echo "Tested commit: $(git rev-parse HEAD)"
@@ -124,10 +129,11 @@ jobs:
           done
           echo 'Physical-device camera, signing, App Store metadata and release approval remain separate gates.' >> "$GITHUB_STEP_SUMMARY"
       - name: Verify tested source stayed unchanged
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git diff --exit-code HEAD --
           echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
+          shasum -a 256 .github/workflows/ios.yml
