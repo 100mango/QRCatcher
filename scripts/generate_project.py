@@ -25,6 +25,7 @@ for path in sorted((root/'Shared').rglob('*')):
         if path.suffix=='.m':sharedSources.append(build(r))
 nativeSharedSources=[];nativeSharedFiles=[]
 for path in sorted((root/'Shared').rglob('*.swift')):
+    if 'PortableQR' in path.parts: continue
     r=file(str(path.relative_to(root)),'sourcecode.swift');nativeSharedFiles.append(r);nativeSharedSources.append(build(r))
 source+=sharedSources;appfiles+=sharedFiles
 for path in sorted((root/'QRCatcher').glob('*')):
@@ -62,6 +63,17 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
         deps=[add(key+'dependency','PBXTargetDependency',target=appID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+
+# Optional CPU QR reader is isolated to Watch and its Mac-hosted oracle tests.
+portableManifest=json.loads((root/'ThirdParty/ZXingCpp/source-manifest.json').read_text())
+portablePaths=['ThirdParty/ZXingCpp/'+p for p in portableManifest['cpp_sources']+portableManifest['c_sources']]+['Shared/PortableQR/QRPortableDecoder.cpp','Shared/PortableQR/QRPortableImageDecoder.swift']
+def portable_sources(files,src,common):
+    for p in portablePaths:
+        kind='sourcecode.swift' if p.endswith('.swift') else ('sourcecode.cpp.cpp' if p.endswith('.cpp') else 'sourcecode.c.c')
+        r=file(p,kind);files.append(r);src.append(build(r))
+    common.update(CLANG_CXX_LANGUAGE_STANDARD='c++20',OTHER_CPLUSPLUSFLAGS=['$(inherited)','-DZXING_INTERNAL','-DZUECI_EMBED_NO_TO_ECI'],OTHER_CFLAGS=['$(inherited)','-DZUECI_EMBED_NO_TO_ECI'],OTHER_LDFLAGS=['$(inherited)','-lc++'])
+    common['HEADER_SEARCH_PATHS']=common.get('HEADER_SEARCH_PATHS',[])+['$(SRCROOT)/Shared/PortableQR','$(SRCROOT)/ThirdParty/ZXingCpp/src','$(SRCROOT)/ThirdParty/ZXingCpp/Config']
+
 # Native macOS executable and supported hosted XCTest/UI routes, independent of the iOS target.
 macID=uid('mac')
 for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing')]:
@@ -84,6 +96,8 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES',MACOSX_DEPLOYMENT_TARGET='14.0')
         if key=='macunit':
+            portable_sources(files,src,common)
+            common.update(SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMacTests/QRCatcherMacTests-Bridging-Header.h')
             r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
@@ -162,12 +176,14 @@ for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRC
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher.watchkitapp' if app else '100mango.'+name,'SDKROOT':'watchos','SUPPORTED_PLATFORMS':'watchos watchsimulator','TARGETED_DEVICE_FAMILY':'4','WATCHOS_DEPLOYMENT_TARGET':'9.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherWatch/Info.plist',OTHER_LDFLAGS=['$(inherited)','-weak_framework','Vision'],ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        portable_sources(files,src,common)
+        common.update(SWIFT_OBJC_BRIDGING_HEADER='QRCatcherWatch/QRCatcherWatch-Bridging-Header.h',INFOPLIST_FILE='QRCatcherWatch/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         localized=add('watchlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherWatch/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('watchvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
         r=file('Shared/Services/QRPrivacyText.swift','sourcecode.swift');files.append(r);src.append(build(r))
         r=file('QRCatcherWatch/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('ThirdParty/ZXingCpp/ThirdPartyNotices.txt','text');files.append(r);res.append(build(r))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES')
         if key=='watchunit':

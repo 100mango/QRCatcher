@@ -52,5 +52,37 @@
       6000
     ],
     "expected_error": "source_dimensions_limit"
+  },
+  {
+    "name": "eci-utf8.png",
+    "sha256": "9c3d86ff77dec452d5a1a77510c77f9a7d72dc85e8f8406f8aac505426523366",
+    "payloads": [
+      "你好 🌈"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-latin1.png",
+    "sha256": "30c8f5ad52fa69f3660c38f432423dfad0c7f95ac086cffae74ad1c8efbe2cb6",
+    "payloads": [
+      "Café"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-shiftjis.png",
+    "sha256": "806a3faa2faab080bcb422c5430ac89019d7960099ab994afc47cbc6a6caa089",
+    "payloads": [
+      "日本語"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-mixed.png",
+    "sha256": "e7ad12b5f04accdbf6c0316b1c604541c1a5375c27bc3b0e6f36cbba0feea830",
+    "payloads": [
+      "Café 你好"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
   }
 ]

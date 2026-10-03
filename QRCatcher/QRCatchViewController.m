@@ -194,6 +194,16 @@
 }
 #if DEBUG
 - (void)traceCamera:(NSString *)event {
+    if (!NSThread.isMainThread) {
+        __weak typeof(self) weakSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf traceCamera:event]; });
+        return;
+    }
+    // Debug-only AX diagnostics survive a failing UI test even when the app's
+    // console is not forwarded into xcodebuild's UI-runner output.
+    self.statusLabel.accessibilityValue = [NSString stringWithFormat:@"event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d ready=%d wants=%d", event,
+        (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
+        (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState, self.visible, self.ready, self.wantsCamera];
     NSLog(@"QRCATCHER_CAMERA_TRACE event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d result=%d importing=%d presented=%@ policy=%d ready=%d wants=%d status=%@",
           event, (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
           (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState,

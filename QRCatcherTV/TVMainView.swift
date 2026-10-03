@@ -38,7 +38,7 @@ struct TVMainView: View {
                                     Text("Code \(session.resultIndex + 1) of \(session.decodedResults.count)")
                                     HStack { Button("Previous Code") { session.changeResult(by: -1) }; Button("Next Code") { session.changeResult(by: 1) } }
                                 }
-                                Button(session.isExporting ? "Verifying Photos save…" : "Save QR to Photos") { session.export() }.disabled(session.isExporting || code == nil).accessibilityIdentifier("tv.export")
+                                Button(LocalizedStringKey(session.isExporting ? "Verifying Photos save…" : "Save QR to Photos")) { session.export() }.disabled(session.isExporting || code == nil).accessibilityIdentifier("tv.export")
                             }.frame(maxWidth: 760)
                         }
                     } else {
@@ -119,13 +119,21 @@ private struct TVHistoryView: View {
         NavigationStack {
             List {
                 Button("Back") { dismiss() }.accessibilityIdentifier("tv.historyBack")
-                if history.items.isEmpty { Text(history.error == nil ? "No saved QR codes yet" : "History is unavailable") }
+                if history.items.isEmpty { Text(QRL(history.error == nil ? "No saved QR codes yet" : "History is unavailable")) }
                 ForEach(history.items) { item in
-                    VStack(alignment: .leading, spacing: 18) {
-                        Button { select(item) } label: { Text(item.payload).lineLimit(3) }.accessibilityIdentifier("tv.record")
-                        Text(item.createdAt, style: .date).font(.caption)
+                    // One action per focusable row: a VStack containing two
+                    // buttons becomes one tvOS focused cell with no unambiguous
+                    // Select action. Keep opening and removal separate.
+                    Section {
+                        Button { select(item) } label: {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(verbatim: item.payload).lineLimit(3)
+                                Text(item.createdAt, style: .date).font(.caption)
+                            }.padding(.vertical, 10)
+                        }.accessibilityIdentifier("tv.record")
                         Button("Delete Record", role: .destructive) { deleting = item }
-                    }.padding(.vertical, 10)
+                            .accessibilityIdentifier("tv.deleteRecord")
+                    }
                 }
                 if !history.items.isEmpty || history.error != nil { Button("Clear TV History", role: .destructive) { clear = true } }
             }.navigationTitle("History")

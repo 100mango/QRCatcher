@@ -33,3 +33,10 @@
 "iPhone result saved on this Watch" = "iPhone 的识别结果已保存在这块手表上";
 
 "The saved preview could not be read. Your text result is still available." = "无法读取已保存的预览，文本结果仍可查看。";
+
+"iPhone could not read a QR code. Existing results and the saved photo were kept." = "iPhone 未能识别二维码。已有结果和保存的照片均已保留。";
+
+"This QR photo could not be decoded. Its existing saved data was kept." = "无法识别此二维码照片。已有保存数据已保留。";
+"Open Source Licenses" = "开源许可";
+
+"Licenses" = "开源许可";

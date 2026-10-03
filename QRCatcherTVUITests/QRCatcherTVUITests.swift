@@ -15,11 +15,18 @@ final class QRCatcherTVUITests: XCTestCase {
         if (testRun?.failureCount ?? 0) > 0 { print("TV_FAILURE_UI:",app.debugDescription); capture("tv-failure") }
         app.terminate()
     }
-    private func focusAndSelect(_ target: XCUIElement, root: XCUIElement? = nil) {
+    private func focusAndSelect(_ target: XCUIElement, root: XCUIElement? = nil, activate: Bool = true) {
         XCTAssertTrue(target.waitForExistence(timeout: 15))
         let scope = root ?? app!
         for _ in 0..<30 {
-            if target.hasFocus { XCUIRemote.shared.press(.select); return }
+            if target.hasFocus { if activate { XCUIRemote.shared.press(.select) }; return }
+            let focusedCell = scope.descendants(matching: .cell).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+            if focusedCell.exists, !target.identifier.isEmpty,
+               focusedCell.buttons.count == 1, focusedCell.buttons[target.identifier].exists {
+                // Native tvOS List reports focus on the cell that owns its one
+                // button. Never infer an action from a multi-button cell.
+                if activate { XCUIRemote.shared.press(.select) }; return
+            }
             let focusedButton = scope.descendants(matching: .button).matching(NSPredicate(format: "hasFocus == true")).firstMatch
             let focused = focusedButton.exists ? focusedButton : scope.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
             if focused.exists {
@@ -27,7 +34,7 @@ final class QRCatcherTVUITests: XCTestCase {
                 if focused.label == target.label && abs(destination.midX-origin.midX) < 2 && abs(destination.midY-origin.midY) < 2 {
                     // tvOS can expose nested buttons with the same frame/title;
                     // activate the actual focused child of this exact control.
-                    XCUIRemote.shared.press(.select); return
+                    if activate { XCUIRemote.shared.press(.select) }; return
                 }
                 // The observed permission dialog starts at Select: above its
                 // action row. Align rows before horizontal movement.
@@ -98,13 +105,25 @@ final class QRCatcherTVUITests: XCTestCase {
         focusAndSelect(app.buttons["tv.history"])
         let record = app.buttons["tv.record"].firstMatch
         XCTAssertTrue(record.waitForExistence(timeout: 15))
+        capture("tv-history-list")
+        focusAndSelect(record, activate: false); capture("tv-history-focused-record")
+        let remove = app.buttons["tv.deleteRecord"].firstMatch
+        focusAndSelect(remove, activate: false); capture("tv-history-focused-delete")
         focusAndSelect(record)
         XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
         capture("tv-reopened-history")
         focusAndSelect(app.buttons["tv.privacy"])
         XCTAssertTrue(app.staticTexts["privacy.offlineBody"].waitForExistence(timeout: 10))
+        capture("tv-offline-policy")
         XCUIRemote.shared.press(.menu)
         XCTAssertTrue(app.buttons["tv.photos"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["tv.privacy"].hasFocus, "Menu must return focus to the presenting Privacy control")
+        app.terminate(); app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]; app.launch()
+        focusAndSelect(app.buttons["tv.history"])
+        let chineseRecord = app.buttons["tv.record"].firstMatch
+        XCTAssertTrue(chineseRecord.waitForExistence(timeout: 15)); focusAndSelect(chineseRecord)
+        XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(app.buttons["tv.photos"].label, "照片")
+        capture("tv-chinese-result")
     }
 }

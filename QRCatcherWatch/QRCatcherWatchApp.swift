@@ -25,15 +25,12 @@ import UniformTypeIdentifiers
             guard let file = try await selection.loadTransferable(type: WatchSelectedPhoto.self) else { throw WatchStoreError.invalidImage }
             let source = try await codec.prepare(file.data)
             try Task.checkCancellation()
-            if #available(watchOS 27.0, *) {
-                let values = try await codec.decode(source)
-                guard !values.isEmpty else { throw WatchStoreError.noQR }
-                try history.append(source: source, payloads: values)
-            } else {
-                // Older supported watches retain the actual selected photo. Only
-                // the explicit request button sends it to the paired iPhone.
-                try history.append(source: source, payloads: [])
-            }
+            let values = try await codec.decode(source)
+            try Task.checkCancellation()
+            // Save the bounded preview even if no QR was found, so the person
+            // can choose an explicit phone retry without selecting it again.
+            try history.append(source: source, payloads: values)
+            if values.isEmpty { self.error = WatchStoreError.noQR.localizedDescription }
             objectWillChange.send()
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
@@ -54,6 +51,11 @@ private struct WatchCollectionContent: View {
     @ObservedObject var history: WatchHistory
     @ObservedObject var phone: WatchPhoneTransport
     @Binding var selection: PhotosPickerItem?
+    private static var thirdPartyNotices: String {
+        guard let file = Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt"),
+              let text = try? String(contentsOf: file, encoding: .utf8) else { return "ZXing-C++: Apache License 2.0" }
+        return text
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -62,7 +64,6 @@ private struct WatchCollectionContent: View {
                 if model.importing { ProgressView("Reading photo…"); Button("Cancel") { model.cancelRead() } }
                 if let error = history.error { Text(error).accessibilityIdentifier("watch.store-error") }
                 if history.records.isEmpty { Text("Choose a QR photo. Saved photos and results stay available offline on this Watch.") }
-                if #unavailable(watchOS 27.0) { Text("Local reading requires watchOS 27. Choose a photo, then request processing on iPhone.").font(.footnote) }
                 ForEach(history.records) { record in
                     NavigationLink { WatchRecordView(model: model, history: history, phone: phone, id: record.id) } label: {
                         VStack(alignment: .leading) { Text(record.payloads.first ?? String(localized: "Photo awaiting iPhone")).lineLimit(3); Text(record.createdAt, style: .date).font(.caption2) }
@@ -72,6 +73,9 @@ private struct WatchCollectionContent: View {
                     ScrollView { VStack(alignment: .leading, spacing: 12) { Text(QRPrivacyText.body); Text("https://100mango.github.io/app-privacy/").font(.footnote) }.padding() }
                         .navigationTitle("Privacy Policy").accessibilityIdentifier("watch.policy")
                 }.accessibilityIdentifier("watch.privacy")
+                NavigationLink("Licenses") {
+                    ScrollView { Text(Self.thirdPartyNotices).font(.footnote).padding() }.navigationTitle("Licenses")
+                }
             }.navigationTitle("QRCatcher")
         }.onChange(of: selection) { value in if let value { model.startRead(value) } }
     }

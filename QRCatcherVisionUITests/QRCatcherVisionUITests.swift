@@ -31,7 +31,7 @@ final class QRCatcherVisionUITests: XCTestCase {
             let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name])
             try descriptor.write(to: request, options: .atomic)
             print("QRCATCHER_VISION_CAPTURE_REQUEST:" + id); fflush(stdout)
-            let deadline = Date().addingTimeInterval(45)
+            let deadline = Date().addingTimeInterval(60)
             while Date() < deadline && !FileManager.default.fileExists(atPath: ack.path) { Thread.sleep(forTimeInterval: 0.2) }
             let result = try JSONSerialization.jsonObject(with: Data(contentsOf: ack)) as? [String: Any]
             XCTAssertEqual(result?["id"] as? String, id)

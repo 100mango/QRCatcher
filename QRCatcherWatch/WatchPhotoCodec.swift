@@ -2,22 +2,35 @@ import Foundation
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
-import Vision
 
-/// Admission is held across Vision suspension points. Actor isolation alone is
-/// insufficient because request.perform is reentrant. Cancelled queued jobs never
-/// enter processing; a running job retains its permit until native work returns.
+/// Explicit admission covers suspended processing as well as synchronous CPU
+/// decoding. Cancelled queued jobs release captured images promptly; active
+/// ImageIO/CPU work retains its permit until the bounded native call returns.
 actor WatchPhotoCodec {
     static let byteLimit = 8 * 1024 * 1024
     private var admitted = false
-    private var waiting: [CheckedContinuation<Void, Never>] = []
-    func withExclusiveProcessing<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
+    private var waiting: [(UUID, CheckedContinuation<Void, Error>)] = []
+    var waitingProcessingCount: Int { waiting.count }
+    private func acquire() async throws {
         try Task.checkCancellation()
-        if admitted { await withCheckedContinuation { waiting.append($0) } }
-        else { admitted = true }
+        if !admitted { admitted = true; return }
+        let id = UUID()
+        try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled { continuation.resume(throwing: CancellationError()) }
+                else { waiting.append((id, continuation)) }
+            }
+        }, onCancel: { Task { await self.cancelQueued(id) } })
+    }
+    private func cancelQueued(_ id: UUID) {
+        guard let index = waiting.firstIndex(where: { $0.0 == id }) else { return }
+        waiting.remove(at: index).1.resume(throwing: CancellationError())
+    }
+    func withExclusiveProcessing<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
+        try await acquire()
         defer {
             if waiting.isEmpty { admitted = false }
-            else { waiting.removeFirst().resume() }
+            else { waiting.removeFirst().1.resume() }
         }
         try Task.checkCancellation()
         return try await operation()
@@ -44,15 +57,12 @@ actor WatchPhotoCodec {
         guard CGImageDestinationFinalize(destination), output.length <= Self.byteLimit else { throw WatchStoreError.imageLimit }
         return output as Data
     }
-    @available(watchOS 27.0, *)
     func decode(_ preparedPNG: Data) async throws -> [String] {
         try await withExclusiveProcessing {
             try Task.checkCancellation()
-            var request = DetectBarcodesRequest(); request.symbologies = [.qr]
-            let observations = try await request.perform(on: preparedPNG)
+            guard Self.validPreparedPNG(preparedPNG), let image = Self.preview(preparedPNG) else { throw WatchStoreError.invalidImage }
+            let values = try QRPortableImageDecoder.decode(image)
             try Task.checkCancellation()
-            let values = observations.compactMap { $0.payloadString }
-            guard values.count <= 32, values.allSatisfy({ $0.utf8.count <= 16384 }) else { throw WatchStoreError.imageLimit }
             return values
         }
     }

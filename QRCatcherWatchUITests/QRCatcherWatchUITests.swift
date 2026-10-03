@@ -34,6 +34,19 @@ import XCTest
         XCTAssertTrue(app.buttons["watch.photos"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["watch.record"].exists)
     }
+    func testSyntheticJournalRecoveryAcrossActualAppRelaunch() {
+        app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_STORE"] = "49F5E6A7-20ED-4BD9-BF4E-C4B44F652F21"; app.launch()
+        print("WATCH_SYNTHETIC_JOURNAL_RECOVERY: actual separate app process and persistence, not WC file delivery")
+        let record = app.buttons["watch.record"].firstMatch
+        XCTAssertTrue(record.waitForExistence(timeout: 20)); record.tap(); app.swipeUp()
+        XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(app.staticTexts["watch.phone-state"].label, "Completed")
+        capture("watch-recovered-journal")
+        app.terminate(); app.launch()
+        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap(); app.swipeUp()
+        XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(app.staticTexts["watch.phone-state"].label, "Completed")
+    }
     func testFixtureFedOfflineResultSourceImageAndRelaunch() {
         app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_STORE"] = "81F3B791-5049-4ED7-B88E-9684DA76DDB8"; app.launch()
         // Hosted test prepared this source photo using the genuine Watch decoder.

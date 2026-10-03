@@ -34,13 +34,21 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
  subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
  for entry in records(json.loads((folder/'manifest.json').read_text())):
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
-  if not name:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
+  if 'mac-audit-element' in text:
+   data=path.read_bytes();assert len(data)<=64*1024
+   count=len(list(out.glob('*-audit-*.txt')))
+   (out/f'{label}-audit-{count+1}.txt').write_bytes(data);continue
+  if not name:continue
   data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
+  digest=hashlib.sha256(data).hexdigest()
+  existing=next((item for item in screenshots if item['sha256']==digest),None)
+  if existing:
+   existing.setdefault('additional_checkpoint_names',[]).append(name);continue
   if len(screenshots)>=12 or sum(p.stat().st_size for p in out.iterdir())+len(data)>limit-256*1024:
    print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
   filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
-  item={'name':filename,'scope':label,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};screenshots.append(item);print(json.dumps(item),flush=True)
+  item={'name':filename,'scope':label,'bytes':len(data),'sha256':digest};screenshots.append(item);print(json.dumps(item),flush=True)
 (out/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
 size=sum(p.stat().st_size for p in out.iterdir());assert size<=limit
 print(json.dumps({'mac_evidence_bytes':size,'exported_screenshots':len(screenshots)}),flush=True)

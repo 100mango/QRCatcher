@@ -140,7 +140,12 @@ final class QRCatcherMacUITests: XCTestCase {
         let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
         if name != "mac-failure" {
-            try app.performAccessibilityAudit(for: .all) { issue in print("MAC_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false }
+            try app.performAccessibilityAudit(for: .all) { issue in
+                let detail = String((issue.compactDescription + "\n" + issue.detailedDescription + "\n" + (issue.element?.debugDescription ?? "no issue element")).prefix(20000))
+                print("MAC_ACCESSIBILITY_ISSUE", detail)
+                let evidence = XCTAttachment(string: detail); evidence.name = "mac-audit-element"; evidence.lifetime = .keepAlways; self.add(evidence)
+                return false
+            }
         }
     }
 
@@ -245,14 +250,18 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(path.waitForExistence(timeout: 5), photos.debugDescription)
         path.typeKey("a", modifierFlags: .command); path.typeText(root.appendingPathComponent("Tests/Fixtures/unicode.png").path)
         photos.typeKey(.return, modifierFlags: [])
-        let open = photos.dialogs.buttons["OKButton"].firstMatch
+        let open = photos.sheets["open-panel"].buttons["OKButton"]
         XCTAssertTrue(open.waitForExistence(timeout: 5), photos.debugDescription); open.click()
         let review = photos.buttons["Review for Import"]
         if review.waitForExistence(timeout: 3) { review.click() }
         let importAll = photos.buttons["Import All New Photos"]
-        XCTAssertTrue(importAll.waitForExistence(timeout: 15), photos.debugDescription); importAll.click()
-        let imported = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: importAll)
-        XCTAssertEqual(XCTWaiter.wait(for: [imported], timeout: 20), .completed, photos.debugDescription)
+        if importAll.waitForExistence(timeout: 3) { importAll.click() }
+        // Photos can import a single selected PNG directly from the open panel.
+        // Require the actual populated library instead of inventing a mandatory
+        // second review step. The grid/asset route was observed on this OS.
+        let imported = photos.collectionViews["photos_collection_view"].descendants(matching: .any).matching(identifier: "mediaKind_asset").firstMatch
+        XCTAssertTrue(imported.waitForExistence(timeout: 25), photos.debugDescription)
+        XCTAssertFalse(photos.sheets["open-panel"].exists)
         print("PHOTOS_LIBRARY_AFTER_IMPORT:", photos.debugDescription)
         app.activate(); verifyRunningApplication()
         app.buttons["mac.photos"].click()

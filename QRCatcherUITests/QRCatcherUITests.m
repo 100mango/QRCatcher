@@ -10,7 +10,7 @@
     if (self.testRun.failureCount > 0) {
         NSString *description = self.app.debugDescription;
         XCUIElement *visibleStatus = self.app.staticTexts[@"scan.status"];
-        NSLog(@"PHONE_FAILURE_STATE:%lu STATUS:%@", (unsigned long)self.app.state, visibleStatus.exists ? visibleStatus.label : @"status not in visible hierarchy");
+        NSLog(@"PHONE_FAILURE_STATE:%lu STATUS:%@ CAMERA_TRACE:%@", (unsigned long)self.app.state, visibleStatus.exists ? visibleStatus.label : @"status not in visible hierarchy", visibleStatus.exists ? visibleStatus.value : @"no visible diagnostic");
         NSLog(@"PHONE_FAILURE_UI:%@", [description substringToIndex:MIN(description.length, 24000)]);
         XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
         XCUIElement *cameraAlert = [system.alerts containingPredicate:[NSPredicate predicateWithFormat:@"label CONTAINS %@ AND label CONTAINS %@", @"QRCatcher", @"camera"]].firstMatch;
