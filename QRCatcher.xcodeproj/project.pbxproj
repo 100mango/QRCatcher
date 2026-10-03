@@ -293,6 +293,8 @@
 "GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
 "GCC_OPTIMIZATION_LEVEL" = "0";
 "ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
 };
 "name" = "Debug";
 };
@@ -393,11 +395,14 @@
 "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 "GENERATE_INFOPLIST_FILE" = "YES";
 "HEADER_SEARCH_PATHS" = "$(SRCROOT)/QRCatcher";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
 "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcher.app/QRCatcher";
 "BUNDLE_LOADER" = "$(TEST_HOST)";
 "GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
 "GCC_OPTIMIZATION_LEVEL" = "0";
 "ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
 };
 "name" = "Debug";
 };
@@ -411,6 +416,7 @@
 "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 "GENERATE_INFOPLIST_FILE" = "YES";
 "HEADER_SEARCH_PATHS" = "$(SRCROOT)/QRCatcher";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
 "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/QRCatcher.app/QRCatcher";
 "BUNDLE_LOADER" = "$(TEST_HOST)";
 "GCC_OPTIMIZATION_LEVEL" = "s";
@@ -498,10 +504,13 @@
 "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 "GENERATE_INFOPLIST_FILE" = "YES";
 "HEADER_SEARCH_PATHS" = "$(SRCROOT)/QRCatcher";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
 "TEST_TARGET_NAME" = "QRCatcher";
 "GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
 "GCC_OPTIMIZATION_LEVEL" = "0";
 "ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
 };
 "name" = "Debug";
 };
@@ -515,6 +524,7 @@
 "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 "GENERATE_INFOPLIST_FILE" = "YES";
 "HEADER_SEARCH_PATHS" = "$(SRCROOT)/QRCatcher";
+"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
 "TEST_TARGET_NAME" = "QRCatcher";
 "GCC_OPTIMIZATION_LEVEL" = "s";
 "VALIDATE_PRODUCT" = "YES";
@@ -588,6 +598,8 @@
 "GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1","$(inherited)");
 "GCC_OPTIMIZATION_LEVEL" = "0";
 "ONLY_ACTIVE_ARCH" = "YES";
+"GCC_SYMBOLS_PRIVATE_EXTERN" = "NO";
+"ENABLE_TESTABILITY" = "YES";
 };
 "name" = "Debug";
 };

@@ -1,6 +1,6 @@
 #import <XCTest/XCTest.h>
 @interface QRCatcherUITests : XCTestCase
-@property XCUIApplication *app;
+@property (nonatomic, strong) XCUIApplication *app;
 @end
 @implementation QRCatcherUITests
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
@@ -50,6 +50,13 @@
     [self.app.buttons[@"Delete"] tap];
     XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
     [self.app terminate]; [self launch:@[]];
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
+}
+- (void)testUnreadableResultOffersRetryWithoutSaving {
+    [self launch:@[@"-reset-history", @"-fixture-empty"]];
+    XCTAssertTrue([self.app.buttons[@"scan.again"] waitForExistenceWithTimeout:10]);
+    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"empty or could not be read"]);
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
 }

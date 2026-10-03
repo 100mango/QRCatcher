@@ -17,6 +17,14 @@
     XCTAssertNil([QRCodeCodec imageForPayload:@""]);
     XCTAssertEqual([QRCodeCodec payloadsInImage:[UIImage new]].count, 0);
 }
+- (void)testNonQRCodeImageDoesNotDecode {
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(128, 128)];
+    UIImage *plain = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+        [UIColor.whiteColor setFill];
+        [context fillRect:CGRectMake(0, 0, 128, 128)];
+    }];
+    XCTAssertEqual([QRCodeCodec payloadsInImage:plain].count, 0);
+}
 - (void)testSafeWebsiteClassification {
     XCTAssertEqualObjects([NSString HTTPURLFromString:@"example.com"].absoluteString, @"https://example.com");
     XCTAssertNotNil([NSString HTTPURLFromString:@"HTTPS://example.com/a?q=1"]);

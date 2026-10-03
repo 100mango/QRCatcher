@@ -84,7 +84,8 @@
         [scroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor], [scroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
         [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
         [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],
-        [stack.centerXAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.centerXAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],
+        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],
         [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32],
         [self.preview.heightAnchor constraintEqualToAnchor:self.preview.widthAnchor multiplier:0.7],
         [self.catcherIndicator.topAnchor constraintEqualToAnchor:self.preview.topAnchor],
@@ -114,6 +115,11 @@
     self.visible = YES;
 #if DEBUG
     NSArray *args = NSProcessInfo.processInfo.arguments;
+    if ([args containsObject:@"-ui-testing"] && [args containsObject:@"-fixture-empty"] && !self.appliedFixture) {
+        self.appliedFixture = YES;
+        [self handlePayload:nil];
+        return;
+    }
     NSUInteger index = [args indexOfObject:@"-fixture-payload"];
     if ([args containsObject:@"-ui-testing"] && !self.appliedFixture && index != NSNotFound && index + 1 < args.count) {
         self.appliedFixture = YES;

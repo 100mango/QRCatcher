@@ -13,7 +13,7 @@ def configs(key,common):
     refs=[]
     for name in ['Debug','Release']:
         settings=dict(common)
-        if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES')
+        if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES',GCC_SYMBOLS_PRIVATE_EXTERN='NO',ENABLE_TESTABILITY='YES')
         else:settings.update(GCC_OPTIMIZATION_LEVEL='s',VALIDATE_PRODUCT='YES')
         refs.append(add(key+name,'XCBuildConfiguration',buildSettings=settings,name=name))
     return add(key+'configs','XCConfigurationList',buildConfigurations=refs,defaultConfigurationIsVisible=0,defaultConfigurationName='Release')
@@ -40,7 +40,7 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
         common.update(INFOPLIST_FILE='QRCatcher/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src=source;res=resources;files=appfiles;deps=[]
     else:
-        common.update(GENERATE_INFOPLIST_FILE='YES',HEADER_SEARCH_PATHS='$(SRCROOT)/QRCatcher')
+        common.update(GENERATE_INFOPLIST_FILE='YES',HEADER_SEARCH_PATHS='$(SRCROOT)/QRCatcher',IPHONEOS_DEPLOYMENT_TARGET='17.0')
         if key=='unit':common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcher.app/QRCatcher',BUNDLE_LOADER='$(TEST_HOST)')
         else:common.update(TEST_TARGET_NAME='QRCatcher')
         test=file(name+'/'+name+'.m','sourcecode.c.objc');files=[test];src=[build(test)];res=[]
