@@ -8,13 +8,14 @@ sdk={'Watch':'watchos','TV':'appletvos','Vision':'xros'}[platform]
 app=Path('build')/('Release'+platform)/'Build/Products'/('Release-'+sdk)/(name+'.app')
 info=plistlib.loads((app/'Info.plist').read_bytes());expected='100mango.QRCatcher.watchkitapp' if platform=='Watch' else '100mango.QRCatcher'
 assert info['CFBundleIdentifier']==expected
+if platform!='Vision':assert 'UIFileSharingEnabled' not in info and 'LSSupportsOpeningDocumentsInPlace' not in info
 assert info['CFBundleShortVersionString']=='1.1' and str(info['CFBundleVersion'])=='2'
 minimum={'Watch':'9.0','TV':'17.0','Vision':'1.0'}[platform]
 assert info['MinimumOSVersion']==minimum,(info['MinimumOSVersion'],minimum)
 assert info['UIDeviceFamily']==[{'Watch':4,'TV':3,'Vision':7}[platform]]
 privacy=plistlib.loads((app/'PrivacyInfo.xcprivacy').read_bytes())
 assert privacy.get('NSPrivacyTracking') is False and privacy.get('NSPrivacyCollectedDataTypes')==[]
-required=[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}] if platform=='TV' else []
+required=[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}] if platform=='TV' else ([{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryFileTimestamp','NSPrivacyAccessedAPITypeReasons':['C617.1','3B52.1']}] if platform=='Vision' else [])
 assert privacy['NSPrivacyAccessedAPITypes']==required
 icons={k:info[k] for k in ['CFBundleIcons','CFBundleIconName','CFBundleIconFiles'] if k in info}
 expected_icon='Small' if platform=='TV' else 'AppIcon'
@@ -27,15 +28,20 @@ for marker in ['QRCATCHER_TEST_STORE','QRCATCHER_SANDBOX_','QRCATCHER_TV_TEST_ST
 assert not list(app.rglob('*.xctest'))
 archs=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True).strip().split()
 load=subprocess.check_output(['xcrun','otool','-l',str(executable)],text=True)
+imports=subprocess.check_output(['xcrun','nm','-u',str(executable)],text=True)
+assert (' _fstat' in imports)==(platform=='Vision'),'Only the file-import target should link the bounded descriptor reader'
 report={'platform':platform,'bundle':str(app),'bundle_id':expected,'minimum_os':minimum,'version':'1.1','build':'2','architectures':archs,'executable_bytes':len(data),'executable_sha256':hashlib.sha256(data).hexdigest(),'icons':icons,'privacy':privacy,'assets_car_sha256':hashlib.sha256((app/'Assets.car').read_bytes()).hexdigest()}
+report['architecture_minimum_os']={}
+for arch in archs:
+ slice_load=subprocess.check_output(['xcrun','otool','-arch',arch,'-l',str(executable)],text=True)
+ match=re.search(r'cmd LC_BUILD_VERSION\b(?:(?!Load command).)*?\bminos ([0-9.]+)',slice_load,re.S)
+ assert match,arch
+ report['architecture_minimum_os'][arch]=match.group(1)
+if platform!='Watch':
+ assert all(value==minimum for value in report['architecture_minimum_os'].values())
+ report['oldest_runtime_launch']='not yet executed; unsigned bundle/load-command checks are not runtime proof'
 if platform=='Watch':
  assert set(archs)>={'arm64_32','arm64'},archs
- report['architecture_minimum_os']={}
- for arch in archs:
-  slice_load=subprocess.check_output(['xcrun','otool','-arch',arch,'-l',str(executable)],text=True)
-  match=re.search(r'cmd LC_BUILD_VERSION\b(?:(?!Load command).)*?\bminos ([0-9.]+)',slice_load,re.S)
-  assert match,arch
-  report['architecture_minimum_os'][arch]=match.group(1)
  # Native arm64 Watch executables were introduced with watchOS 26. The older
  # arm64_32 slice must preserve the application's declared watchOS 9 floor.
  assert report['architecture_minimum_os']['arm64_32']=='9.0'

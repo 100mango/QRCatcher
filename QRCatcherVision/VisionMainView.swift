@@ -53,7 +53,7 @@ struct VisionMainView: View {
                         Button { showImporter = true } label: { Label("Open Image", systemImage: "folder") }.accessibilityIdentifier("vision.import")
                         PhotosPicker(selection: $photo, matching: .images) { Label("Photos", systemImage: "photo") }.accessibilityIdentifier("vision.photos")
                         Button(action: exportHistory) { Label("Export History", systemImage: "square.and.arrow.up") }.accessibilityIdentifier("vision.exportHistory").disabled(history.error != nil)
-                        Button { showPrivacy = true } label: { Label("Privacy", systemImage: "hand.raised") }
+                        Button { showPrivacy = true } label: { Label("Privacy", systemImage: "hand.raised") }.accessibilityIdentifier("vision.privacy")
                     }
                 }
         }
@@ -150,7 +150,7 @@ private struct VisionPrivacyView: View {
             Text("Privacy").font(.title.bold())
             Text(QRPrivacyText.body).accessibilityIdentifier("privacy.offlineBody")
             Link("Read the privacy policy", destination: URL(string: "https://100mango.github.io/app-privacy/")!)
-            Button("Done") { dismiss() }
+            Button("Done") { dismiss() }.accessibilityIdentifier("vision.privacyDone")
         }.padding(32).frame(width: 520)
     }
 }

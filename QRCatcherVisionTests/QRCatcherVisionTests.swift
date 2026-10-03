@@ -53,6 +53,21 @@ final class QRCatcherVisionTests: QRManagedStoreTestCase {
         let link = folder.appendingPathComponent("provider-link.png"); try FileManager.default.createSymbolicLink(at: link, withDestinationURL: large)
         XCTAssertThrowsError(try QRBoundedPhotoFile.read(link))
     }
+    func testSelectedFileFailureAndCancellationPreservePreviousResult() async throws {
+        let store = try storeURL(), history = makeHistory(url: store), session = VisionReadSession(history: history)
+        session.accept(["keep this selection"])
+        let file = store.deletingLastPathComponent().appendingPathComponent("oversized.png")
+        FileManager.default.createFile(atPath: file.path, contents: Data())
+        let handle = try FileHandle(forWritingTo: file); try handle.truncate(atOffset: UInt64(QRBoundedPhotoFile.maximumBytes + 1)); try handle.close()
+        session.read(url: file)
+        for _ in 0..<100 where session.isReading { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(session.isReading); XCTAssertNotNil(session.error)
+        XCTAssertEqual(session.payload, "keep this selection"); XCTAssertEqual(session.history.items.map(\.payload), ["keep this selection"])
+        session.read(url: file); session.cancel()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(session.payload, "keep this selection"); XCTAssertEqual(session.history.items.count, 1)
+    }
+
     func testProviderReadCancellationStopsBeforeRemainingChunks() throws {
         let file = try storeURL().deletingLastPathComponent().appendingPathComponent("provider.png")
         try Data(repeating: 0x20, count: 256 * 1024).write(to: file)

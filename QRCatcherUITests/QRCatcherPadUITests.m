@@ -65,6 +65,13 @@
     XCTAssertEqual(self.app.tables[@"history.table"].cells.count, 2);
     XCTAssertFalse(self.app.buttons[@"scan.open"].exists);
     [self capture:@"ipad-imported-photo"];
+    [self.app terminate]; self.app.launchArguments = @[@"-ui-testing", @"-AppleLanguages", @"(en)"]; [self.app launch];
+    XCUIElement *records = self.app.tables[@"history.table"];
+    XCTAssertTrue([records.cells.firstMatch waitForExistenceWithTimeout:10]);
+    XCTAssertEqual(records.cells.count, 2);
+    [records.cells.firstMatch tap];
+    XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, @"QRCatcher 你好 🌈 123");
+    [self capture:@"ipad-imported-photo"];
 }
 - (void)testLargeTextImportCancellationAndPrivacyReturn {
     [self launchWithArguments:@[@"-UIPreferredContentSizeCategoryName", @"UICTContentSizeCategoryAccessibilityXXXL"]];

@@ -63,7 +63,8 @@ final class QRCatcherTVUITests: XCTestCase {
     private func capture(_ name: String, focused target: XCUIElement? = nil) {
         // Capture the asserted remote-focus state before the system audit visits
         // accessibility elements and potentially changes focus to the first row.
-        guard let data = XCUIScreen.main.screenshot().image.jpegData(compressionQuality: 0.45) else { XCTFail("TV screenshot unavailable"); return }
+        let pixels = XCUIScreen.main.screenshot().image
+        guard let data = pixels.jpegData(compressionQuality: 0.45) else { XCTFail("TV screenshot unavailable"); return }
         XCTAssertLessThanOrEqual(data.count, 800 * 1024)
         let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.jpeg")
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
@@ -72,11 +73,46 @@ final class QRCatcherTVUITests: XCTestCase {
             let ownedCell = cell.exists && cell.buttons.count == 1 && cell.buttons[target.identifier].exists
             XCTAssertTrue(target.hasFocus || ownedCell, "Named focus screenshot must retain the requested real focus owner")
             print("TV_FOCUS_AT_PIXEL_CHECKPOINT", name, target.debugDescription, cell.exists ? cell.debugDescription : "no focused cell")
+            if target.identifier == "tv.deleteRecord" { assertFocusedDeleteContrast(pixels, labelFrame: target.frame) }
         }
         if name != "tv-failure" {
             do { try app.performAccessibilityAudit(for: .all) { issue in print("TV_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("TV accessibility audit failed: \(error)") }
         }
+    }
+    private func assertFocusedDeleteContrast(_ screenshot: UIImage, labelFrame: CGRect) {
+        guard let full = screenshot.cgImage else { XCTFail("No native screenshot pixels"); return }
+        let scaleX = CGFloat(full.width) / screenshot.size.width
+        let scaleY = CGFloat(full.height) / screenshot.size.height
+        let cropRect = CGRect(x: labelFrame.minX * scaleX, y: labelFrame.minY * scaleY,
+                              width: labelFrame.width * scaleX, height: labelFrame.height * scaleY).integral
+        guard cropRect.minX >= 0, cropRect.minY >= 0, cropRect.maxX <= CGFloat(full.width), cropRect.maxY <= CGFloat(full.height),
+              let crop = full.cropping(to: cropRect), crop.width * crop.height < 200_000 else {
+            XCTFail("Focused Delete label does not have a bounded screen crop"); return
+        }
+        var rgba = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
+        let drew = rgba.withUnsafeMutableBytes { buffer -> Bool in
+            guard let color = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(data: buffer.baseAddress, width: crop.width, height: crop.height,
+                                          bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: color,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: CGFloat(crop.width), height: CGFloat(crop.height))); return true
+        }
+        XCTAssertTrue(drew)
+        func linear(_ value: UInt8) -> Double {
+            let s = Double(value) / 255
+            return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+        }
+        let values = stride(from: 0, to: rgba.count, by: 4).map {
+            0.2126 * linear(rgba[$0]) + 0.7152 * linear(rgba[$0 + 1]) + 0.0722 * linear(rgba[$0 + 2])
+        }.sorted()
+        let foreground = values[values.count / 20], background = values[values.count * 9 / 10]
+        let contrast = (background + 0.05) / (foreground + 0.05)
+        print("TV_FOCUSED_DELETE_PIXEL_CONTRAST", cropRect, foreground, background, contrast)
+        // This specific runtime state has a white focused card. The whole exact
+        // label crop must contain dark glyph pixels, not the observed pink-on-white.
+        XCTAssertGreaterThan(background, 0.85)
+        XCTAssertGreaterThanOrEqual(contrast, 4.5, "Actual focused Delete glyph/background contrast")
     }
     func testActualPhotosDecodeExportVerificationAndOfflineReopen() { realPhotosWorkflow(expectPrompt: true) }
     func testExplicitlyPreconditionedPhotosDecodeExportAndReopen() {
@@ -133,5 +169,20 @@ final class QRCatcherTVUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
         XCTAssertEqual(app.buttons["tv.photos"].label, "照片")
         capture("tv-chinese-result")
+        app.terminate(); app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]; app.launch()
+        focusAndSelect(app.buttons["tv.history"])
+        focusAndSelect(app.buttons["tv.deleteRecord"].firstMatch)
+        let confirmation = app.buttons["tv.confirmDelete"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 10), app.debugDescription)
+        XCUIRemote.shared.press(.menu)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirmation)], timeout: 10), .completed)
+        XCTAssertEqual(app.buttons["tv.record"].count, 1, "Cancel must preserve the saved result")
+        focusAndSelect(app.buttons["tv.deleteRecord"].firstMatch)
+        focusAndSelect(confirmation)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["tv.record"].firstMatch)], timeout: 10), .completed)
+        app.terminate(); app.launch(); focusAndSelect(app.buttons["tv.history"])
+        XCTAssertFalse(app.buttons["tv.record"].exists)
+        XCTAssertTrue(app.staticTexts["No saved QR codes yet"].exists)
+        capture("tv-history-after-removal")
     }
 }

@@ -4,27 +4,13 @@ import Foundation
 /// Encoded size is checked before allocation and during each cancellable read.
 enum QRBoundedPhotoFile {
     static let maximumBytes = 50 * 1024 * 1024
-    static func read(_ url: URL, isCancelled: () -> Bool = { Task.isCancelled }) throws -> Data {
-        if isCancelled() { throw CancellationError() }
+    static func read(_ url: URL, isCancelled: @escaping () -> Bool = { Task.isCancelled }) throws -> Data {
         try Task.checkCancellation()
-        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true,
-              let size = values.fileSize, size > 0, size <= maximumBytes else {
-            throw NSError(domain: "QRCatcher.Image", code: 1, userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Choose an image smaller than 50 MB.", comment: "")])
+        do {
+            return try QRBoundedImageFileReader.read(url, isCancelled: { Task.isCancelled || isCancelled() })
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == CocoaError.Code.userCancelled.rawValue {
+            throw CancellationError()
         }
-        let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
-        var result = Data()
-        while true {
-            try Task.checkCancellation()
-            if isCancelled() { throw CancellationError() }
-            guard let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty else { break }
-            guard chunk.count <= maximumBytes - result.count else {
-                throw NSError(domain: "QRCatcher.Image", code: 1, userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Choose an image smaller than 50 MB.", comment: "")])
-            }
-            result.append(chunk)
-        }
-        try Task.checkCancellation()
-        return result
     }
 }
 /// A provider callback is not necessarily a Swift task. This token propagates

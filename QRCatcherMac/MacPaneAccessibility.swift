@@ -3,7 +3,8 @@ import SwiftUI
 
 /// NavigationSplitView adds a native hosting group around each pane. The audit
 /// identified that exact ancestor above the labeled history Outline. Label the
-/// direct NSSplitView child, preserving its existing role and child semantics.
+/// outermost accessible group inside the split pane, preserving its role and
+/// children. AppKit can insert ignored glass wrappers as direct split children.
 struct MacPaneAccessibility: NSViewRepresentable {
     let label: String
     let identifier: String
@@ -17,22 +18,27 @@ struct MacPaneAccessibility: NSViewRepresentable {
         override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
         override func layout() { super.layout(); apply() }
         func apply() {
-            var child: NSView = self
-            while let parent = child.superview {
-                if parent is NSSplitView {
-                    child.setAccessibilityLabel(paneLabel)
-                    child.setAccessibilityIdentifier(paneIdentifier)
+            guard window != nil, !paneLabel.isEmpty else { return }
+            var ancestor = superview
+            var candidate: NSView?
+            for _ in 0..<32 {
+                guard let view = ancestor else { return }
+                if view is NSSplitView {
+                    guard let candidate else { return }
+                    if candidate.accessibilityLabel() != paneLabel { candidate.setAccessibilityLabel(paneLabel) }
+                    if candidate.accessibilityIdentifier() != paneIdentifier { candidate.setAccessibilityIdentifier(paneIdentifier) }
                     #if DEBUG
                     if !reported {
                         reported = true
-                        print("MAC_NATIVE_AX_PANE", paneIdentifier, String(describing: type(of: child)),
-                              String(describing: child.accessibilityRole()), child.frame,
-                              child.accessibilityLabel() ?? "<nil>")
+                        print("MAC_NATIVE_AX_PANE", paneIdentifier, String(describing: type(of: candidate)),
+                              String(describing: candidate.accessibilityRole()), candidate.frame,
+                              candidate.accessibilityLabel() ?? "<nil>")
                     }
                     #endif
                     return
                 }
-                child = parent
+                if view.isAccessibilityElement(), view.accessibilityRole() == .group { candidate = view }
+                ancestor = view.superview
             }
         }
     }
@@ -44,5 +50,6 @@ struct MacPaneAccessibility: NSViewRepresentable {
     }
     func updateNSView(_ view: Marker, context: Context) {
         view.paneLabel = label; view.paneIdentifier = identifier; view.apply()
+        DispatchQueue.main.async { [weak view] in view?.apply() }
     }
 }

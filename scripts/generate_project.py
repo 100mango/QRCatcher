@@ -15,6 +15,8 @@ def configs(key,common):
         settings=dict(common)
         if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES',GCC_SYMBOLS_PRIVATE_EXTERN='NO',ENABLE_TESTABILITY='YES',SWIFT_OPTIMIZATION_LEVEL='-Onone',SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG')
         else:settings.update(GCC_OPTIMIZATION_LEVEL='s',VALIDATE_PRODUCT='YES')
+        if name=='Debug' and key=='app':
+            settings['INFOPLIST_FILE']='QRCatcher/Debug-Info.plist'
         refs.append(add(key+name,'XCBuildConfiguration',buildSettings=settings,name=name))
     return add(key+'configs','XCConfigurationList',buildConfigurations=refs,defaultConfigurationIsVisible=0,defaultConfigurationName='Release')
 source=[]; appfiles=[]
@@ -88,7 +90,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
             r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
-        r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('Shared/FileImportResources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
         r=file('QRCatcherMac/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for localizedName in ['Localizable.strings','InfoPlist.strings']:
             localized=add('maclocalized:'+localizedName,'PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/'+localizedName,sourceTree='<group>')
@@ -99,6 +101,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
             portable_sources(files,src,common)
             common.update(SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMacTests/QRCatcherMacTests-Bridging-Header.h')
             r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
+            r=file('Tests/Support/QRBoundedImportReadTests.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
@@ -122,13 +125,14 @@ for key,name,kind in [('vision','QRCatcherVision','application'),('visionunit','
         r=file('QRCatcherVision/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m','QRCatcherMac/MacHistory.swift','QRCatcherMac/MacLocalization.swift']:
             r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))
-        r=file('Shared/Resources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
+        r=file('Shared/FileImportResources/PrivacyInfo.xcprivacy','text.xml');files.append(r);res.append(build(r))
         localized=add('visionlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherMac/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('visionvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES')
         if key=='visionunit':
             r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
+            r=file('Tests/Support/QRBoundedImportReadTests.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherVision.app/QRCatcherVision',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
@@ -148,7 +152,11 @@ for key,name,kind in [('tv','QRCatcherTV','application'),('tvunit','QRCatcherTVT
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'appletvos','SUPPORTED_PLATFORMS':'appletvos appletvsimulator','TARGETED_DEVICE_FAMILY':'3','TVOS_DEPLOYMENT_TARGET':'17.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
         common.update(INFOPLIST_FILE='QRCatcherTV/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherTV/QRCatcherTV-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
-        src+=sharedSources+nativeSharedSources;files+=sharedFiles+nativeSharedFiles
+        # TV never imports user-selected files. Do not link a dormant file reader
+        # or declare unused required-reason APIs for this PhotoKit-only target.
+        src+=[r for r in sharedSources if r != uid('build:'+uid('file:Shared/Image/QRBoundedImageFileReader.m'))]
+        src+=[r for r in nativeSharedSources if r != uid('build:'+uid('file:Shared/Services/QRBoundedPhotoFile.swift'))]
+        files+=sharedFiles+nativeSharedFiles
         r=file('QRCatcherTV/Assets.xcassets','folder.assetcatalog');files.append(r);res.append(build(r))
         for path in ['QRCatcherMac/MacLocalization.swift']:
             r=file(path,'sourcecode.c.objc' if path.endswith('.m') else 'sourcecode.swift');files.append(r);src.append(build(r))

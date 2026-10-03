@@ -5,6 +5,9 @@ limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['
 out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
 icon=pathlib.Path('build/icon-verification/mac-bundled-icon.png')
+package=pathlib.Path('build/native-release-evidence/mac-release.json')
+if package.is_file():
+ data=package.read_bytes();assert len(data)<8192;(out/package.name).write_bytes(data)
 if icon.exists():
  data=icon.read_bytes();assert len(data)<=600*1024;(out/icon.name).write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
 for name in ['mac-test.log','mac-sandbox-test.log','mac-sandbox-build.log']:

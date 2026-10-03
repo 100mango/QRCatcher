@@ -77,4 +77,62 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.buttons["vision.copy"].tap()
         saveUsingSystemFileExporter("vision.exportHistory", name: "QRCatcher Synthetic History", checkpoint: "vision-exported-history")
     }
+
+    private func visibleFileItem(_ name: String) -> XCUIElement? {
+        for query in [app.cells, app.buttons, app.staticTexts] {
+            if let item = query.allElementsBoundByIndex.first(where: { ($0.label == name || $0.identifier == name || $0.label.hasPrefix(name + ",")) && $0.isHittable }) { return item }
+        }
+        return nil
+    }
+    private func selectFileItem(_ name: String) {
+        var item: XCUIElement?
+        for _ in 0..<20 where item == nil { item = visibleFileItem(name); if item == nil { Thread.sleep(forTimeInterval: 0.5) } }
+        guard let item else { XCTFail("Missing actual Files item \(name): \(app.debugDescription)"); return }
+        item.tap()
+    }
+    func testRealFilesImportAndReopen() {
+        XCTAssertTrue(app.buttons["vision.import"].waitForExistence(timeout: 20)); app.buttons["vision.import"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 20), app.debugDescription)
+        if visibleFileItem("QRCatcher-Test-Imports") == nil {
+            visibleFileItem("Browse")?.tap()
+            if visibleFileItem("QRCatcher") == nil { selectFileItem("On My Apple Vision Pro") }
+            selectFileItem("QRCatcher")
+        }
+        selectFileItem("QRCatcher-Test-Imports")
+        selectFileItem(visibleFileItem("SyntheticQR.png") == nil ? "SyntheticQR" : "SyntheticQR.png")
+        XCTAssertTrue(app.staticTexts["vision.payload"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+        app.terminate(); app.launch()
+        let record = app.staticTexts["QRCatcher 你好 🌈 123"]
+        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
+        XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+        capture("vision-files-import-reopened")
+    }
+
+    func testChineseEmptyPhotosResultAndOfflinePolicy() {
+        app.terminate()
+        app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["vision.payload"].exists)
+        capture("vision-chinese-empty")
+        app.buttons["vision.photos"].tap()
+        let asset = app.images["PXGGridLayout-Info"].firstMatch
+        XCTAssertTrue(asset.waitForExistence(timeout: 20), app.debugDescription); asset.tap()
+        XCTAssertTrue(app.staticTexts["vision.payload"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(app.buttons["vision.copy"].label, "复制")
+        app.buttons["vision.copy"].tap()
+        XCTAssertEqual(app.staticTexts["vision.status"].label, "已复制结果")
+        capture("vision-chinese-result")
+        app.buttons["vision.privacy"].tap()
+        let body = app.staticTexts["privacy.offlineBody"]
+        XCTAssertTrue(body.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(body.label.contains("本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。"))
+        XCTAssertTrue(body.label.contains("100mango@gmail.com"))
+        capture("vision-chinese-policy")
+        app.buttons["vision.privacyDone"].tap()
+        XCTAssertTrue(app.buttons["vision.copy"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+    }
 }

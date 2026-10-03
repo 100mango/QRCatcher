@@ -2,7 +2,7 @@
 
 ## Baseline and current milestone
 
-The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. At exact checkpoint `0eebd8f` / run `37124136942`, iOS units12, Pro Max UI8 and native iPad Pro UI3 passed. Vision compiled and passed4 hosted tests; real Photos/decode/copy/reopen assertions ran but its UI test exceeded the initial time allowance. TV compiled and passed4 hosted tests; the UI stopped at the actual system Photos permission dialog. The following changes add a substantive Watch source slice awaiting its first compiler/runtime pass. The combined workflow is not yet green.
+The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. At exact checkpoint `0eebd8f` / run `37124136942`, iOS units12, Pro Max UI8 and native iPad Pro UI3 passed. Vision compiled and passed4 hosted tests; real Photos/decode/copy/reopen assertions ran but its UI test exceeded the initial time allowance. TV compiled and passed4 hosted tests; the UI stopped at the actual system Photos permission dialog. The current 3245069 checkpoint includes native Vision and TV runtime/export gates, a compiled portable Watch decoder, and ongoing Mac audit/Watch startup fixes, detailed below. The combined workflow is not yet green.
 
 Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. Release verification remains unsigned. A separate local ad-hoc Debug sandbox test is described below; no Store records, Apple-account signing resources or registered persistent capabilities are created.
 
@@ -117,13 +117,15 @@ physical Continuity Camera and further accessibility audits remain separate gate
 
 ## Native Watch implementation and remaining physical gates
 
-The new Watch source (first QRCatcher compiler/runtime pass still pending) uses watchOS 27's Swift `DetectBarcodesRequest` behind an
-availability check, not unavailable legacy VN/Core Image APIs. It imports a
+The Watch source now uses the pinned portable CPU QR decoder described below,
+without Vision or Core Image framework dependencies. The earlier Swift Vision
+path encountered actual simulator model-loading errors. It imports a
 bounded selected Photos file, normalizes a real source image with ImageIO,
 retains that normalized preview (up to1536pixels, not original bytes) and all decoded payloads in a quota-bounded atomic archive,
 and provides offline viewing, zoom, confirmed removal and the approved policy.
-Unreadable archives are never overwritten. Older watchOS versions retain the
-selected photo and offer explicit paired-iPhone processing.
+Unreadable archives are never overwritten. The CPU path compiles for the retained
+watchOS 9 arm64_32 floor; actual older-system launch remains unverified. Explicit
+paired-iPhone processing is also available for a saved copy.
 
 The paired phone processor consumes only explicit request files. It verifies
 version, UUIDs, image fingerprint, bounded regular non-symlink file contents and
@@ -142,8 +144,8 @@ Cloud test scopes are deliberately distinct:
   the QRCatcher test targets its unavailable/Close path; selection requires a physical Watch
 - Apple excludes background WCSession file/user-info delivery from Simulator
   support; cross-device transport requires a paired physical iPhone and Watch
-- An older-watchOS launch and weak-link/device Release packaging remain separate
-  gates, as do physical scannability of the displayed saved preview and camera
+- An older-watchOS launch remains separate from the passed generic device Release
+  and no-Vision/static libc++ checks, as do physical scannability of the displayed saved preview and camera
   capture where a platform has a camera workflow
 
 No App IDs, certificates, provisioning profiles or Store records were registered
@@ -241,8 +243,9 @@ CoreData store adapter are unchanged. Local GCC ASan/UBSan evaluation passes 44
 unique cases, including Latin-1/UTF-8/Shift-JIS/mixed ECI, rotated/mirrored/inverted,
 multiple codes, maximum dimensions, malformed and truncated inputs. LeakSanitizer
 cannot run under the ptraced host and is explicitly not claimed. An optimized
-Linux harness was 318,360 bytes; the Watch binary footprint and actual arm64/
-arm64_32 load/runtime still require the exact Apple CI candidate.
+Linux harness was 318,360 bytes. The 3245069 unsigned Watch binary is 1,881,736
+bytes, with inspected arm64/arm64_32 load commands as recorded below; actual CPU
+decoder execution and an older-system launch remain separate runtime gates.
 
 The Watch app is not yet embedded in the iOS product; a combined unsigned
 companion packaging gate remains after native Watch compilation/runtime stabilizes.
@@ -290,3 +293,78 @@ tests are explicitly command doubles, not app-runtime evidence.
 Native Vision/Watch audits currently cover normal runtime text size. A system
 Settings text-size route has not yet been established; forced SwiftUI environment
 layout stress will not be presented as a real system preference change.
+
+
+## 3245069 runtime checkpoint
+
+The native Vision row passed all seven hosted tests and its expanded real system
+Photos → Unicode QR → copy → history/relaunch → Files PNG/history export flow.
+Both actual saved outputs were read back from the FileExporter completion URLs;
+the independent runner codec verified the PNG payload and parsed history JSON.
+All four held public-simctl screenshots completed and their retained SHA-256s
+were checked after download. Unsuppressed accessibility audits and generic-device
+Release packaging passed. The evidence folder is 853,130 bytes with no omissions.
+
+Watch generic Release and Debug test bundles compile. The 1,881,736-byte Release
+executable contains arm64 (minimum 26.0) and arm64_32 (minimum 9.0), the compiled
+icon/privacy/notices, and no Vision/CoreML dependency. Strict SDK availability
+diagnostics and per-slice libc++ symbol checks pass. However, its real installed
+app launch was followed by a hosted XCTest startup timeout with zero test cases.
+No Watch CPU decode runtime pass is claimed. A follow-up uses a fresh owned
+simulator, records its actual pairings, terminates only the manually launched
+app before XCTest, and streams bounded logs/diagnostics. This tests a startup
+hypothesis; no service or security setting is changed.
+
+Mac Release arm64/x86_64 builds passed, but hosted compilation stopped at a new
+non-optional AppKit identifier assertion. The sandbox tests still expose the
+unlabeled accessible sidebar group, and the observed Photos-picker helper
+com.apple.mobileslideshow.photospicker cannot be queried as an XCUIApplication.
+The follow-up corrects that assertion and targets the outermost accessible pane
+group, and reaches the guarded real-picker visual route without that throwing
+helper query. These repairs await runtime proof. Other rows remain independently
+reported while this exact-head serial workflow continues.
+
+The same 3245069 TV row passed 4 hosted plus 2 UI cases, real prompt/import/Photos
+output readback/relaunch/Chinese/policy/revoked-state flows, Release and all strict
+audits. All nine required images now fit in 1,052,692 bytes with no omissions.
+Actual focused-record pixels prove black payload/date on white. Focused Delete
+still renders pale pink on white despite the audit passing; visual acceptance
+therefore remains open. The next change uses a normal contrasted confirmation-
+opening row while retaining the destructive role for the actual confirmed delete,
+and adds cancellation/removal/relaunch assertions.
+
+## Next bounded-import qualification candidate
+
+The completed 3245069 phone checkpoints are 16 hosted + 8 Pro Max UI and 8 SE3
+UI, including real Camera Allow → reset → Deny. The mini passed all three iPad
+cases including real Photos import. The large iPad passed both executed
+layout/picker-cancel/privacy/rotation/share/relaunch cases with its full History
+title and unsuppressed largest-text audit; its import case did not run because
+the single pre-install addmedia command timed out. A timeout is not evidence
+that the photo is absent. The next launcher runs the actual picker/cancel UI
+first, then attempts seeding only once, with the original outcome retained.
+
+A source-found pre-materialization gap is now repaired locally for phone/iPad
+Photos and Files plus Mac/Vision Files/drop/provider reads. One synchronous
+Foundation reader opens a regular non-symlink descriptor, caps actual chunks at
+50 MiB, observes cancellation between 64 KiB reads, rejects growth/truncation/
+metadata change, and owns the snapshot before a provider callback returns.
+The existing serial decode and generation/result/history behavior is retained.
+New unit cases exercise missing/symbolic/oversized/growing/truncated/error/cancel/
+stale inputs and provider temporary-file lifetime through the real codec. These
+Apple tests are not yet executed at the time this candidate is prepared.
+
+The reader's direct fstat use has only the required FileTimestamp reasons C617.1
+and 3B52.1 in affected app manifests, for app-owned and explicitly selected files.
+Source target wiring excludes the unused reader from TV/Watch, and Release symbol
+checks verify that boundary rather than inferring it from manifests. No collection
+or tracking declaration changes. Apple's definitions are at
+https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype .
+
+Real Files/Photos UI coverage is expanded on the successor. A synthetic input is
+staged only in the disposable app's owned Documents folder; iOS exposes that
+folder only through a Debug Info.plist override, checked absent from Release.
+Vision already exposes its document folder in the existing product. These tests
+select the actual file through the native document picker and independently
+assert the exact Unicode decode plus history/process relaunch. The new routes
+await actual execution and do not substitute fixtures for provider selection.

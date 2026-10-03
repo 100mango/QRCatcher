@@ -276,21 +276,19 @@ final class QRCatcherMacUITests: XCTestCase {
         } else {
             // The current OS renders the populated picker in a remote hosted
             // sheet whose children may not be bridged into the target's AX tree.
-            // Query only actually running, system Photos-picker app identities.
+            // Record only observed identities. The observed Photos-picker helper
+            // isn't an XCUIApplication and attempting that query throws before
+            // the real UI fallback can run.
             let candidates = NSWorkspace.shared.runningApplications.filter {
                 guard let id = $0.bundleIdentifier?.lowercased() else { return false }
                 return id.hasPrefix("com.apple.") && (id.contains("photospicker") || id.contains("photosui"))
             }.prefix(6)
-            var selected = false
             for running in candidates {
                 guard let identifier = running.bundleIdentifier else { continue }
-                let picker = XCUIApplication(bundleIdentifier: identifier)
                 print("PHOTOS_PICKER_OBSERVED_PROCESS", identifier, running.processIdentifier,
-                      String(picker.debugDescription.prefix(16000)))
-                let asset = picker.images["PXGGridLayout-Info"].firstMatch
-                if asset.exists && asset.isHittable { asset.click(); selected = true; break }
+                      running.localizedName ?? "<no name>")
             }
-            if !selected {
+            do {
                 // Pixel-grounded fallback from the retained 9c876a4 screenshot:
                 // one imported QR at (248,242) within a 780×620 system sheet.
                 // Require that exact synthetic single-photo/layout precondition;

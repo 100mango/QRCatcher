@@ -4,6 +4,7 @@
 #import "QRCodeCodec.h"
 #import "QRImageCodec.h"
 #import "QRImageImportQueue.h"
+#import "QRBoundedImageFileReader.h"
 #import "QRActionButton.h"
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -25,6 +26,7 @@
 @property (nonatomic) NSUInteger importGeneration;
 @property (nonatomic, strong) NSOperation *importOperation;
 @property (nonatomic, strong) NSProgress *photoProgress;
+@property (nonatomic, strong) NSProgress *importReadProgress;
 @property (nonatomic, strong) CAShapeLayer *ripple;
 @property (nonatomic, strong) AVCaptureSession *session;
 @property (nonatomic, strong) AVCaptureVideoPreviewLayer *previewLayer;
@@ -167,7 +169,7 @@
     self.visible = NO;
     [self pauseCamera];
 }
-- (void)dealloc { [self.photoProgress cancel]; [self.importOperation cancel]; [NSNotificationCenter.defaultCenter removeObserver:self]; }
+- (void)dealloc { [self.photoProgress cancel]; [self.importReadProgress cancel]; [self.importOperation cancel]; [NSNotificationCenter.defaultCenter removeObserver:self]; }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.previewLayer.frame = self.preview.bounds;
@@ -374,7 +376,7 @@
 - (void)handlePayload:(NSString *)payload { [self displayPayload:payload saveToHistory:YES]; }
 - (void)showSavedPayload:(NSString *)payload {
     [self loadViewIfNeeded];
-    [self.importOperation cancel]; [self.photoProgress cancel];
+    [self.importOperation cancel]; [self.photoProgress cancel]; [self.importReadProgress cancel];
     self.importGeneration += 1; self.importing = NO;
     self.hasResult = NO;
     [self displayPayload:payload saveToHistory:NO];
@@ -403,7 +405,7 @@
     UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, self.statusLabel.text);
 }
 - (void)scanAgain {
-    [self.importOperation cancel]; [self.photoProgress cancel];
+    [self.importOperation cancel]; [self.photoProgress cancel]; [self.importReadProgress cancel];
     self.importGeneration += 1; self.importing = NO;
     self.hasResult = NO; self.payload = nil;
     self.resultLabel.hidden = self.openButton.hidden = self.resultCopyButton.hidden = self.shareButton.hidden = self.againButton.hidden = YES;
@@ -418,7 +420,7 @@
 }
 - (void)choosePhoto {
     if (self.presentedViewController) return;
-    [self.importOperation cancel]; [self.photoProgress cancel];
+    [self.importOperation cancel]; [self.photoProgress cancel]; [self.importReadProgress cancel];
     self.importGeneration += 1; self.importing = YES; [self pauseCamera];
     PHPickerConfiguration *configuration = [[PHPickerConfiguration alloc] init];
     configuration.filter = PHPickerFilter.imagesFilter; configuration.selectionLimit = 1;
@@ -428,7 +430,7 @@
 }
 - (void)chooseFile {
     if (self.presentedViewController) return;
-    [self.importOperation cancel]; [self.photoProgress cancel];
+    [self.importOperation cancel]; [self.photoProgress cancel]; [self.importReadProgress cancel];
     self.importGeneration += 1; self.importing = YES; [self pauseCamera];
     UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeImage] asCopy:NO];
     picker.delegate = self; picker.allowsMultipleSelection = NO;
@@ -440,12 +442,10 @@
     if (!URL) { self.importing = NO; [self resumeCamera]; return; }
     NSUInteger generation = self.importGeneration;
     __weak typeof(self) weakSelf = self;
+    NSProgress *readProgress = [NSProgress progressWithTotalUnitCount:1];
+    self.importReadProgress = readProgress;
     self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) {
-        BOOL access = [URL startAccessingSecurityScopedResource];
-        NSNumber *size; [URL getResourceValue:&size forKey:NSURLFileSizeKey error:error];
-        NSData *data = (size.unsignedLongLongValue <= 50 * 1024 * 1024) ? [NSData dataWithContentsOfURL:URL options:NSDataReadingMappedIfSafe error:error] : nil;
-        if (access) [URL stopAccessingSecurityScopedResource];
-        return data;
+        return [QRBoundedImageFileReader readURL:URL isCancelled:^BOOL { return readProgress.cancelled; } error:error];
     } completion:^(NSArray<NSString *> *values, NSError *error) {
         [weakSelf finishImportedValues:values error:error generation:generation];
     }];
@@ -455,21 +455,35 @@
     [picker dismissViewControllerAnimated:YES completion:^{ if (!results.count) { self.importing = NO; [self resumeCamera]; } }];
     if (!results.count) return;
     NSUInteger generation = self.importGeneration;
-    NSItemProvider *provider = results.firstObject.itemProvider;
+    [self readPhotoProvider:results.firstObject.itemProvider generation:generation];
+}
+- (void)readPhotoProvider:(NSItemProvider *)provider generation:(NSUInteger)generation {
+    if (generation != self.importGeneration) return;
     NSString *type = nil;
     for (NSString *identifier in provider.registeredTypeIdentifiers) {
         if ([[UTType typeWithIdentifier:identifier] conformsToType:UTTypeImage]) { type = identifier; break; }
     }
-    if (!type) { [self decodeImportedData:nil generation:generation]; return; }
-    self.photoProgress = [provider loadDataRepresentationForTypeIdentifier:type completionHandler:^(NSData *data, NSError *error) {
-        [self decodeImportedData:data generation:generation];
+    if (!type) { [self decodeImportedData:nil error:nil generation:generation]; return; }
+    NSProgress *readProgress = [NSProgress progressWithTotalUnitCount:1];
+    self.importReadProgress = readProgress;
+    __weak typeof(self) weakSelf = self;
+    self.photoProgress = [provider loadFileRepresentationForTypeIdentifier:type completionHandler:^(NSURL *URL, NSError *providerError) {
+        // The provider owns this temporary URL only until the callback returns.
+        // Take the capped, cancellable snapshot here, before scheduling decode.
+        if (readProgress.cancelled) return;
+        NSError *readError = providerError;
+        NSData *data = URL && !providerError ? [QRBoundedImageFileReader readURL:URL isCancelled:^BOOL { return readProgress.cancelled; } error:&readError] : nil;
+        if (!readProgress.cancelled) [weakSelf decodeImportedData:data error:readError generation:generation];
     }];
 }
-- (void)decodeImportedData:(NSData *)data generation:(NSUInteger)generation {
+- (void)decodeImportedData:(NSData *)data error:(NSError *)importError generation:(NSUInteger)generation {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (generation != self.importGeneration) return;
         __weak typeof(self) weakSelf = self;
-        self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) { return data; } completion:^(NSArray<NSString *> *values, NSError *error) {
+        self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) {
+            if (error) *error = importError;
+            return data;
+        } completion:^(NSArray<NSString *> *values, NSError *error) {
             [weakSelf finishImportedValues:values error:error generation:generation];
         }];
     });

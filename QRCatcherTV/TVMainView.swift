@@ -131,15 +131,18 @@ private struct TVHistoryView: View {
                                 Text(item.createdAt, style: .date).font(.caption)
                             }.padding(.vertical, 10)
                         }.accessibilityIdentifier("tv.record")
-                        Button("Delete Record", role: .destructive) { deleting = item }
+                        // This row opens confirmation; deletion happens only in
+                        // the destructive dialog below. A destructive List row
+                        // renders pale pink on the focused white card on tvOS 27.
+                        Button("Delete Record") { deleting = item }
                             .accessibilityIdentifier("tv.deleteRecord")
                     }
                 }
-                if !history.items.isEmpty || history.error != nil { Button("Clear TV History", role: .destructive) { clear = true } }
+                if !history.items.isEmpty || history.error != nil { Button("Clear TV History") { clear = true } }
             }.navigationTitle("History")
                 .onExitCommand { dismiss() }
                 .confirmationDialog("Delete this history record?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-                    Button("Delete Record", role: .destructive) { if let deleting { history.delete(deleting) }; deleting = nil }
+                    Button("Delete Record", role: .destructive) { if let deleting { history.delete(deleting) }; deleting = nil }.accessibilityIdentifier("tv.confirmDelete")
                 }
                 .confirmationDialog("Clear history saved on this TV? Photos and phone history are not deleted.", isPresented: $clear) {
                     Button("Clear TV History", role: .destructive) { history.clearAfterConfirmation() }

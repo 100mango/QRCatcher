@@ -69,11 +69,7 @@ final class MacWorkspace: ObservableObject {
     func read(url: URL) {
         guard url.isFileURL else { error = QRL("Only local image files can be imported."); return }
         beginRead {
-            let access = url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
-            let bytes = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard bytes <= 50 * 1024 * 1024 else { throw ImageReadError.tooLarge }
-            return try Data(contentsOf: url, options: .mappedIfSafe)
+            return try QRBoundedPhotoFile.read(url)
         }
     }
 

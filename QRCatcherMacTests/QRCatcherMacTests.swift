@@ -25,15 +25,34 @@ final class QRCatcherMacTests: QRManagedStoreTestCase {
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         for _ in 0..<20 {
             host.layoutSubtreeIfNeeded()
-            if descendants(host).filter({ $0.accessibilityIdentifier()?.hasPrefix("mac.pane.") == true }).count == 2 { break }
+            if descendants(host).filter({ $0.accessibilityIdentifier().hasPrefix("mac.pane.") }).count == 2 { break }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
         for (identifier, label) in [("mac.pane.history", "Saved QR history"), ("mac.pane.result", "QR Result")] {
             let pane = try XCTUnwrap(descendants(host).first { $0.accessibilityIdentifier() == identifier })
-            XCTAssertTrue(pane.superview is NSSplitView)
+            var ancestor = pane.superview
+            while let current = ancestor, !(current is NSSplitView) { ancestor = current.superview }
+            XCTAssertTrue(ancestor is NSSplitView)
+            XCTAssertTrue(pane.isAccessibilityElement())
+            XCTAssertEqual(pane.accessibilityRole(), .group)
             XCTAssertEqual(pane.accessibilityLabel(), QRL(label))
             XCTAssertFalse((pane.accessibilityChildren() ?? []).isEmpty, "Semantic labels must preserve pane children")
         }
+    }
+
+    func testFilesFailureAndCancellationRetainSelectedPayloadAndHistory() async throws {
+        let folder = try directory(), history = makeHistory(url: folder.appendingPathComponent("history.sqlite"))
+        let workspace = MacWorkspace(history: history); workspace.accept(["keep this selection"])
+        let url = folder.appendingPathComponent("oversized.png")
+        FileManager.default.createFile(atPath: url.path, contents: Data())
+        let handle = try FileHandle(forWritingTo: url); try handle.truncate(atOffset: UInt64(QRBoundedPhotoFile.maximumBytes + 1)); try handle.close()
+        workspace.read(url: url)
+        for _ in 0..<100 where workspace.isReading { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(workspace.isReading); XCTAssertNotNil(workspace.error)
+        XCTAssertEqual(workspace.payload, "keep this selection"); XCTAssertEqual(history.items.map(\.payload), ["keep this selection"])
+        workspace.read(url: url); workspace.cancelRead()
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(workspace.payload, "keep this selection"); XCTAssertEqual(history.items.count, 1)
     }
 
     func testSafePayloadPolicy() {

@@ -33,6 +33,7 @@ jobs:
         xcodebuild -version | grep '27A266a'
         test "$(uname -m)" = arm64
         python3 Tests/Harness/test_ios_launcher.py
+        python3 Tests/Harness/test_watch_process.py
         python3 scripts/verify_portable_source.py
         python3 scripts/materialize_qr_fixtures.py
         python3 scripts/materialize_mac_icons.py
@@ -65,11 +66,12 @@ jobs:
         echo "Verified native slices: $ARCHITECTURES"
         [[ " $ARCHITECTURES " == *" arm64 "* && " $ARCHITECTURES " == *" x86_64 "* ]]
         xcrun lipo -info "$APP/Contents/MacOS/QRCatcherMac"
+        python3 scripts/verify_mac_release.py
         python3 - <<'PYCODE'
         import plistlib
         from pathlib import Path
         value=plistlib.loads(Path('build/MacRelease/Build/Products/Release/QRCatcherMac.app/Contents/Resources/PrivacyInfo.xcprivacy').read_bytes())
-        assert value['NSPrivacyAccessedAPITypes']==[] and value['NSPrivacyCollectedDataTypes']==[] and value['NSPrivacyTracking'] is False
+        assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryFileTimestamp','NSPrivacyAccessedAPITypeReasons':['C617.1','3B52.1']}] and value['NSPrivacyCollectedDataTypes']==[] and value['NSPrivacyTracking'] is False
         print('VERIFIED_MAC_MINIMAL_PRIVACY_MANIFEST',flush=True)
         PYCODE
         ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")
@@ -130,11 +132,12 @@ jobs:
       if: ${{ matrix.scope == 'visionos' && !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' }}
       timeout-minutes: 3
       run: |
+        python3 scripts/stage_owned_import_fixture.py "$VISION_SIMULATOR_ID"
         python3 -u scripts/run_bounded.py 150 xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
     - name: Execute native Vision system-picker UI flow
       if: ${{ (matrix.scope == 'visionos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' && steps.vision_photo_seed.outcome
         == 'success') }}
-      timeout-minutes: 12
+      timeout-minutes: 16
       run: |
         set -o pipefail
         python3 -u scripts/launch_optional_simulator.py "$VISION_SIMULATOR_ID"
@@ -186,7 +189,7 @@ jobs:
         xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Debug -derivedDataPath build/WatchTests -destination 'generic/platform=watchOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee watch-test-build.log
     - name: Execute actual Watch local decode history and native UI
       if: ${{ (matrix.scope == 'watchos') && (!cancelled() && steps.watch_test_build.outcome == 'success') }}
-      timeout-minutes: 18
+      timeout-minutes: 22
       run: python3 -u scripts/run_watch_platform_tests.py
     - name: Stop Watch simulator before phone and iPad matrix
       if: ${{ (matrix.scope == 'watchos') && (always() && env.WATCH_SIMULATOR_ID != '') }}
@@ -218,8 +221,12 @@ jobs:
         python3 - <<'PYCODE'
         import plistlib
         from pathlib import Path
+        import subprocess
+        assert ' _fstat' in subprocess.check_output(['xcrun','nm','-u','build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/QRCatcher'],text=True)
+        info=plistlib.loads(Path('build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/Info.plist').read_bytes())
+        assert 'UIFileSharingEnabled' not in info and 'LSSupportsOpeningDocumentsInPlace' not in info
         value=plistlib.loads(Path('build/iOS/Build/Products/Release-iphoneos/QRCatcher.app/PrivacyInfo.xcprivacy').read_bytes())
-        assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryFileTimestamp','NSPrivacyAccessedAPITypeReasons':['C617.1']}]
+        assert value['NSPrivacyAccessedAPITypes']==[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryFileTimestamp','NSPrivacyAccessedAPITypeReasons':['C617.1','3B52.1']}]
         assert value['NSPrivacyCollectedDataTypes']==[] and value['NSPrivacyTracking'] is False
         print('VERIFIED_IOS_APP_CONTAINER_REQUEST_METADATA_REASON',flush=True)
         PYCODE
@@ -246,11 +253,11 @@ jobs:
         xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
     - name: Run large-phone UI regression
       if: ${{ (matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
-      timeout-minutes: 10
+      timeout-minutes: 20
       run: bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
     - name: Run compact-phone UI regression
       if: ${{ (matrix.scope == 'iphone_se3') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}
-      timeout-minutes: 12
+      timeout-minutes: 22
       run: bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests
     - name: Run native 13-inch iPad workflows
       if: ${{ (matrix.scope == 'ipad_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success') }}

@@ -8,7 +8,7 @@ from pathlib import Path
 udid,log=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
 runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionUITests-Runner.app/Info.plist')
 runner_id=plistlib.loads(runner.read_bytes())['CFBundleIdentifier']
-seen=set();report=[];deadline=time.monotonic()+660
+seen=set();report=[];deadline=time.monotonic()+900
 while time.monotonic()<deadline:
  text=log.read_text(errors='replace') if log.exists() else ''
  for request_id in re.findall(r'QRCATCHER_VISION_CAPTURE_REQUEST:([A-F0-9-]{36})',text):
@@ -20,7 +20,7 @@ while time.monotonic()<deadline:
    request=container/'tmp'/('QRCatcher-capture-'+request_id+'.json');ack=request.with_suffix('.ack')
    assert not request.is_symlink() and request.stat().st_size<1024
    descriptor=json.loads(request.read_text());name=descriptor['name']
-   assert descriptor['id']==request_id and name in ['vision-imported-qr','vision-reopened-history','vision-exported-qr','vision-exported-history','vision-failure']
+   assert descriptor['id']==request_id and name in ['vision-imported-qr','vision-reopened-history','vision-exported-qr','vision-exported-history','vision-files-import-reopened','vision-chinese-empty','vision-chinese-result','vision-chinese-policy','vision-failure']
    if name in ['vision-exported-qr','vision-exported-history']:
     test_store=descriptor['test_store'];assert str(uuid.UUID(test_store)).upper()==test_store
     app_container=Path(subprocess.check_output(['xcrun','simctl','get_app_container',udid,'100mango.QRCatcher','data'],text=True,timeout=20).strip())
