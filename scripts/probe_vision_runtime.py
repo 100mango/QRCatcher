@@ -25,10 +25,11 @@ try:
  (out/'boot.log').write_text((boot+'\n'+status)[-512*1024:])
  report.update(boot_exit=boot_code,bootstatus_exit=status_code)
  if status_code!=0:raise RuntimeError('Installed visionOS simulator did not finish booting within the supported bounded route')
- service_code,services=run(['xcrun','simctl','spawn',device['udid'],'launchctl','print','system'],30)
- (out/'services-tail.log').write_text(services[-128*1024:]);report['services_exit']=service_code
- if service_code!=0:raise RuntimeError('Booted simulator did not respond to its system service manager')
+ # bootstatus establishes boot completion only. A whole launchctl domain
+ # dump previously timed out despite boot_exit=bootstatus_exit=0; it is not
+ # an application-readiness test. The next bounded XCTest install/launch is.
  report['ready']=True
+ report['readiness_scope']='Boot completed; actual app install/launch/XCTest is the next required gate'
 except Exception as error:report['environment_observation']=str(error)
 finally:
  (out/'runtime.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2),flush=True)

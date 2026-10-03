@@ -85,3 +85,5 @@
 "History could not be loaded" = "无法载入历史记录";
 "History unavailable" = "历史记录暂不可用";
 "The image could not be read." = "无法读取这张图片。";
+
+"This image is too large or has invalid dimensions. Choose a smaller image." = "图片过大或尺寸无效，请选择较小的图片。";

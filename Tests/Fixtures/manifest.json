@@ -32,5 +32,25 @@
       "https://example.com/qrcatcher?source=golden",
       "QRCatcher 你好 🌈 123"
     ]
+  },
+  {
+    "name": "oversized-edge.png",
+    "sha256": "7c5fad423c8d22b93c654e914f44ca888023f594247a4467ea5699dba1b141ed",
+    "payloads": [],
+    "source_dimensions": [
+      100000,
+      1
+    ],
+    "expected_error": "source_dimensions_limit"
+  },
+  {
+    "name": "oversized-area.png",
+    "sha256": "1840b0493101b6e8d6306c2e33ccc0cb5d9063ee155f753bc5c46ac73bc586fb",
+    "payloads": [],
+    "source_dimensions": [
+      20000,
+      6000
+    ],
+    "expected_error": "source_dimensions_limit"
   }
 ]

@@ -5,11 +5,11 @@ import UniformTypeIdentifiers
 @testable import QRCatcherMac
 
 @MainActor
-final class QRCatcherMacTests: XCTestCase {
+final class QRCatcherMacTests: QRManagedStoreTestCase {
     private func directory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        cleanupLater(url)
         return url
     }
 
@@ -47,6 +47,36 @@ final class QRCatcherMacTests: XCTestCase {
         XCTAssertThrowsError(try QRImageCodec.decode(data: Data(count: 50 * 1024 * 1024 + 1)))
     }
 
+    func testEncodedClipboardPathRejectsOversizedSourceBeforeRasterExpansion() async throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.clearContents(); pasteboard.releaseGlobally() }
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let workspace = MacWorkspace(history: history)
+        workspace.accept(["Keep this result"])
+        for name in ["oversized-edge", "oversized-area"] {
+            let data = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "png")))
+            XCTAssertLessThan(data.count, 100 * 1024, "This fixture is small encoded data with excessive source dimensions")
+            XCTAssertThrowsError(try QRImageCodec.decode(data: data)) { error in
+                XCTAssertEqual((error as NSError).domain, "QRCatcher.Image")
+                XCTAssertEqual((error as NSError).code, 3, "Metadata must reject the dimensions before thumbnail creation")
+            }
+            pasteboard.clearContents(); XCTAssertTrue(pasteboard.setData(data, forType: .png))
+            workspace.error = nil
+            workspace.pasteImage(from: pasteboard)
+            XCTAssertTrue(workspace.isReading, "The explicit paste must enqueue encoded bytes, not expand NSImage on the main actor")
+            for _ in 0..<50 { if !workspace.isReading { break }; try await Task.sleep(nanoseconds: 100_000_000) }
+            XCTAssertNotNil(workspace.error)
+            XCTAssertEqual(workspace.payload, "Keep this result")
+            XCTAssertEqual(history.items.count, 1)
+        }
+        let valid = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "unicode", withExtension: "png")))
+        pasteboard.clearContents(); XCTAssertTrue(pasteboard.setData(valid, forType: .png))
+        workspace.pasteImage(from: pasteboard)
+        for _ in 0..<50 { if !workspace.isReading { break }; try await Task.sleep(nanoseconds: 100_000_000) }
+        XCTAssertEqual(workspace.payload, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(history.items.count, 2)
+    }
+
     func testLegacyModelAndHistoryPreserveNullDateDuplicatesAndReopen() throws {
         let url = try directory().appendingPathComponent("coredata.sqlite")
         let model = QRHistoryStore.model()
@@ -62,7 +92,7 @@ final class QRCatcherMacTests: XCTestCase {
         }
         _ = NSEntityDescription.insertNewObject(forEntityName: "URLEntity", into: context)
         try context.save(); context.reset(); try coordinator.remove(persistent)
-        var history: MacHistory? = MacHistory(url: url)
+        var history: MacHistory? = makeHistory(url: url)
         XCTAssertNil(history?.error)
         XCTAssertEqual(history?.items.count, 4)
         XCTAssertEqual(history?.items.filter { $0.payload == "legacy duplicate" }.count, 2)
@@ -75,19 +105,19 @@ final class QRCatcherMacTests: XCTestCase {
         XCTAssertEqual(rows.filter { ($0["payload"] as? String) == "legacy duplicate" }.count, 2)
         XCTAssertEqual(rows.filter { $0["payload"] is NSNull }.count, 1)
         XCTAssertEqual(rows.compactMap { $0["createdAtUnixSeconds"] as? Double }.suffix(3), [1431993600,1431993500,0])
-        history = nil
-        let reopened = MacHistory(url: url)
+        try history?.close(); history = nil
+        let reopened = makeHistory(url: url)
         XCTAssertEqual(reopened.items.count, 5)
         let new = try XCTUnwrap(reopened.items.first(where: { $0.payload == "new value" }))
         reopened.delete(new)
-        XCTAssertEqual(MacHistory(url: url).items.count, 4)
+        XCTAssertEqual(makeHistory(url: url).items.count, 4)
     }
 
     func testUnreadableStoreRemainsIntactAndCopyStillWorks() throws {
         let url = try directory().appendingPathComponent("coredata.sqlite")
         let data = Data("not a sqlite database - preserve me".utf8)
         try data.write(to: url)
-        let history = MacHistory(url: url)
+        let history = makeHistory(url: url)
         XCTAssertNotNil(history.error)
         XCTAssertThrowsError(try history.exportData())
         let workspace = MacWorkspace(history: history)
@@ -102,7 +132,7 @@ final class QRCatcherMacTests: XCTestCase {
     }
 
     func testCancelledDecodeCannotReplaceSelection() async throws {
-        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history)
         let data = try XCTUnwrap(QRImageCodec.png(payload: "stale"))
         workspace.read(data: data)
@@ -115,7 +145,7 @@ final class QRCatcherMacTests: XCTestCase {
     }
 
     func testLatePhotoProviderCannotReplaceASelectedResult() async throws {
-        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history)
         let data = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "unicode", withExtension: "png")))
         let stale = workspace.beginExternalLoad()
@@ -132,7 +162,7 @@ final class QRCatcherMacTests: XCTestCase {
     }
 
     func testImageDropUsesRealPixelsAndRejectsLateDelivery() async throws {
-        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history)
         let data = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "ascii", withExtension: "png")))
         let provider = NSItemProvider()
@@ -162,7 +192,7 @@ final class QRCatcherMacTests: XCTestCase {
         let entered = expectation(description: "First heavy operation started")
         let probe = DecodeConcurrencyProbe(started: entered)
         let decoder = QRDecodeWorker(operation: { data in try probe.process(data) })
-        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let history = makeHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
         let workspace = MacWorkspace(history: history, decoder: decoder)
         workspace.read(data: Data("first".utf8))
         await fulfillment(of: [entered], timeout: 5)
@@ -217,7 +247,7 @@ private final class DecodeConcurrencyProbe: @unchecked Sendable {
 }
 
 @MainActor
-final class QRCatcherHistoryLocationTests: XCTestCase {
+final class QRCatcherHistoryLocationTests: QRManagedStoreTestCase {
     private func fixture() throws -> (root: URL, docs: URL, modern: URL, locations: QRHistoryLocations) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("Library/Containers/100mango.QRCatcher/Data")
@@ -225,7 +255,7 @@ final class QRCatcherHistoryLocationTests: XCTestCase {
         let folder = root.appendingPathComponent("Library/Application Support/100mango.QRCatcher", isDirectory: true)
         try FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: root.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()) }
+        cleanupLater(root.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent())
         let modern = folder.appendingPathComponent("coredata.sqlite")
         let owned = try XCTUnwrap(QRHistoryLocations.validatedDocuments(home: root, documents: docs, sandboxed: true))
         return (root, docs, modern, QRHistoryLocations(nativeURL: modern, previousURL: owned.appendingPathComponent("coredata.sqlite"), selectionURL: folder.appendingPathComponent("history-location.json")))
@@ -245,7 +275,7 @@ final class QRCatcherHistoryLocationTests: XCTestCase {
     }
     func testSameOwnedContainerSelectsOriginalStoreWithSidecarsAndValuesIntact() throws {
         let f = try fixture(); let legacy = try XCTUnwrap(f.locations.previousURL)
-        let old = QRHistoryStore(url: legacy)
+        let old = makeLegacyStore(url: legacy)
         let context = try XCTUnwrap(old.context)
         for (text, seconds) in [("duplicate", 1431993600.0), ("duplicate",1431993500.0), ("text 你好",0.0)] {
             let row = NSEntityDescription.insertNewObject(forEntityName: "URLEntity", into: context) as! URLEntity
@@ -257,18 +287,18 @@ final class QRCatcherHistoryLocationTests: XCTestCase {
         XCTAssertEqual(try f.locations.resolve(), legacy)
         XCTAssertEqual(files(legacy), before, "Location selection must not copy, rename, checkpoint or delete store files")
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
-        let opened = MacHistory(url: try f.locations.resolve())
+        let opened = makeHistory(url: try f.locations.resolve())
         XCTAssertNil(opened.error)
         XCTAssertEqual(opened.items.map(\.payload), ["duplicate", "duplicate", "text 你好"])
         XCTAssertEqual(opened.items.compactMap { $0.createdAt?.timeIntervalSince1970 }, [1431993600,1431993500,0])
         XCTAssertTrue(opened.record("new native scan"))
-        XCTAssertEqual(MacHistory(url: legacy).items.count, 4)
+        XCTAssertEqual(makeHistory(url: legacy).items.count, 4)
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))
     }
     func testBothStoresRequireExplicitChoiceAndNeverOverwriteEither() throws {
         let f = try fixture(); let previous = try XCTUnwrap(f.locations.previousURL)
-        let old = QRHistoryStore(url: previous); try old.record(payload: "previous payload")
-        let new = QRHistoryStore(url: f.modern); try new.record(payload: "native payload")
+        let old = makeLegacyStore(url: previous); try old.record(payload: "previous payload")
+        let new = makeLegacyStore(url: f.modern); try new.record(payload: "native payload")
         let a = files(previous), b = files(f.modern)
         XCTAssertThrowsError(try f.locations.resolve()) { error in
             guard let locationError = error as? QRHistoryLocationError else { return XCTFail("Expected a location error") }
@@ -300,7 +330,7 @@ final class QRCatcherHistoryLocationTests: XCTestCase {
         let f = try fixture(); let previous = try XCTUnwrap(f.locations.previousURL)
         let original = Data("unreadable original store".utf8); try original.write(to: previous)
         XCTAssertEqual(try f.locations.resolve(), previous)
-        let history = MacHistory(url: previous)
+        let history = makeHistory(url: previous)
         XCTAssertNotNil(history.error); XCTAssertFalse(history.record("cannot save"))
         XCTAssertEqual(try Data(contentsOf: previous), original)
         XCTAssertFalse(FileManager.default.fileExists(atPath: f.modern.path))

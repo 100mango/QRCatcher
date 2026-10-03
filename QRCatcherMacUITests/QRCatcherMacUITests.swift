@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 import CryptoKit
+import Security
 
 @MainActor
 final class QRCatcherMacUITests: XCTestCase {
@@ -14,7 +15,12 @@ final class QRCatcherMacUITests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         app = XCUIApplication(url: expectedApplicationURL)
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path
+        if isSandboxedProduct {
+            // The actual sandbox app chooses its OS-provided Application Support
+            // container. No absolute /tmp override or broad file grant is used.
+            app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
+        } else { app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path }
+        dismissObservedRealityWidgetsCrash()
         app.launch(); verifyRunningApplication()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
     }
@@ -29,7 +35,32 @@ final class QRCatcherMacUITests: XCTestCase {
         return runner.deletingLastPathComponent().appendingPathComponent("QRCatcherMac.app")
     }
 
+    private var isSandboxedProduct: Bool {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(expectedApplicationURL as CFURL, [], &code) == errSecSuccess, let code else { return false }
+        var information: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+              let dictionary = information as? [String: Any], let entitlements = dictionary[kSecCodeInfoEntitlementsDict as String] as? [String: Any] else { return false }
+        return entitlements["com.apple.security.app-sandbox"] as? Bool == true
+    }
+
+    private func dismissObservedRealityWidgetsCrash() {
+        // Exact non-permission crash notice observed after the Vision simulator
+        // boot in run 37120587065. Never choose Report or handle other alerts.
+        let notifications = XCUIApplication(bundleIdentifier: "com.apple.UserNotificationCenter")
+        let dialog = notifications.dialogs.firstMatch
+        let title = dialog.staticTexts.matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "RealityWidgets quit unexpectedly", "RealityWidgets quit unexpectedly")).firstMatch
+        guard title.exists else { return }
+        print("OBSERVED_REALITY_WIDGETS_CRASH_NOTICE:", dialog.debugDescription)
+        let ignore = dialog.buttons["Ignore"]
+        guard ignore.exists else { XCTFail("Known crash notice has no accessible Ignore button; leaving it untouched"); return }
+        ignore.click()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: title)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+    }
+
     private func verifyRunningApplication() {
+        dismissObservedRealityWidgetsCrash()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
         let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "100mango.QRCatcher").filter { !$0.isTerminated }
         XCTAssertEqual(candidates.count, 1, "Exactly one target process must be running")
@@ -42,13 +73,14 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertFalse(bytes.isEmpty)
         let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
         let provenance: [String: Any] = ["pid": running.processIdentifier, "actual_bundle": actual.path, "actual_executable": executable.path,
-                                        "expected_bundle": expected.path, "executable_sha256": hash]
+                                        "expected_bundle": expected.path, "executable_sha256": hash, "product_app_sandbox": isSandboxedProduct]
         if let data = try? JSONSerialization.data(withJSONObject: provenance, options: .sortedKeys) {
             print("RUNNING_APP_PROVENANCE:", String(decoding: data, as: UTF8.self))
         }
     }
 
     private func fileDialog(path: String, button: String) {
+        dismissObservedRealityWidgetsCrash()
         let url = URL(fileURLWithPath: path)
         if button == "Save" {
             let name = app.dialogs.textFields["saveAsNameTextField"]

@@ -4,7 +4,7 @@
 
 The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. The native iPad split workflow is implemented in this branch and is under validation. Vision has an initial import-first executable slice awaiting compiler/runtime proof. Watch and TV remain staged and are not implemented.
 
-Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. All builds here are unsigned and no Store records, signing resources or persistent capabilities are created.
+Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. Release verification remains unsigned. A separate local ad-hoc Debug sandbox test is described below; no Store records, Apple-account signing resources or registered persistent capabilities are created.
 
 ## Product workflow
 
@@ -64,3 +64,32 @@ reported separately from compilation or app-test failures. Native Vision pixels,
 Chinese localization, icon packaging and export UI verification remain gates
 until recorded successful evidence exists. No simulator/runtime downloads or
 paid runner fallback are performed.
+
+
+## App Sandbox and import hardening gates
+
+The native Mac target now includes minimal source entitlements for App Sandbox,
+user-selected file read/write, and its existing camera feature. The independent
+`QRCatcherMacSandbox` scheme uses an ephemeral ad-hoc Debug signature on the same
+standard cloud runner. It does not create certificates, profiles, App IDs, teams,
+keychain items, accounts, App Groups or system security exceptions. The pipeline
+verifies the actual signature and entitlements before its own hosted container
+persistence/legacy selection/denied-write tests and the real Open/Save/paste UI
+suite. Any normal Xcode-injected `get-task-allow` is Debug-only test support; this
+is not a distribution signature or evidence of prior App Store container handover.
+No network, general Documents/Pictures or Photos-library entitlement is granted.
+A genuine Photos-picker import from a disposable Mac Photos library is a separate
+remaining gate; cancellation or a file-panel import does not substitute for it.
+
+Paste reads encoded PNG/TIFF bytes only after the person's explicit action.
+Source metadata is checked without caching before ImageIO expands raster data:
+50 MiB encoded input, 32,768 pixels per edge, 100 million source pixels, and a
+4,096-pixel normalized decode thumbnail. Tiny valid 1-bit PNG fixtures exercise
+both the edge and total-pixel limits through the actual clipboard path, preserving
+the prior result/history on failure. Existing normal golden QR fixtures continue
+to test UIKit/shared-codec equivalence.
+
+Final combined validation must re-enable `RUN_EXTENDED_IOS_MATRIX` and pass the
+same head on Pro Max, SE3, iPad Pro 13-inch and iPad mini. Focused repair runs do
+not fulfill those final gates. The genuine iOS 15.5 launch and physical capture,
+Watch pairing, TV library availability and Vision interaction gates remain distinct.

@@ -30,3 +30,5 @@
 "No QR code was found. Try a clearer image." = "未找到二维码，请尝试更清晰的图片。";
 "This image could not be read. Choose an image smaller than 50 MB." = "无法读取此图片，请选择小于 50 MB 的图片。";
 "This result could not be exported as a QR image." = "无法将此结果导出为二维码图片。";
+
+"This image is too large or has invalid dimensions. Choose a smaller image." = "图片过大或尺寸无效，请选择较小的图片。";

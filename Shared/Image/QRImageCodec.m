@@ -28,7 +28,19 @@
         if (error) *error = [NSError errorWithDomain:@"QRCatcher.Image" code:1 userInfo:@{NSLocalizedDescriptionKey:NSLocalizedString(@"Choose an image smaller than 50 MB.", nil)}];
         return nil;
     }
-    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, (__bridge CFDictionaryRef)@{(id)kCGImageSourceShouldCache:@NO});
+    if (source) {
+        // ImageIO thumbnail size bounds the output, but some formats may still
+        // expand source pixels internally. Inspect uncached metadata first.
+        NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, 0, (__bridge CFDictionaryRef)@{(id)kCGImageSourceShouldCache:@NO}));
+        unsigned long long width = [properties[(id)kCGImagePropertyPixelWidth] unsignedLongLongValue];
+        unsigned long long height = [properties[(id)kCGImagePropertyPixelHeight] unsignedLongLongValue];
+        if (!width || !height || width > 32768 || height > 32768 || width > 100000000 / height) {
+            CFRelease(source);
+            if (error) *error = [NSError errorWithDomain:@"QRCatcher.Image" code:3 userInfo:@{NSLocalizedDescriptionKey:NSLocalizedString(@"This image is too large or has invalid dimensions. Choose a smaller image.", nil)}];
+            return nil;
+        }
+    }
     CGImageRef image = source ? CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)@{(id)kCGImageSourceCreateThumbnailFromImageAlways:@YES, (id)kCGImageSourceCreateThumbnailWithTransform:@YES, (id)kCGImageSourceThumbnailMaxPixelSize:@4096, (id)kCGImageSourceShouldCacheImmediately:@YES}) : nil;
     if (source) CFRelease(source);
     if (!image) {

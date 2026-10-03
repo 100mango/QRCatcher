@@ -101,11 +101,18 @@ final class MacWorkspace: ObservableObject {
         status = saved ? (nonempty.count == 1 ? QRL("QR code read and saved on this Mac") : QRF("%ld QR codes read. Select any result in History.", nonempty.count)) : QRL("QR code read. Copy or export it now; history could not be saved.")
     }
 
-    func pasteImage() {
-        guard let image = NSImage(pasteboard: .general), let data = image.tiffRepresentation else {
+    func pasteImage() { pasteImage(from: .general) }
+
+    func pasteImage(from pasteboard: NSPasteboard) {
+        // This method is reached only by the explicit Paste Image action. Keep
+        // encoded bytes intact; NSImage/TIFF re-encoding here would eagerly
+        // expand an untrusted image on the main actor before the serial bounds.
+        guard let type = pasteboard.availableType(from: [.png, .tiff]),
+              let data = pasteboard.data(forType: type) else {
             error = QRL("The clipboard does not contain an image. Copy an image, then choose Paste Image.")
             return
         }
+        guard data.count <= 50 * 1024 * 1024 else { error = ImageReadError.tooLarge.localizedDescription; return }
         read(data: data)
     }
 

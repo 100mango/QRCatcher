@@ -1,47 +1,51 @@
 #!/usr/bin/env python3
-"""Bounded native XCTest evidence, with exact bytes and runner-side SHA-256.
-Runs after Mac XCTest, before unrelated platform stages. No large xcresult upload.
-"""
+"""Bounded native XCTest evidence. No app binaries or full xcresult upload."""
 import hashlib,json,os,pathlib,subprocess
-result='MacTestResults.xcresult'
-evidence=pathlib.Path('build/mac-evidence');evidence.mkdir(parents=True,exist_ok=True)
+out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
 icon=pathlib.Path('build/icon-verification/mac-bundled-icon.png')
 if icon.exists():
- data=icon.read_bytes();assert len(data)<=600*1024;(evidence/'mac-bundled-icon.png').write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
-(evidence/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
-log=pathlib.Path('mac-test.log')
-if log.exists():(evidence/'mac-test-tail.log').write_bytes(log.read_bytes()[-1024*1024:])
-if not pathlib.Path(result,'Info.plist').is_file():
- print('No Mac test result bundle was produced',flush=True)
- raise SystemExit(0)
-summary=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
-(evidence/'test-summary.json').write_text(summary.stdout if summary.returncode==0 else json.dumps({'summary_error':summary.stderr}))
-destination=pathlib.Path('build/mac-screenshots');destination.mkdir(parents=True,exist_ok=True)
-subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(destination)],check=True)
+ data=icon.read_bytes();assert len(data)<=600*1024;(out/icon.name).write_bytes(data);provenance['bundled_icon_sha256']=hashlib.sha256(data).hexdigest()
+for name in ['mac-test.log','mac-sandbox-test.log','mac-sandbox-build.log']:
+ path=pathlib.Path(name)
+ if path.exists():(out/name.replace('.log','-tail.log')).write_bytes(path.read_bytes()[-512*1024:])
+for name in ['mac-sandbox-entitlements.plist','mac-sandbox-signature.txt']:
+ path=pathlib.Path('build')/name
+ if path.exists():
+  data=path.read_bytes();assert len(data)<16384;(out/name).write_bytes(data)
+(out/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
-  for v in value.values():yield from records(v)
+  for child in value.values():yield from records(child)
  elif isinstance(value,list):
-  for v in value:yield from records(v)
-manifest=json.loads((destination/'manifest.json').read_text());screenshots=[]
-for item in records(manifest):
- label=' '.join(v for v in item.values() if isinstance(v,str))
- name=next((n for n in ['mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure'] if n in label),None)
- if not name:continue
- if len(screenshots)>=8:
-  print('Additional named screenshot omitted at the eight-image evidence limit:',name,flush=True);continue
- path=(destination/item['exportedFileName']).resolve();assert path.is_relative_to(destination.resolve())
- data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
- name=f'{len(screenshots)+1}-{name}.jpg';(evidence/name).write_bytes(data)
- entry={'name':name,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};screenshots.append(entry);print(json.dumps(entry),flush=True)
-(evidence/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
-assert sum(p.stat().st_size for p in evidence.iterdir())<=6*1024*1024,'Total evidence budget exceeded'
-print('Exported screenshots:',len(screenshots),flush=True)
-if not screenshots:print(json.dumps(manifest)[:12000],flush=True)
-
-if summary.returncode == 0:
- warnings=json.loads(summary.stdout).get('runtimeWarnings',[])
- if any('Publishing changes from within view updates' in x.get('message','') for x in warnings):
-  raise SystemExit('SwiftUI re-entrant publication warning is a release blocker')
+  for child in value:yield from records(child)
+screenshots=[];warnings=[]
+names=['mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
+# Prefer the stricter sandbox's actual pixels; keep both full structured summaries.
+for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.xcresult','native')]:
+ if not pathlib.Path(result,'Info.plist').is_file():
+  print(label,'No test result bundle produced',flush=True);continue
+ summary=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
+ (out/('sandbox-test-summary.json' if label=='sandbox' else 'test-summary.json')).write_text(summary.stdout if summary.returncode==0 else json.dumps({'summary_error':summary.stderr}))
+ if summary.returncode==0:warnings.extend(json.loads(summary.stdout).get('runtimeWarnings',[]))
+ folder=pathlib.Path('build/mac-screenshots')/label;folder.mkdir(parents=True,exist_ok=True)
+ subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
+ for entry in records(json.loads((folder/'manifest.json').read_text())):
+  text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
+  if not name:continue
+  path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
+  data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
+  if len(screenshots)>=8 or sum(p.stat().st_size for p in out.iterdir())+len(data)>6*1024*1024-256*1024:
+   print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
+  filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
+  item={'name':filename,'scope':label,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()};screenshots.append(item);print(json.dumps(item),flush=True)
+(out/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
+size=sum(p.stat().st_size for p in out.iterdir());assert size<=6*1024*1024
+print(json.dumps({'mac_evidence_bytes':size,'exported_screenshots':len(screenshots)}),flush=True)
+if any('Publishing changes from within view updates' in item.get('message','') for item in warnings):
+ raise SystemExit('SwiftUI re-entrant publication warning is a release blocker')
+for name in ['mac-test.log','mac-sandbox-test.log']:
+ path=pathlib.Path(name)
+ if path.exists() and 'vnode unlinked' in path.read_text(errors='replace'):
+  raise SystemExit('SQLite files were unlinked while open; close fixture stores before cleanup')

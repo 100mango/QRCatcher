@@ -111,7 +111,7 @@
             [UITraitCollection traitCollectionWithPreferredContentSizeCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]
         ]];
         [host setOverrideTraitCollection:traits forChildViewController:scanner];
-        [traits performAsCurrent:^{
+        [traits performAsCurrentTraitCollection:^{
             [scanner loadViewIfNeeded];
             scanner.view.frame = host.view.bounds;
             [host.view addSubview:scanner.view]; [scanner didMoveToParentViewController:host];

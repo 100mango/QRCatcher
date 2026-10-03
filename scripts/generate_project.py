@@ -64,7 +64,7 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
 # Native macOS executable and supported hosted XCTest/UI routes, independent of the iOS target.
 macID=uid('mac')
-for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing')]:
+for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcherMacTests','bundle.unit-test'),('macui','QRCatcherMacUITests','bundle.ui-testing'),('macsandboxunit','QRCatcherMacSandboxTests','bundle.unit-test')]:
     app=key=='mac';ext='app' if app else 'xctest'
     product=add(key+'product','PBXFileReference',explicitFileType='wrapper.application' if app else 'wrapper.cfbundle',includeInIndex=0,path=name+'.'+ext,sourceTree='BUILT_PRODUCTS_DIR');products.append(product)
     files=[];src=[];res=[];deps=[]
@@ -72,7 +72,7 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
         r=file(str(path.relative_to(root)),'sourcecode.swift');files.append(r);src.append(build(r))
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher' if app else '100mango.'+name,'SDKROOT':'macosx','SUPPORTED_PLATFORMS':'macosx','MACOSX_DEPLOYMENT_TARGET':'13.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','HEADER_SEARCH_PATHS':['$(SRCROOT)/QRCatcher','$(SRCROOT)/Shared/Domain','$(SRCROOT)/Shared/Image'],'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks','CODE_SIGN_STYLE':'Automatic','ENABLE_HARDENED_RUNTIME':'NO'}
     if app:
-        common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR='all',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(INFOPLIST_FILE='QRCatcherMac/Info.plist',CODE_SIGN_ENTITLEMENTS='QRCatcherMac/QRCatcherMac.entitlements',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR='all',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherMac/QRCatcherMac-Bridging-Header.h',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         src+=sharedSources+nativeSharedSources+[build(model)];files+=sharedFiles+nativeSharedFiles+[model]
         for path in ['QRCatcher/QRHistoryStore.m','QRCatcher/URLEntity.m']:
             r=file(path,'sourcecode.c.objc');files.append(r);src.append(build(r))
@@ -83,7 +83,8 @@ for key,name,kind in [('mac','QRCatcherMac','application'),('macunit','QRCatcher
             variant=add('macvariant:'+localizedName,'PBXVariantGroup',children=[localized],name=localizedName,sourceTree='<group>');files.append(variant);res.append(build(variant))
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES',MACOSX_DEPLOYMENT_TARGET='14.0')
-        if key=='macunit':
+        if key in ['macunit','macsandboxunit']:
+            r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherMac.app/Contents/MacOS/QRCatcherMac',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
@@ -112,6 +113,7 @@ for key,name,kind in [('vision','QRCatcherVision','application'),('visionunit','
     else:
         common.update(GENERATE_INFOPLIST_FILE='YES')
         if key=='visionunit':
+            r=file('Tests/Support/QRManagedStoreTestCase.swift','sourcecode.swift');files.append(r);src.append(build(r))
             common.update(TEST_HOST='$(BUILT_PRODUCTS_DIR)/QRCatcherVision.app/QRCatcherVision',BUNDLE_LOADER='$(TEST_HOST)')
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
@@ -152,3 +154,7 @@ macScheme.write_text(scheme.read_text().replace(uid('app'),uid('mac')).replace(u
 
 visionScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherVision.xcscheme'
 visionScheme.write_text(scheme.read_text().replace(uid('app'),uid('vision')).replace(uid('unit'),uid('visionunit')).replace(uid('ui'),uid('visionui')).replace('QRCatcherTests','QRCatcherVisionTests').replace('QRCatcherUITests','QRCatcherVisionUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherVision.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherVision"'))
+
+# The sandbox gate uses a separate test bundle and a separate derived-data path.
+sandboxScheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMacSandbox.xcscheme'
+sandboxScheme.write_text(macScheme.read_text().replace(uid('macunit'),uid('macsandboxunit')).replace('QRCatcherMacTests','QRCatcherMacSandboxTests'))

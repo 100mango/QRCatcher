@@ -121,6 +121,20 @@ final class MacHistory: ObservableObject {
         }
     }
 
+    /// Disconnect cleanly before a fixture directory or temporary history is
+    /// removed. Pending changes must save successfully; closing never deletes data.
+    func close() throws {
+        if let context = store?.context {
+            if context.hasChanges { try context.save() }
+            context.reset()
+            if let coordinator = context.persistentStoreCoordinator {
+                for persistent in coordinator.persistentStores { try coordinator.remove(persistent) }
+            }
+            context.persistentStoreCoordinator = nil
+        }
+        store = nil
+    }
+
     func exportData() throws -> Data {
         guard error == nil else {
             throw NSError(domain: "QRCatcher.History", code: 2, userInfo: [NSLocalizedDescriptionKey: QRL("History is unavailable. Export the current QR result instead; your saved data has not been erased.")])
