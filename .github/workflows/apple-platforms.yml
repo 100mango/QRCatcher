@@ -57,7 +57,20 @@ jobs:
         timeout-minutes: 20
         run: |
           set -o pipefail
-          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
+          xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcherMac -configuration Debug -derivedDataPath build/MacTests -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-test.log
+      - name: Export bounded native Mac screenshots
+        if: always()
+        timeout-minutes: 3
+        run: python3 -u scripts/export_mac_screenshots.py
+      - name: Retain small native Mac evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qrcatcher-native-mac-evidence
+          path: build/mac-evidence
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
       - name: Verify iOS release and unchanged store model
         if: ${{ !cancelled() }}
         timeout-minutes: 8
@@ -78,10 +91,6 @@ jobs:
           xcrun simctl boot "$SIMULATOR_ID" || true
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcodebuild test -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO
-      - name: Export bounded native Mac screenshots
-        if: always()
-        timeout-minutes: 3
-        run: python3 -u scripts/export_mac_screenshots.py
       - name: Summarize executed evidence
         if: always()
         timeout-minutes: 3

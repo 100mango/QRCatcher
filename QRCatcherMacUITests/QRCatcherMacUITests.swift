@@ -36,12 +36,12 @@ final class QRCatcherMacUITests: XCTestCase {
         fileDialog(path: root.appendingPathComponent("Tests/Fixtures/\(name).png").path, button: "Read QR Code")
     }
     private func screenshot(_ name: String) throws {
-        let png = XCUIScreen.main.screenshot.pngRepresentation
+        let png = XCUIScreen.main.screenshot().pngRepresentation
         let bitmap = try XCTUnwrap(NSBitmapImageRep(data: png))
-        let jpeg = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.55]))
+        let jpeg = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: 0.55]))
         XCTAssertLessThanOrEqual(jpeg.count, 800 * 1024)
         let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
-        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
     }
 
     func testImportCopyExportReopenAndSearch() throws {
@@ -74,6 +74,21 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No matching results"].waitForExistence(timeout: 5))
         search.typeKey("a", modifierFlags: .command); search.typeKey(.delete, modifierFlags: [])
         try screenshot("mac-reopened-history")
+    }
+
+    func testPasteActualQRImageAndCancelExport() throws {
+        let image = try XCTUnwrap(NSImage(contentsOf: root.appendingPathComponent("Tests/Fixtures/ascii.png")))
+        NSPasteboard.general.clearContents()
+        XCTAssertTrue(NSPasteboard.general.writeObjects([image]))
+        app.buttons["mac.paste"].click()
+        XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["mac.openWebsite"].exists)
+        XCTAssertEqual(app.state, .runningForeground)
+        app.buttons["mac.exportQR"].click()
+        app.buttons["Cancel"].firstMatch.click()
+        XCTAssertTrue(app.buttons["mac.copy"].exists)
+        app.buttons["mac.copy"].click()
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
     }
 
     func testInvalidImageCancelAndCameraAbsence() throws {

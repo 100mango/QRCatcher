@@ -24,7 +24,7 @@ Run `python3 scripts/materialize_qr_fixtures.py` before opening/building the pro
 
 Run `python3 scripts/generate_project.py` after changing source inventory. The generated Xcode project is deterministic and CI rejects a difference.
 
-The `Native Apple platforms` workflow has one public `xcode-27` job with bounded execution and evidence output. It checks exact source/tree/toolchain, unsigned universal Mac Release, DEBUG hook exclusion, Mac unit/UI XCTest, unsigned iOS Release, original model/store preservation and iOS unit/codec-equivalence regression. It exports only bounded synthetic screenshots after XCTest and logs each screenshot's SHA-256 before transfer.
+The `Native Apple platforms` workflow has one public `xcode-27` job with bounded execution and evidence output. It checks exact source/tree/toolchain, unsigned universal Mac Release, DEBUG hook exclusion, Mac unit/UI XCTest, unsigned iOS Release, original model/store preservation and iOS unit/codec-equivalence regression. It exports bounded synthetic screenshots after Mac XCTest and logs each screenshot's SHA-256 before transfer. A maximum 6 MB evidence artifact is retained for one day, allowing diagnosis while later iOS stages continue.
 
 Native UI test import and export use actual NSOpenPanel/NSSavePanel; decoding, storage and exports are production code. The only DEBUG test hook chooses an isolated store path. No real user store is deleted, TCC database is altered or OS security prompt bypassed.
 

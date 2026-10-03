@@ -1,6 +1,7 @@
 import XCTest
 import CoreData
 import AppKit
+import UniformTypeIdentifiers
 @testable import QRCatcherMac
 
 @MainActor
@@ -111,6 +112,33 @@ final class QRCatcherMacTests: XCTestCase {
         XCTAssertEqual(workspace.payload, "current")
         XCTAssertEqual(history.items.map(\.payload), ["current"])
         XCTAssertFalse(workspace.isReading)
+    }
+
+    func testImageDropUsesRealPixelsAndRejectsLateDelivery() async throws {
+        let history = MacHistory(url: try directory().appendingPathComponent("coredata.sqlite"))
+        let workspace = MacWorkspace(history: history)
+        let data = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "ascii", withExtension: "png")))
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.image.identifier, visibility: .all) { completion in
+            completion(data, nil)
+            return nil
+        }
+        XCTAssertTrue(workspace.dropped([provider]))
+        for _ in 0..<50 {
+            if workspace.payload != nil { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertEqual(workspace.payload, "https://example.com/qrcatcher?source=golden")
+        XCTAssertEqual(history.items.count, 1)
+        let delayed = NSItemProvider()
+        delayed.registerDataRepresentation(forTypeIdentifier: UTType.image.identifier, visibility: .all) { completion in
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { completion(data, nil) }
+            return nil
+        }
+        XCTAssertTrue(workspace.dropped([delayed]))
+        workspace.accept(["Newer explicit selection"])
+        try await Task.sleep(nanoseconds: 700_000_000)
+        XCTAssertEqual(workspace.payload, "Newer explicit selection")
     }
 
     func testCameraAbsenceIsExplicit() throws {
