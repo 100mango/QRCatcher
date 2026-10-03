@@ -38,8 +38,17 @@
     [self launch:@[@"-reset-history", @"-camera-denied"]];
     XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
     XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);
+    XCUIElement *privacy = self.app.navigationBars.buttons[@"privacy.policy"];
+    XCTAssertTrue(privacy.hittable);
+    XCTAssertEqualObjects(privacy.label, @"Privacy Policy");
+    [privacy tap];
+    XCUIElement *done = self.app.buttons[@"Done"];
+    XCTAssertTrue([done waitForExistenceWithTimeout:15]);
+    [done tap];
+    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5]);
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);
+    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);
     [self.app.tabBars.buttons[@"scan.tab"] tap];
     XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);
 }

@@ -14,9 +14,21 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify exact tested commit
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          echo "Tested commit: $(git rev-parse HEAD)"
+          echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
+          shasum -a 256 .github/workflows/ios.yml
       - name: Verify stable cloud toolchain
         run: |
           sw_vers
@@ -58,6 +70,20 @@ jobs:
           if grep -E -- '-ui-testing|-fixture-payload|-fixture-empty|-reset-history' release-strings.txt; then
             echo 'Debug-only test seams leaked into the Release binary'; exit 1
           fi
+      - name: Record embedded framework inventory
+        run: |
+          python3 - <<'PYINVENTORY'
+          import hashlib,json,pathlib,plistlib
+          app=pathlib.Path('build/DerivedData/Build/Products/Release-iphoneos/QRCatcher.app')
+          inventory=[]
+          for framework in sorted(app.rglob('*.framework')):
+              info=plistlib.loads((framework/'Info.plist').read_bytes())
+              binary=framework/info['CFBundleExecutable']
+              inventory.append({'path':str(framework.relative_to(app)), 'bundle_identifier':info['CFBundleIdentifier'], 'executable_sha256':hashlib.sha256(binary.read_bytes()).hexdigest()})
+          text=json.dumps(inventory,indent=2)
+          pathlib.Path('build/embedded-frameworks.json').write_text(text+'\n')
+          print('Embedded framework inventory: '+text)
+          PYINVENTORY
       - name: Build and run unit regression tests
         timeout-minutes: 8
         run: |
@@ -97,3 +123,11 @@ jobs:
             if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
           done
           echo 'Physical-device camera, signing, App Store metadata and release approval remain separate gates.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify tested source stayed unchanged
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code HEAD --
+          echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"

@@ -7,6 +7,7 @@
 - Native Objective-C app: QR camera scanning/decoding, text results, web links, persistent scan history, history selection and swipe deletion
 - Original scanning artwork, tab icons and ripple animation retained; native safe-area layout, Dynamic Type, Reduce Motion and labelled controls replace device-size assumptions
 - Chinese interface retained through Simplified Chinese localization, with English fallback
+- Localized, VoiceOver-labelled Privacy Policy entry is available from both tabs and opens https://100mango.github.io/app-privacy/ in an in-app Safari view with an explicit Done dismissal
 - Text results can now be copied and stored as well as web links. A scanned URL requires an explicit tap; QR content cannot launch arbitrary URL schemes automatically
 
 ## Storage compatibility
@@ -35,7 +36,7 @@ No CocoaPods install is required. Masonry 0.6.1 was an unused import; the app us
 
 - Production UIScene launch/background/foreground navigation without any UI-test camera stub; simulator may present its real permission prompt, but has no camera hardware
 
-- Denied camera explanation/Settings affordance and empty history
+- Denied camera explanation/Settings affordance and empty history, including Privacy Policy entry visibility, open/dismiss and return to the denied state
 - Production QR decode/result/save path via Debug-only generated QR fixture
 - Plain text cannot offer website opening; website scan remains in-app until explicit action
 - Relaunch/background/foreground history persistence and deletion persistence
@@ -71,3 +72,13 @@ Permission states are injected for determinism because simulator camera hardware
 - Dimensions/format: 1024 × 1024, opaque RGB PNG
 - SHA-256: `dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4`
 - Provenance limit: Apple-served 1024px derivative; original designer master has not been recovered
+
+
+The approved bilingual privacy policy is published at https://100mango.github.io/app-privacy/ and linked from both app tabs. Publication and HTTP/body verification were completed on 2026-10-03. Its implementation does not change QR storage, add tracking, or introduce login. The policy-inclusive commit requires a fresh full CI result; earlier green results alone do not validate this later change.
+
+
+## Exact-source release provenance
+
+The workflow pins official `actions/checkout` v7.0.1 at commit `3d3c42e5aac5ba805825da76410c181273ba90b1`, disables persisted credentials, and explicitly checks out `github.sha`. On manual `workflow_dispatch` runs only, the named `Verify exact tested commit` and `Verify tested source stayed unchanged` steps assert the checked-out commit and unchanged tracked source and log the tree plus workflow SHA-256. Ordinary PR runs may test a synthetic merge commit; they remain useful regression evidence but do not satisfy the exact frozen-candidate signing gate. No workflow input can override the revision.
+
+The unsigned device build also records every embedded `.framework` bundle and executable hash, or an explicit empty inventory. A final manual run must match the frozen candidate, reviewed workflow digest, run/attempt/repository, both successful provenance steps and every real build/test/analyzer step before signing can be considered. This workflow itself contains no signing or credential access.

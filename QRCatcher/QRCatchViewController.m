@@ -35,7 +35,10 @@
     button.titleLabel.numberOfLines = 0;
     button.accessibilityIdentifier = identifier;
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-    [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+    NSLayoutConstraint *minimumHeight = [button.heightAnchor constraintGreaterThanOrEqualToConstant:44];
+    // Hidden arranged subviews must be allowed to collapse without conflicting with UIStackView.
+    minimumHeight.priority = UILayoutPriorityRequired - 1;
+    minimumHeight.active = YES;
     return button;
 }
 - (void)loadView {
