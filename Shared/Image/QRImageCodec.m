@@ -45,7 +45,7 @@
     // Four modules (32 px at 8 px/module) of quiet zone on every exported edge.
     size_t w = CGImageGetWidth(code) + 64, h = CGImageGetHeight(code) + 64;
     CGColorSpaceRef color = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(NULL, w, h, 8, 0, color, kCGImageAlphaPremultipliedLast);
+    CGContextRef context = CGBitmapContextCreate(NULL, w, h, 8, 0, color, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
     CGColorSpaceRelease(color);
     if (!context) { CGImageRelease(code); return nil; }
     CGContextSetRGBFillColor(context, 1, 1, 1, 1); CGContextFillRect(context, CGRectMake(0,0,w,h));
