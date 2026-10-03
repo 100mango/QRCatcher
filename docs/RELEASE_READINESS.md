@@ -22,7 +22,7 @@ The automated legacy test writes a store with the unchanged original schema usin
 
 No CocoaPods install is required. Masonry 0.6.1 was an unused import; the app used no Masonry APIs. The Pod integration was removed, and no third-party implementation was copied. Open `QRCatcher.xcworkspace` or `QRCatcher.xcodeproj` and use the shared **QRCatcher** scheme. Minimum deployment target is iOS 15.0. Project structure is reproducibly generated with `python3 scripts/generate_project.py`.
 
-`.github/workflows/ios.yml` uses one standard `xcode-27` runner, pins `/Applications/Xcode_27.app/Contents/Developer`, and fails unless it reports stable Xcode 27.0 build 27A266a and an installed iOS 27.0 iPhone simulator. It logs OS, SDK and runtime versions first. It runs the entire unit/UI suite serially on an iPhone 18 Pro Max, then repeats UI coverage on the smaller iPhone 17e. It reports both xcresult summaries in logs, builds an unsigned device Release, verifies bundle ID/minimum OS/absence of Debug test seams, and runs Clang static analysis. Test targets require iOS 17+ because the current XCTest library requires that version; the shipping application keeps its iOS 15 deployment target. It disables automatic verbose failure sysdiagnoses to avoid long post-suite collection stalls, while retaining test failures, test results, bounded process/simulator diagnostics and synthetic screenshot evidence in logs. It never uploads artifacts, accesses signing secrets, archives for distribution or submits to App Store Connect. New commits cancel superseded app runs.
+`.github/workflows/ios.yml` uses one standard `xcode-27` runner, pins `/Applications/Xcode_27.app/Contents/Developer`, and fails unless it reports stable Xcode 27.0 build 27A266a and an installed iOS 27.0 iPhone simulator. It logs OS, SDK and runtime versions first. It runs the entire unit/UI suite serially on an iPhone 18 Pro Max, then repeats UI coverage on a freshly created iPhone SE (3rd generation), the 375 × 667-point compact size. Device types and runtime identifiers are read from the actual runner, and creation must succeed; the workflow does not silently substitute a larger phone. Previous 98f48f0 evidence used iPhone 17e and did not establish the smallest layout. It reports all three xcresult summaries in logs, builds an unsigned device Release, verifies bundle ID/minimum OS/absence of Debug test seams, and runs Clang static analysis. Test targets require iOS 17+ because the current XCTest library requires that version; the shipping application keeps its iOS 15 deployment target. It disables automatic verbose failure sysdiagnoses to avoid long post-suite collection stalls, while retaining test failures, test results, bounded process/simulator diagnostics and synthetic screenshot evidence in logs. It never uploads artifacts, accesses signing secrets, archives for distribution or submits to App Store Connect. New commits cancel superseded app runs.
 
 ### Unit regression cases
 
@@ -30,7 +30,8 @@ No CocoaPods install is required. Masonry 0.6.1 was an unused import; the app us
 - Empty QR/image handling and HTTP/HTTPS URL classification; reject script/file/telephone schemes and credential-containing URLs
 - History uniqueness, timestamps, empty payload rejection and persistent deletion
 - Original-schema SQLite reopening with exact data preservation
-- Corrupt SQLite failure without deleting or replacing the source file
+- Corrupt SQLite failure without deleting or replacing the source file; actual history/scanner controllers show storage errors while scanned text remains copyable
+- Privacy HTTP 404/500 handling, WebKit process termination, Retry, nonpersistent/JavaScript-disabled configuration and idempotent Close
 
 ### Simulator UI cases
 
@@ -41,9 +42,11 @@ No CocoaPods install is required. Masonry 0.6.1 was an unused import; the app us
 - Plain text cannot offer website opening; website scan remains in-app until explicit action
 - Relaunch/background/foreground history persistence and deletion persistence
 - Cancel/reopen navigation and repeated scan flow
-- Accessibility XXXL result wrapping with reachable tab navigation and Scan Again
+- Accessibility XXXL result wrapping, history row growth and reachable detail actions; portrait-only layout survives device rotation
+- Apple accessibility audits of the result and populated-history screens, including labels, contrast, text clipping, Dynamic Type and hit regions
+- Approved policy body must actually load before native Close and scanner-resume assertions
 
-Permission states are injected for determinism because simulator camera hardware is unavailable. These tests do **not** establish physical camera performance, actual OS permission dialogue behavior or interruption recovery. A passing newest-iOS run does not prove runtime support on iOS 15; older OS/device coverage is a separate gate.
+The deterministic denied-camera case injects a view state. The separate production launch case runs without that hook, records the actual unavailable/denied camera state and verifies it after background/foreground. The runner logs supported `simctl privacy` services, and hosted tests log actual AVFoundation authorization/device availability. These observations must not be described as a granted→denied→revoked camera test when the simulator lacks camera/TCC support. These tests do **not** establish physical camera performance, physical permission dialogue behavior or interruption recovery. Accessibility audits cover common automated checks, not a complete spoken VoiceOver traversal. A passing newest-iOS run does not prove runtime support on iOS 15; older OS/device coverage is a separate gate.
 
 ## Required release gates
 
@@ -82,3 +85,10 @@ The approved bilingual privacy policy is published at https://100mango.github.io
 The workflow pins official `actions/checkout` v7.0.1 at commit `3d3c42e5aac5ba805825da76410c181273ba90b1`, disables persisted credentials, and explicitly checks out `github.sha`. On bounded `push` runs for `codex/ios-modernization` or manual `workflow_dispatch` runs, the named `Verify exact tested commit` and `Verify tested source stayed unchanged` steps assert the checked-out commit and unchanged tracked source and log the tree plus workflow SHA-256. The workflow no longer runs a duplicate `pull_request` job. Earlier PR runs may have tested synthetic merge commits; they remain regression evidence but do not satisfy the exact frozen-candidate signing gate. The initial provenance step verifies this repository, fixed branch, and equality of the source/workflow SHA. No workflow input can override the revision.
 
 The unsigned device build also records every embedded `.framework` bundle and executable hash, or an explicit empty inventory. A final same-repository, non-fork push or manual run must match the frozen candidate, reviewed workflow digest, run/attempt/repository, both successful provenance steps and every real build/test/analyzer step before signing can be considered. This workflow itself contains no signing or credential access.
+
+
+## Deeper compatibility pass
+
+The all-source review identified a narrow policy-viewer recovery defect: HTTP error pages were treated as successful navigation, and a terminated WebKit process could leave a blank screen. The viewer now rejects non-success/non-HTML responses, exposes native Retry on network/server/process failures, ignores late callbacks after Close, and scrolls the error text/buttons at large accessibility sizes. The fixed-document restriction remains in place. Unit transport responses are controlled test doubles; the UI policy-body check loads the real approved HTTPS page.
+
+The regression additions and SE3 destination require a new exact-head CI pass. Do not carry the earlier 19-execution pass forward as proof of later source changes. The shipping target remains iPhone-only and portrait-only, with iOS 15 minimum. Full hardware scanning, OS-level camera grant/revoke and permission prompts, archived-production-store upgrade, oldest iOS runtime, real VoiceOver navigation, focus/low light and interruptions remain explicit device gates.

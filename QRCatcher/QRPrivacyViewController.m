@@ -3,6 +3,7 @@
 @interface QRPrivacyViewController () <WKNavigationDelegate>
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) UIStackView *errorView;
+@property (nonatomic, strong) UIScrollView *errorScroll;
 @property (nonatomic, strong) UIActivityIndicatorView *activity;
 @property (nonatomic) BOOL closing;
 @end
@@ -27,6 +28,7 @@
     [self.view addSubview:self.activity];
     UILabel *message = [UILabel new];
     message.text = NSLocalizedString(@"The privacy policy could not load. Check your connection and try again.", nil);
+    message.accessibilityIdentifier = @"privacy.error";
     message.numberOfLines = 0;
     message.textAlignment = NSTextAlignmentCenter;
     message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
@@ -34,6 +36,9 @@
     UIButton *retry = [UIButton buttonWithType:UIButtonTypeSystem];
     [retry setTitle:NSLocalizedString(@"Retry", nil) forState:UIControlStateNormal];
     retry.accessibilityIdentifier = @"privacy.retry";
+    retry.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    retry.titleLabel.adjustsFontForContentSizeCategory = YES;
+    retry.titleLabel.numberOfLines = 0;
     [retry addTarget:self action:@selector(loadPolicy) forControlEvents:UIControlEventTouchUpInside];
     [retry.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
     self.errorView = [[UIStackView alloc] initWithArrangedSubviews:@[message, retry]];
@@ -41,7 +46,11 @@
     self.errorView.spacing = 16;
     self.errorView.translatesAutoresizingMaskIntoConstraints = NO;
     self.errorView.hidden = YES;
-    [self.view addSubview:self.errorView];
+    self.errorScroll = [UIScrollView new];
+    self.errorScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    self.errorScroll.hidden = YES;
+    [self.view addSubview:self.errorScroll];
+    [self.errorScroll addSubview:self.errorView];
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
         [self.webView.topAnchor constraintEqualToAnchor:safe.topAnchor],
@@ -50,14 +59,22 @@
         [self.webView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
         [self.activity.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
         [self.activity.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor],
-        [self.errorView.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor],
-        [self.errorView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:24],
-        [self.errorView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-24]
+        [self.errorScroll.topAnchor constraintEqualToAnchor:safe.topAnchor],
+        [self.errorScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
+        [self.errorScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
+        [self.errorScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [self.errorView.topAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.topAnchor constant:24],
+        [self.errorView.bottomAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.bottomAnchor constant:-24],
+        [self.errorView.leadingAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.leadingAnchor constant:24],
+        [self.errorView.trailingAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.trailingAnchor constant:-24],
+        [self.errorView.widthAnchor constraintEqualToAnchor:self.errorScroll.frameLayoutGuide.widthAnchor constant:-48]
     ]];
     [self loadPolicy];
 }
 - (void)loadPolicy {
+    if (self.closing) return;
     self.errorView.hidden = YES;
+    self.errorScroll.hidden = YES;
     self.webView.hidden = NO;
     [self.activity startAnimating];
     NSURL *URL = [NSURL URLWithString:@"https://100mango.github.io/app-privacy/"];
@@ -67,24 +84,42 @@
     [self.activity stopAnimating];
 }
 - (void)showLoadError:(NSError *)error {
-    if (error.code == NSURLErrorCancelled) return;
+    if (self.closing || ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled)) return;
     [self.activity stopAnimating];
     self.errorView.hidden = NO;
+    self.errorScroll.hidden = NO;
     self.webView.hidden = YES;
 }
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self showLoadError:error]; }
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self showLoadError:error]; }
-- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
-    NSURLComponents *parts = [NSURLComponents componentsWithURL:action.request.URL resolvingAgainstBaseURL:NO];
-    BOOL approvedContact = [parts.scheme.lowercaseString isEqualToString:@"mailto"] &&
-        [parts.path.lowercaseString isEqualToString:@"100mango@gmail.com"] && !parts.query.length && !parts.fragment.length;
-    if (approvedContact && action.navigationType == WKNavigationTypeLinkActivated) {
-        [UIApplication.sharedApplication openURL:action.request.URL options:@{} completionHandler:nil];
-    }
-    BOOL approvedDocument = [parts.scheme.lowercaseString isEqualToString:@"https"] &&
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
+    [self showLoadError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorUnknown userInfo:nil]];
+}
+- (BOOL)isApprovedDocumentURL:(NSURL *)URL {
+    NSURLComponents *parts = [NSURLComponents componentsWithURL:URL resolvingAgainstBaseURL:NO];
+    return [parts.scheme.lowercaseString isEqualToString:@"https"] &&
         [parts.host.lowercaseString isEqualToString:@"100mango.github.io"] &&
         [parts.path isEqualToString:@"/app-privacy/"] && !parts.query.length && !parts.user.length && !parts.password.length &&
         (!parts.port || parts.port.integerValue == 443);
+}
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)response decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
+    NSHTTPURLResponse *HTTP = [response.response isKindOfClass:NSHTTPURLResponse.class] ? (NSHTTPURLResponse *)response.response : nil;
+    BOOL allowed = [self isApprovedDocumentURL:response.response.URL] && response.canShowMIMEType &&
+        [response.response.MIMEType.lowercaseString isEqualToString:@"text/html"] && HTTP.statusCode >= 200 && HTTP.statusCode < 300;
+    if (!allowed && response.forMainFrame) {
+        [self showLoadError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorBadServerResponse userInfo:nil]];
+    }
+    decisionHandler(allowed ? WKNavigationResponsePolicyAllow : WKNavigationResponsePolicyCancel);
+}
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    NSURLComponents *parts = [NSURLComponents componentsWithURL:action.request.URL resolvingAgainstBaseURL:NO];
+    BOOL approvedContact = [parts.scheme.lowercaseString isEqualToString:@"mailto"] &&
+        [parts.path.lowercaseString isEqualToString:@"100mango@gmail.com"] && !parts.query.length && !parts.fragment.length &&
+        !parts.host.length && !parts.user.length && !parts.password.length && !parts.port;
+    if (approvedContact && action.navigationType == WKNavigationTypeLinkActivated) {
+        [UIApplication.sharedApplication openURL:action.request.URL options:@{} completionHandler:nil];
+    }
+    BOOL approvedDocument = [self isApprovedDocumentURL:action.request.URL];
     decisionHandler(approvedDocument ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
 }
 - (void)close {

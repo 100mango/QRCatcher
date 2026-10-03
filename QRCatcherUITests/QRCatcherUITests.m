@@ -6,6 +6,7 @@
 @implementation QRCatcherUITests
 + (void)load { NSLog(@"QRCatcher UI regression bundle loaded"); }
 - (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
+- (void)tearDown { XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown]; }
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
 - (void)logSyntheticScreenshot:(NSString *)name {
     NSData *JPEG = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image, 0.55);
@@ -28,11 +29,25 @@
     }];
     [self.app launch];
     XCTAssertTrue([self.app.tabBars.buttons[@"history.tab"] waitForExistenceWithTimeout:10]);
+    NSLog(@"PRODUCTION_VIEWPORT:%@", NSStringFromCGRect(self.app.frame));
     [self.app tap];
+    XCUIElement *status = self.app.staticTexts[@"scan.status"];
+    NSPredicate *cameraSettled = [NSPredicate predicateWithFormat:@"label CONTAINS %@ OR label CONTAINS %@", @"Camera access is off", @"No camera is available"];
+    [self expectationForPredicate:cameraSettled evaluatedWithObject:status handler:nil];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+    NSString *cameraStatus = status.label;
+    NSLog(@"PRODUCTION_CAMERA_STATE:%@", cameraStatus);
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCTAssertTrue([self.app.tables[@"history.table"] waitForExistenceWithTimeout:5]);
     [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
     XCTAssertTrue([self.app.tabBars.buttons[@"scan.tab"] waitForExistenceWithTimeout:5]);
+    [self.app.tabBars.buttons[@"scan.tab"] tap];
+    XCTAssertEqualObjects(status.label, cameraStatus);
+    // The shipped application is portrait-only, including when the device rotates.
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationLandscapeLeft;
+    XCTAssertGreaterThan(CGRectGetHeight(self.app.frame), CGRectGetWidth(self.app.frame));
+    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
 }
 - (void)testDeniedCameraAndEmptyHistory {
     [self launch:@[@"-reset-history", @"-camera-denied"]];
@@ -44,6 +59,8 @@
     [privacy tap];
     XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];
     XCTAssertTrue([done waitForExistenceWithTimeout:15]);
+    XCUIElement *policyBody = [self.app.webViews.staticTexts containingPredicate:[NSPredicate predicateWithFormat:@"label CONTAINS %@", @"process photos, camera images"]].firstMatch;
+    XCTAssertTrue([policyBody waitForExistenceWithTimeout:25], @"The policy must load its approved body, not merely display a Close button.");
     NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
     [self logSyntheticScreenshot:@"privacy-open-diagnostic"];
     [done tap];
@@ -109,5 +126,27 @@
     [self.app swipeUp]; [self.app swipeUp];
     XCTAssertTrue(self.app.buttons[@"scan.again"].hittable);
     XCTAssertTrue(self.app.tabBars.buttons[@"history.tab"].hittable);
+    XCTAssertEqualObjects(self.app.buttons[@"scan.copy"].label, @"Copy Result");
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCUIElement *record = self.app.tables.cells.firstMatch;
+    XCTAssertTrue([record waitForExistenceWithTimeout:5]);
+    XCTAssertGreaterThan(CGRectGetHeight(record.frame), 70);
+    XCTAssertGreaterThanOrEqual(CGRectGetMinX(record.frame), 0);
+    XCTAssertLessThanOrEqual(CGRectGetMaxX(record.frame), CGRectGetWidth(self.app.frame));
+    [record tap];
+    XCTAssertTrue(self.app.alerts.buttons[@"Copy Result"].hittable);
+    XCTAssertTrue(self.app.alerts.buttons[@"Cancel"].hittable);
+    [self.app.alerts.buttons[@"Cancel"] tap];
+}
+- (void)testAccessibilityOfResultAndHistory {
+    [self launch:@[@"-reset-history", @"-fixture-payload", @"Accessible QR result 你好"]];
+    XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
+    XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, @"Accessible QR result 你好");
+    NSError *error;
+    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"Scanner accessibility audit: %@", error);
+    [self.app.tabBars.buttons[@"history.tab"] tap];
+    XCTAssertTrue([self.app.tables.cells.firstMatch waitForExistenceWithTimeout:5]);
+    error = nil;
+    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"History accessibility audit: %@", error);
 }
 @end

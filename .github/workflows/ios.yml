@@ -41,6 +41,8 @@ jobs:
           xcodebuild -showsdks
           xcrun simctl list runtimes
           xcrun simctl list devices available
+          xcrun simctl list devicetypes -j
+          xcrun simctl help privacy
           xcodebuild -version | grep -E '^Xcode 27(\.0)?$'
           xcodebuild -version | grep '27A266a'
       - name: Validate project and select iOS 27 simulator
@@ -56,11 +58,16 @@ jobs:
           assert candidates, 'Stable iOS 27.0 iPhone simulator unavailable'
           d=sorted(candidates,key=lambda d:('Pro Max' not in d['name'],d['name']))[0]
           print('Selected',d)
-          compact=next((c for c in candidates if c['name']=='iPhone 17e'), candidates[-1])
-          print('Compact layout device',compact)
+          types=json.loads(subprocess.check_output(['xcrun','simctl','list','devicetypes','-j']))['devicetypes']
+          compactType=next((t for t in types if t['name']=='iPhone SE (3rd generation)'),None)
+          assert compactType, 'The runner does not expose the requested iPhone SE (3rd generation) device type'
+          runtimes=json.loads(subprocess.check_output(['xcrun','simctl','list','runtimes','-j']))['runtimes']
+          runtime=next(r for r in runtimes if r['identifier'].endswith('iOS-27-0') and r.get('isAvailable'))
+          compactID=subprocess.check_output(['xcrun','simctl','create','QRCatcher Compact SE3',compactType['identifier'],runtime['identifier']],text=True).strip()
+          print('Compact layout device',compactType,'runtime',runtime['identifier'],'udid',compactID)
           with open(os.environ['GITHUB_ENV'],'a') as f:
               f.write('SIMULATOR_ID='+d['udid']+'\n')
-              f.write('COMPACT_SIMULATOR_ID='+compact['udid']+'\n')
+              f.write('COMPACT_SIMULATOR_ID='+compactID+'\n')
           PY
       - name: Build unsigned device Release and verify identity
         timeout-minutes: 8
