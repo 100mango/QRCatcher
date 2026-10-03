@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded iOS 15.5 feasibility probe on an eligible, disposable cloud host."""
-import hashlib, json, os, pathlib, plistlib, signal, subprocess, sys, urllib.parse, urllib.request
+import hashlib, json, os, pathlib, plistlib, signal, subprocess, sys, shutil, urllib.parse, urllib.request
 
 def run(args, timeout=60, required=True):
     print('COMMAND', args, flush=True)
@@ -45,7 +45,7 @@ print('OFFICIAL_CATALOG',json.dumps({'url':url,'sha256':hashlib.sha256(data).hex
 # solely for this Apple package, with stdin closed and no account credentials.
 run(['xcodes','version'],required=False)
 run(['xcodes','runtimes','install','--help'])
-result=run(['xcodes','runtimes','install','iOS 15.5','--no-aria2'],timeout=720,required=False)
+result=run(['sudo','-n','env','DEVELOPER_DIR='+os.environ['DEVELOPER_DIR'],shutil.which('xcodes'),'runtimes','install','iOS 15.5','--no-aria2'],timeout=720,required=False)
 all_runtimes=json.loads(subprocess.check_output(['xcrun','simctl','list','runtimes','-j']))['runtimes']
 matching=[r for r in all_runtimes if r.get('platform')=='iOS' and r.get('version')=='15.5']
 print('ACTUAL_15_5_RUNTIME',json.dumps(matching,sort_keys=True))
