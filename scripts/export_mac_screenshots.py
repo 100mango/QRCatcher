@@ -25,7 +25,7 @@ def records(value):
 manifest=json.loads((destination/'manifest.json').read_text());screenshots=[]
 for item in records(manifest):
  label=' '.join(v for v in item.values() if isinstance(v,str))
- name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-failure'] if n in label),None)
+ name=next((n for n in ['mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure'] if n in label),None)
  if not name:continue
  assert len(screenshots)<6,'Screenshot evidence budget exceeded'
  path=(destination/item['exportedFileName']).resolve();assert path.is_relative_to(destination.resolve())
@@ -36,3 +36,8 @@ for item in records(manifest):
 assert sum(p.stat().st_size for p in evidence.iterdir())<=6*1024*1024,'Total evidence budget exceeded'
 print('Exported screenshots:',len(screenshots),flush=True)
 if not screenshots:print(json.dumps(manifest)[:12000],flush=True)
+
+if summary.returncode == 0:
+ warnings=json.loads(summary.stdout).get('runtimeWarnings',[])
+ if any('Publishing changes from within view updates' in x.get('message','') for x in warnings):
+  raise SystemExit('SwiftUI re-entrant publication warning is a release blocker')

@@ -18,7 +18,7 @@ struct MacMainView: View {
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
-                List(selection: $workspace.selection) {
+                List(selection: selectionBinding) {
                     ForEach(filtered) { item in
                         HistoryRow(item: item).tag(item.id)
                             .contextMenu { Button("Delete Record", role: .destructive) { deleteItem = item } }
@@ -46,9 +46,6 @@ struct MacMainView: View {
                 Button { sheet = .privacy } label: { Label("Privacy", systemImage: "hand.raised") }.accessibilityIdentifier("mac.privacy")
             }
         }
-        .onChange(of: workspace.selection) { value in
-            if let item = history.items.first(where: { $0.id == value }), workspace.payload != item.payload { workspace.select(item) }
-        }
         .task(id: photo) { await readPhoto() }
         .sheet(item: $sheet) { value in
             switch value {
@@ -62,6 +59,20 @@ struct MacMainView: View {
         .confirmationDialog("Delete this history record?", isPresented: Binding(get: { deleteItem != nil }, set: { if !$0 { deleteItem = nil } })) {
             Button("Delete Record", role: .destructive) { if let deleteItem { history.delete(deleteItem) }; deleteItem = nil }
         } message: { Text("The original image is not affected.") }
+    }
+
+    private var selectionBinding: Binding<String?> {
+        Binding(get: { workspace.selection }, set: { identifier in
+            let previous = workspace.selection
+            guard identifier != previous else { return }
+            // AppKit may send List selection while SwiftUI is updating its tree.
+            // Publish the resulting model transition on the next main-actor job.
+            Task { @MainActor in
+                guard workspace.selection == previous else { return }
+                if let item = history.items.first(where: { $0.id == identifier }) { workspace.select(item) }
+                else { workspace.selection = nil }
+            }
+        })
     }
 
     private func readPhoto() async {
@@ -102,13 +113,7 @@ private struct QRResultView: View {
                             .accessibilityLabel("Scannable QR representation of the selected result")
                     }
                     Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload")
-                    HStack {
-                        Button("Copy", action: workspace.copy).accessibilityIdentifier("mac.copy")
-                        Button("Export QR Image…", action: workspace.exportQR).accessibilityIdentifier("mac.exportQR")
-                        if QRPayload.safeWebURL(payload) != nil {
-                            Button("Open in Browser", action: workspace.openWebsite).accessibilityIdentifier("mac.openWebsite")
-                        }
-                    }
+                    MacResultActions(workspace: workspace, canOpen: QRPayload.safeWebURL(payload) != nil)
                     Text("Links open only when you choose Open in Browser.").font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text("Use an image from Files, Photos or your clipboard. You can also drop an image here, or use an available camera.")
@@ -120,6 +125,25 @@ private struct QRResultView: View {
                 if let historyError { Text(historyError).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("mac.historyError") }
             }.padding(36).frame(maxWidth: .infinity)
         }.navigationTitle("QRCatcher")
+    }
+}
+
+private struct MacResultActions: View {
+    @ObservedObject var workspace: MacWorkspace
+    let canOpen: Bool
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Button("Copy", action: workspace.copy).accessibilityIdentifier("mac.copy")
+                Button("Export QR Image…", action: workspace.exportQR).accessibilityIdentifier("mac.exportQR")
+                if canOpen { Button("Open in Browser", action: workspace.openWebsite).accessibilityIdentifier("mac.openWebsite") }
+            }.fixedSize()
+            VStack(spacing: 12) {
+                Button("Copy", action: workspace.copy).accessibilityIdentifier("mac.copy")
+                Button("Export QR Image…", action: workspace.exportQR).accessibilityIdentifier("mac.exportQR")
+                if canOpen { Button("Open in Browser", action: workspace.openWebsite).accessibilityIdentifier("mac.openWebsite") }
+            }.lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

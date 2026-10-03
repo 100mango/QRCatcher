@@ -124,6 +124,37 @@ final class QRCatcherMacUITests: XCTestCase {
         try screenshot("mac-chinese-reopened")
     }
 
+    func testNativeWindowResizeKeepsFullActionTitles() throws {
+        let image = try XCTUnwrap(NSImage(contentsOf: root.appendingPathComponent("Tests/Fixtures/ascii.png")))
+        NSPasteboard.general.clearContents(); XCTAssertTrue(NSPasteboard.general.writeObjects([image]))
+        app.buttons["mac.paste"].click()
+        XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
+        let window = app.windows["main"]
+        let before = window.frame
+        let right = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
+        right.click(forDuration: 0.3, thenDragTo: right.withOffset(CGVector(dx: -264, dy: 0)))
+        let bottom = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(CGVector(dx: 0, dy: -1))
+        bottom.click(forDuration: 0.3, thenDragTo: bottom.withOffset(CGVector(dx: 0, dy: -154)))
+        XCTAssertLessThan(window.frame.width, before.width - 100)
+        XCTAssertLessThan(window.frame.height, before.height - 60)
+        let scroll = app.scrollViews.containing(.button, identifier: "mac.exportQR").firstMatch
+        if !app.buttons["mac.copy"].isHittable { scroll.scroll(byDeltaX: 0, deltaY: -500) }
+        for (identifier, title) in [("mac.copy", "Copy"), ("mac.exportQR", "Export QR Image…"), ("mac.openWebsite", "Open in Browser")] {
+            let button = app.buttons[identifier]
+            XCTAssertTrue(button.isHittable, button.debugDescription)
+            XCTAssertEqual(button.label, title)
+            XCTAssertTrue(window.frame.contains(button.frame), button.debugDescription)
+            // The control uses the system regular button font. This catches a
+            // constrained one-line title even when its AX label stays complete.
+            let fullText = (title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+            XCTAssertGreaterThanOrEqual(button.frame.width, ceil(fullText.width))
+            XCTAssertGreaterThanOrEqual(button.frame.height, ceil(fullText.height))
+        }
+        app.buttons["mac.copy"].click()
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
+        try screenshot("mac-minimum-window")
+    }
+
     func testInvalidImageCancelAndCameraAbsence() throws {
         app.buttons["mac.import"].click()
         app.dialogs.buttons["CancelButton"].firstMatch.click()
