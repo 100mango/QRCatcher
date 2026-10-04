@@ -38,6 +38,15 @@ class VisionAsyncContracts(unittest.TestCase):
         self.assertLess(teardown.index('await capture("vision-failure")'), teardown.index('app.terminate()'))
         self.assertIn('try? FileManager.default.removeItem(at: request); try? FileManager.default.removeItem(at: ack)', UI)
 
+    def test_failure_capture_never_requests_another_ax_snapshot(self):
+        teardown = UI.split('override func tearDown() async throws {', 1)[1].split('private func capture', 1)[0]
+        self.assertNotIn('debugDescription', teardown)
+        self.assertIn('await capture("vision-failure")', teardown)
+        capture = UI.split('private func capture(', 1)[1].split('private func revealPolicyEnding', 1)[0]
+        self.assertIn('if name != "vision-failure" {\n            let description = String(app.debugDescription.prefix(20000))', capture)
+        self.assertIn('VISION_FAILURE_CAPTURE_WITHOUT_NEW_AX_QUERY', capture)
+        self.assertIn('VISION_FAILURE_CAPTURE_DIAGNOSTIC', capture)
+
     def test_async_export_wait_uses_concurrency_safe_waiter(self):
         self.assertIn('let outcome = await XCTWaiter.fulfillment(of: [finished], timeout: 20)', UI)
         self.assertIn('XCTAssertEqual(outcome, .completed, app.debugDescription)', UI)

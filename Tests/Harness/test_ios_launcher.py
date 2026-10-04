@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as direct
     folder=alias.resolve();binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
     fixture_env={**os.environ,'GITHUB_WORKSPACE':str(folder),'GITHUB_ENV':str(folder/'fixture-github-env')}
     fixture_env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
-    for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','atomic_json.py','stage_owned_import_fixture.py']:
+    for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','atomic_json.py','stage_owned_import_fixture.py','ios_import_continuation.py']:
         shutil.copyfile(root/'scripts'/name,folder/'scripts'/name)
     rejected=subprocess.run(['python3','scripts/owned_process_barrier.py','--check'],cwd=folder,
         env={**fixture_env,'GITHUB_WORKSPACE':str(alias),'QRCATCHER_OWNED_PROCESS_BARRIER':str(alias/'build/owned-process-cleanup.json')},capture_output=True,text=True,timeout=5)

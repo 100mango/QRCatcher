@@ -1,6 +1,11 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
+#include <math.h>
 #import "QRUIInterruptionSafety.h"
+static BOOL QRPadFiniteNonemptyRect(CGRect rect) {
+    return isfinite(rect.origin.x) && isfinite(rect.origin.y) && isfinite(rect.size.width) && isfinite(rect.size.height) &&
+        rect.size.width > 0 && rect.size.height > 0;
+}
 @interface QRCatcherPadUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
@@ -42,11 +47,54 @@
     XCTAssertEqual(history.cells.count, 1);
     XCUIElement *share = self.app.buttons[@"scan.share"];
     if (!share.hittable) [self.app.scrollViews.firstMatch swipeUp];
-    XCTAssertTrue(share.hittable); [share tap];
-    XCTAssertTrue([self.app.otherElements[@"ActivityListView"] waitForExistenceWithTimeout:5] || self.app.buttons[@"Copy"].exists, @"%@", self.app.debugDescription);
+    XCTAssertTrue(share.hittable);
+    CGRect anchor = share.frame;
+    [share tap];
+    // SDK27 exposes Copy as an actionGroupCell in an anchored native popover.
+    // Pro ebcc showed this complete UI about9.6s after the tap, beyond the old
+    // 5s broad-container wait. Keep one bounded, passive readiness prerequisite.
+    XCUIElementQuery *popovers = [self.app.popovers containingType:XCUIElementTypeOther identifier:@"ActivityListView"];
+    XCUIElement *popover = popovers.firstMatch;
+    XCUIElement *activity = popover.otherElements[@"ActivityListView"];
+    XCUIElement *caption = activity.otherElements[@"LP.CaptionBar.BottomCaption"];
+    XCUIElement *copy = [activity.cells matchingPredicate:[NSPredicate predicateWithFormat:@"identifier == %@ AND label == %@", @"actionGroupCell", @"Copy"]].firstMatch;
+    NSPredicate *shareReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        return popovers.count == 1 && popover.exists && activity.exists && caption.exists &&
+            [caption.label isEqualToString:@"Native iPad QR result 你好"] && copy.exists && copy.enabled && copy.hittable;
+    }];
+    NSTimeInterval readinessStarted = NSProcessInfo.processInfo.systemUptime;
+    XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc] initWithPredicate:shareReady object:nil];
+    XCTWaiterResult readiness = [XCTWaiter waitForExpectations:@[ready] timeout:10];
+    NSLog(@"IPAD_NATIVE_SHARE_READINESS outcome=%ld elapsed=%.3f", (long)readiness, NSProcessInfo.processInfo.systemUptime - readinessStarted);
+    XCTAssertEqual(readiness, XCTWaiterResultCompleted, @"Expected native share popover, matching payload caption and hittable Copy cell");
+    if (readiness != XCTWaiterResultCompleted) return;
+    BOOL currentReady = [shareReady evaluateWithObject:nil];
+    XCTAssertTrue(currentReady);
+    if (!currentReady) return;
+    CGRect presented = popover.frame;
+    CGRect copyFrame = copy.frame, window = self.app.frame;
+    // The app anchors sourceView/sourceRect to Share but does not constrain
+    // UIKit's permitted arrow direction. Accept each directionally aligned
+    // side, rather than asserting the above-source direction seen on Pro.
+    // A wide source control does not require the arrow to target its center.
+    BOOL verticalSide = MIN(CGRectGetMaxX(presented), CGRectGetMaxX(anchor)) > MAX(CGRectGetMinX(presented), CGRectGetMinX(anchor)) &&
+        (CGRectGetMaxY(presented) <= CGRectGetMinY(anchor) || CGRectGetMinY(presented) >= CGRectGetMaxY(anchor));
+    BOOL horizontalSide = MIN(CGRectGetMaxY(presented), CGRectGetMaxY(anchor)) > MAX(CGRectGetMinY(presented), CGRectGetMinY(anchor)) &&
+        (CGRectGetMaxX(presented) <= CGRectGetMinX(anchor) || CGRectGetMinX(presented) >= CGRectGetMaxX(anchor));
+    BOOL anchored = QRPadFiniteNonemptyRect(window) && QRPadFiniteNonemptyRect(presented) &&
+        QRPadFiniteNonemptyRect(anchor) && QRPadFiniteNonemptyRect(copyFrame) &&
+        CGRectContainsRect(window, presented) && CGRectContainsRect(window, anchor) &&
+        CGRectContainsRect(presented, copyFrame) && (verticalSide || horizontalSide);
+    NSLog(@"IPAD_NATIVE_SHARE_GEOMETRY popover=%@ anchor=%@ copy=%@", NSStringFromCGRect(presented), NSStringFromCGRect(anchor), NSStringFromCGRect(copyFrame));
+    XCTAssertTrue(anchored, @"The share popover must fit on a source-aligned side and expose the whole Copy cell");
+    if (!anchored) return;
     [self capture:@"ipad-anchored-share"];
     // Dismiss the popover by tapping outside it, retaining the selected payload.
     [history.cells.firstMatch tap];
+    XCTNSPredicateExpectation *dismissed = [[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:popover];
+    XCTWaiterResult dismissal = [XCTWaiter waitForExpectations:@[dismissed] timeout:5];
+    XCTAssertEqual(dismissal, XCTWaiterResultCompleted);
+    if (dismissal != XCTWaiterResultCompleted) return;
     XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, @"Native iPad QR result 你好");
     XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
     XCTAssertTrue([self.app.buttons[@"scan.import"] waitForExistenceWithTimeout:5]);
