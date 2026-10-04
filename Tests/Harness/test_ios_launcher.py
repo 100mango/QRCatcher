@@ -6,9 +6,21 @@ from pathlib import Path
 import ast,json,os,plistlib,shutil,subprocess,tempfile
 root=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as directory:
-    folder=Path(directory);binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
+    # macOS exposes temporary roots through /var -> /private/var. Exercise a
+    # real owned alias on every host, then pass the same canonical root to both
+    # the fixture workspace and the unchanged production ownership guard.
+    temporary=Path(directory).resolve()
+    workspace=temporary/'workspace';workspace.mkdir()
+    alias=temporary/'workspace-alias';alias.symlink_to(workspace,target_is_directory=True)
+    folder=alias.resolve();binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
+    fixture_env={**os.environ,'GITHUB_WORKSPACE':str(folder),'GITHUB_ENV':str(folder/'fixture-github-env')}
+    fixture_env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
     for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','atomic_json.py','stage_owned_import_fixture.py']:
         shutil.copyfile(root/'scripts'/name,folder/'scripts'/name)
+    rejected=subprocess.run(['python3','scripts/owned_process_barrier.py','--check'],cwd=folder,
+        env={**fixture_env,'GITHUB_WORKSPACE':str(alias),'QRCATCHER_OWNED_PROCESS_BARRIER':str(alias/'build/owned-process-cleanup.json')},capture_output=True,text=True,timeout=5)
+    assert rejected.returncode==126,(rejected.returncode,rejected.stdout,rejected.stderr)
+    print('OWNED_WORKSPACE_ALIAS_REJECTION_PASS raw alias rejected; canonical routing follows',flush=True)
     app=folder/'synthetic-app';app.mkdir();data=folder/'synthetic-data';data.mkdir()
     (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'100mango.QRCatcher','UIFileSharingEnabled':True,'LSSupportsOpeningDocumentsInPlace':True}))
     (folder/'Tests/Fixtures').mkdir(parents=True)
@@ -36,9 +48,9 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
         observed=folder/'command.json';observed.unlink(missing_ok=True)
         marker=folder/'build/owned-process-cleanup.json';marker.unlink(missing_ok=True)
         result=subprocess.run(['bash','scripts/run_ios_platform_ui.sh','11111111-2222-4333-8444-555555555555','SyntheticResults.xcresult',test_class],cwd=folder,
-            env={**os.environ,'PATH':str(binary)+':'+os.environ['PATH'],'SEED_STATUS':str(seed),'TEST_STATUS':str(test_exit),'FILE_STATUS':str(file_exit),'PHOTO_STATUS':str(photo_exit),'BARRIER_AFTER_FILES':str(barrier).lower(),'QRCATCHER_OWNED_PROCESS_BARRIER':str(marker),'GITHUB_WORKSPACE':str(folder),'OBSERVED_COMMAND':str(observed),'SYNTHETIC_APP':str(app),'SYNTHETIC_DATA':str(data)},capture_output=True,text=True,timeout=15)
+            env={**fixture_env,'PATH':str(binary)+':'+os.environ['PATH'],'SEED_STATUS':str(seed),'TEST_STATUS':str(test_exit),'FILE_STATUS':str(file_exit),'PHOTO_STATUS':str(photo_exit),'BARRIER_AFTER_FILES':str(barrier).lower(),'QRCATCHER_OWNED_PROCESS_BARRIER':str(marker),'GITHUB_WORKSPACE':str(folder),'OBSERVED_COMMAND':str(observed),'SYNTHETIC_APP':str(app),'SYNTHETIC_DATA':str(data)},capture_output=True,text=True,timeout=15)
         expected=test_exit or (126 if file_exit==126 or barrier else seed or (126 if photo_exit==126 else file_exit or photo_exit))
-        assert result.returncode==expected,(test_class,seed,test_exit,file_exit,photo_exit,result.stdout,result.stderr)
+        assert result.returncode==expected,(test_class,seed,test_exit,file_exit,photo_exit,result.returncode,result.stdout,result.stderr)
         rows=json.loads(observed.read_text());commands=[x['args'] for x in rows if x['tool']=='xcodebuild']
         expected_count=1 if test_exit else 2 if seed or file_exit==126 or barrier else 3
         assert len(commands)==expected_count,(test_class,commands)
