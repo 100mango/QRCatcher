@@ -10,7 +10,16 @@ class OwnedBarrierTests(unittest.TestCase):
         isolation=patch.dict(os.environ);isolation.start();self.addCleanup(isolation.stop)
         for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','QRCATCHER_OWNED_PROCESS_BARRIER','GITHUB_ENV','GITHUB_WORKSPACE']:os.environ.pop(key,None)
     def env(self,folder):
+        # macOS exposes /var/folders through /private/var/folders. Use the same
+        # canonical owned root for both values; the production guard stays exact.
+        folder=folder.resolve()
         return dict(os.environ,GITHUB_WORKSPACE=str(folder),GITHUB_ENV=str(folder/'github-env'),QRCATCHER_OWNED_PROCESS_BARRIER=str(folder/'build/owned-process-cleanup.json'))
+    def test_fixture_root_canonicalizes_system_temp_directory_aliases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);owned=root/'owned';owned.mkdir();alias=root/'alias';alias.symlink_to(owned,target_is_directory=True)
+            env=self.env(alias)
+            self.assertEqual(env['GITHUB_WORKSPACE'],str(owned.resolve()))
+            self.assertEqual(env['QRCATCHER_OWNED_PROCESS_BARRIER'],str(owned.resolve()/'build/owned-process-cleanup.json'))
     def test_exit_two_unknown_cleanup_is_durable_and_blocks_fresh_process(self):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory);env=self.env(folder)
