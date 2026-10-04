@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded synthetic phone/iPad evidence. Never uploads full xcresult archives."""
-import hashlib,json,os,pathlib,subprocess
+import hashlib,json,os,pathlib,struct,subprocess
 scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
@@ -27,14 +27,14 @@ for label,relative in [('watch','QRCatcherWatch/Assets.xcassets/AppIcon.appicons
 for name in ['release-watch.log','release-tv.log','release-vision.log','watch-test-build.log','watch-unit.log','watch-ui.log','tv-test-build.log','tv-test.log','tv-authorized-test.log','tv-revoked-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log','PadUIResults-layout.log','MiniUIResults-layout.log','PhoneUIResults-imports.log','CompactPhoneUIResults-imports.log']:
  path=pathlib.Path(name)
  if path.is_file():(out/name).write_bytes(path.read_bytes()[-64*1024:])
-names=('image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
+names=('image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
   for child in value.values():yield from records(child)
  elif isinstance(value,list):
   for child in value:yield from records(child)
-for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
+for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
  if not pathlib.Path(result,'Info.plist').is_file():
   summary['results'][label]={'not_produced':True};continue
  report=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
@@ -47,7 +47,12 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=path.read_bytes()
   source_bytes=len(data)
-  if data.startswith(b'\x89PNG'):
+  native_watch_png=label.startswith('watch-') and data.startswith(b'\x89PNG')
+  native_dimensions=None
+  if native_watch_png:
+   assert len(data)>24 and data[12:16]==b'IHDR'
+   native_dimensions=list(struct.unpack('>II',data[16:24]));assert all(0<v<=1024 for v in native_dimensions)
+  if data.startswith(b'\x89PNG') and not native_watch_png:
    converted=path.with_suffix('.bounded.jpg')
    subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','55','-Z','1440',str(path),'--out',str(converted)],check=True,capture_output=True)
    data=converted.read_bytes()
@@ -57,15 +62,22 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
    converted=path.with_suffix('.bounded.jpg')
    subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','50','-Z','1920',str(path),'--out',str(converted)],check=True,capture_output=True,timeout=30)
    data=converted.read_bytes()
-  assert data.startswith(b'\xff\xd8') and len(data)<=800*1024,'Invalid or oversized synthetic screenshot'
-  filename=f'{label}-{name}-{len(summary["screenshots"])+1}.jpg'
-  # Reserve 512 KiB for structured summaries, keeping the entire artifact <=6 MiB.
+  assert (native_watch_png or data.startswith(b'\xff\xd8')) and len(data)<=800*1024,'Invalid or oversized synthetic screenshot'
+  suffix='png' if native_watch_png else 'jpg'
+  filename=f'{label}-{name}-{len(summary["screenshots"])+1}.{suffix}'
+  # Endpoint rows omit duplicate icon/Release evidence and have a smaller,
+  # explicitly bounded summary; all rows still undergo strict pre-upload checks.
+  reserve=128*1024 if scope.startswith('watchos_') else 512*1024
   used=sum(p.stat().st_size for p in out.iterdir())
-  if used+len(data)>limit-512*1024 or len(summary['screenshots'])>=28:
+  if used+len(data)>limit-reserve or len(summary['screenshots'])>=28:
    summary['omitted'].append({'name':filename,'reason':'bounded evidence cap'});print('OMITTED_AT_CAP',filename,flush=True);continue
   (out/filename).write_bytes(data)
-  item={'name':filename,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()};summary['screenshots'].append(item);print(json.dumps(item),flush=True)
-(out/'manifest.json').write_text(json.dumps(summary,indent=2)+'\n')
+  item={'name':filename,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()}
+  if native_dimensions:item.update(native_pixel_dimensions=native_dimensions,source_bytes_preserved=True)
+  summary['screenshots'].append(item);print(json.dumps(item),flush=True)
+encoded=json.dumps(summary,indent=2)+'\n'
+assert len(encoded.encode())<=(128*1024 if scope.startswith('watchos_') else 512*1024)
+(out/'manifest.json').write_text(encoded)
 size=sum(p.stat().st_size for p in out.iterdir())
 mac=sum(p.stat().st_size for p in pathlib.Path('build/mac-evidence').glob('*') if p.is_file())
 print(json.dumps({'ios_evidence_bytes':size,'mac_evidence_bytes':mac,'combined_bytes':size+mac}),flush=True)

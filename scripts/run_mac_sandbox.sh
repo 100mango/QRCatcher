@@ -2,7 +2,7 @@
 set -euo pipefail
 # Ephemeral ad-hoc signing only. No identity lookup, provisioning update, team,
 # profile, certificate, keychain or system-security setting is created/changed.
-xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherMacSandbox -configuration Debug -derivedDataPath build/MacSandbox -destination 'platform=macOS,arch=arm64' ARCHS=arm64 CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= | tee mac-sandbox-build.log
+python3 -u scripts/run_bounded.py 240 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherMacSandbox -configuration Debug -derivedDataPath build/MacSandbox -destination 'platform=macOS,arch=arm64' ARCHS=arm64 CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= | tee mac-sandbox-build.log
 APP=build/MacSandbox/Build/Products/Debug/QRCatcherMac.app
 # XCTest's hosted unit instrumentation injects broad read/Mach exceptions. The
 # sandbox gate uses external XCUI only, and re-signs this app with exactly the
@@ -42,4 +42,4 @@ assert all(values.get(k) is True for k in required)
 assert set(values) <= required | {'com.apple.security.get-task-allow'}, values
 print('VERIFIED_EPHEMERAL_SANDBOX_ENTITLEMENTS',values,flush=True)
 PY
-xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherMacSandbox -configuration Debug -derivedDataPath build/MacSandbox -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacSandboxResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-sandbox-test.log
+python3 -u scripts/run_bounded.py 600 xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherMacSandbox -configuration Debug -derivedDataPath build/MacSandbox -destination 'platform=macOS,arch=arm64' ARCHS=arm64 -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -resultBundlePath MacSandboxResults.xcresult CODE_SIGNING_ALLOWED=NO | tee mac-sandbox-test.log

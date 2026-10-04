@@ -1,11 +1,21 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
+#import "QRUIInterruptionSafety.h"
 @interface QRCatcherPadUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
+@property (nonatomic, strong) id interruptionGuard;
 @end
 @implementation QRCatcherPadUITests
-- (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
-- (void)tearDown { if (self.testRun.failureCount > 0) { NSLog(@"IPAD_FAILURE_UI:%@", self.app.debugDescription); [self capture:@"ipad-failure"]; } [self.app terminate]; XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown]; }
+- (void)setUp {
+    [super setUp]; self.continueAfterFailure = NO;
+    self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
+    self.app = [XCUIApplication new];
+}
+- (void)tearDown {
+    if (self.testRun.failureCount > 0) { NSLog(@"IPAD_FAILURE_UI:%@", self.app.debugDescription); [self capture:@"ipad-failure"]; }
+    [self.app terminate]; XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown];
+    [self removeUIInterruptionMonitor:self.interruptionGuard];
+}
 - (void)launchWithArguments:(NSArray *)extra {
     self.app.launchArguments = [@[@"-ui-testing", @"-reset-history", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US", @"-fixture-payload", @"Native iPad QR result 你好"] arrayByAddingObjectsFromArray:extra];
     [self.app launch];

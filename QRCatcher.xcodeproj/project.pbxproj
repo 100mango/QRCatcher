@@ -546,9 +546,9 @@
 "7D1043473D55BFA90E8530D3" = {
 "isa" = "PBXNativeTarget";
 "buildConfigurationList" = "F37922C48DA5978D02C9E50E";
-"buildPhases" = ("2D764CD838DB39F040AA7EC4","12384B5908BE5FE5B3301CEE","06F5DC629BD46AAFD46564D1");
+"buildPhases" = ("2D764CD838DB39F040AA7EC4","12384B5908BE5FE5B3301CEE","06F5DC629BD46AAFD46564D1","64541B888467ADB0A3BB5252");
 "buildRules" = ();
-"dependencies" = ();
+"dependencies" = ("8A222B611E8D513D5F1C5EBF");
 "name" = "QRCatcher";
 "productName" = "QRCatcher";
 "productReference" = "E6FC57C251E9E1BEC1D3C0D2";
@@ -2825,6 +2825,7 @@
 "OTHER_CFLAGS" = ("$(inherited)","-DZUECI_EMBED_NO_TO_ECI");
 "OTHER_LDFLAGS" = ("$(inherited)","-lc++");
 "HEADER_SEARCH_PATHS" = ("$(SRCROOT)/Shared/PortableQR","$(SRCROOT)/ThirdParty/ZXingCpp/src","$(SRCROOT)/ThirdParty/ZXingCpp/Config");
+"SKIP_INSTALL" = "YES";
 "SWIFT_OBJC_BRIDGING_HEADER" = "QRCatcherWatch/QRCatcherWatch-Bridging-Header.h";
 "INFOPLIST_FILE" = "QRCatcherWatch/Info.plist";
 "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
@@ -2858,6 +2859,7 @@
 "OTHER_CFLAGS" = ("$(inherited)","-DZUECI_EMBED_NO_TO_ECI");
 "OTHER_LDFLAGS" = ("$(inherited)","-lc++");
 "HEADER_SEARCH_PATHS" = ("$(SRCROOT)/Shared/PortableQR","$(SRCROOT)/ThirdParty/ZXingCpp/src","$(SRCROOT)/ThirdParty/ZXingCpp/Config");
+"SKIP_INSTALL" = "YES";
 "SWIFT_OBJC_BRIDGING_HEADER" = "QRCatcherWatch/QRCatcherWatch-Bridging-Header.h";
 "INFOPLIST_FILE" = "QRCatcherWatch/Info.plist";
 "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
@@ -3134,6 +3136,34 @@
 "productName" = "QRCatcherWatchUITests";
 "productReference" = "CCDCF4922C1A88795F62789E";
 "productType" = "com.apple.product-type.bundle.ui-testing";
+};
+"66985B737CA355E912FC04A1" = {
+"isa" = "PBXContainerItemProxy";
+"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+"proxyType" = 1;
+"remoteGlobalIDString" = "292B0901993F7E9D9A0D9B80";
+"remoteInfo" = "QRCatcherWatch";
+};
+"8A222B611E8D513D5F1C5EBF" = {
+"isa" = "PBXTargetDependency";
+"target" = "292B0901993F7E9D9A0D9B80";
+"targetProxy" = "66985B737CA355E912FC04A1";
+};
+"E2527ABFC92948DC24171EF4" = {
+"isa" = "PBXBuildFile";
+"fileRef" = "27DDAA7C6240B9E2D7F7077D";
+"settings" = {
+"ATTRIBUTES" = ("RemoveHeadersOnCopy");
+};
+};
+"64541B888467ADB0A3BB5252" = {
+"isa" = "PBXCopyFilesBuildPhase";
+"buildActionMask" = 2147483647;
+"dstPath" = "$(CONTENTS_FOLDER_PATH)/Watch";
+"dstSubfolderSpec" = 16;
+"files" = ("E2527ABFC92948DC24171EF4");
+"name" = "Embed Watch Content";
+"runOnlyForDeploymentPostprocessing" = 0;
 };
 "A51B995684AEC2DD04AF0056" = {
 "isa" = "PBXGroup";

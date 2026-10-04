@@ -31,7 +31,7 @@ def inspect(folder: Path,required=True,limit=FOLDER_LIMIT):
 def allocation():
  value=json.loads(Path(__file__).with_name('evidence-allocation.json').read_text())
  limits=value['scope_limits_bytes']
- assert set(limits)=={'macos','visionos','tvos','watchos','iphone_pro','iphone_se3','ipad_pro','ipad_mini'}
+ assert set(limits)=={'macos','visionos','tvos','watchos','iphone_pro','iphone_se3','ipad_pro','ipad_mini','watchos_40','watchos_49'}
  assert value['whole_run_limit_bytes']==COMBINED_LIMIT
  assert all(isinstance(n,int) and 0<n<=FOLDER_LIMIT for n in limits.values())
  assert sum(limits.values())<=COMBINED_LIMIT

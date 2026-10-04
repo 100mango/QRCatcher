@@ -5,10 +5,11 @@ simctl get_app_container; no accessibility/TCC/database mutation is involved.
 """
 import hashlib,json,plistlib,re,subprocess,sys,time,uuid
 from pathlib import Path
+from atomic_json import write_json
 udid,log=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
 runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionUITests-Runner.app/Info.plist')
 runner_id=plistlib.loads(runner.read_bytes())['CFBundleIdentifier']
-seen=set();report=[];deadline=time.monotonic()+900
+seen=set();report=[];deadline=time.monotonic()+1440
 while time.monotonic()<deadline:
  text=log.read_text(errors='replace') if log.exists() else ''
  for request_id in re.findall(r'QRCATCHER_VISION_CAPTURE_REQUEST:([A-F0-9-]{36})',text):
@@ -56,8 +57,8 @@ while time.monotonic()<deadline:
   except Exception as e:row['error']=str(e)
   finally:
    if raw and raw.exists():raw.unlink()
-   if ack:ack.write_text(json.dumps(row)+'\n')
-  report.append(row);(out/'checkpoint-captures.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(row),flush=True)
+   if ack:write_json(ack,row,limit=16*1024)
+  report.append(row);write_json(out/'checkpoint-captures.json',report);print(json.dumps(row),flush=True)
  if (out/'ui-completed.marker').exists():break
  time.sleep(.25)
 if not report or any(not row['success'] for row in report):raise SystemExit('A held Vision screenshot checkpoint was not captured')

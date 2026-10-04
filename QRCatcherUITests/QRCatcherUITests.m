@@ -1,11 +1,18 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
+#import "QRUIInterruptionSafety.h"
 @interface QRCatcherUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
+@property (nonatomic, strong) id interruptionGuard;
+@property (nonatomic, strong) id cameraMonitor;
 @end
 @implementation QRCatcherUITests
 + (void)load { NSLog(@"QRCatcher UI regression bundle loaded"); }
-- (void)setUp { [super setUp]; self.continueAfterFailure = NO; self.app = [XCUIApplication new]; }
+- (void)setUp {
+    [super setUp]; self.continueAfterFailure = NO;
+    self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
+    self.app = [XCUIApplication new];
+}
 - (void)tearDown {
     if (self.testRun.failureCount > 0) {
         NSString *description = self.app.debugDescription;
@@ -17,7 +24,10 @@
         if (cameraAlert.exists) NSLog(@"PHONE_FAILURE_CAMERA_DIALOG:%@", cameraAlert.debugDescription);
         [self logSyntheticScreenshot:@"phone-failure"];
     }
+    [self.app terminate];
     XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown];
+    if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];
+    [self removeUIInterruptionMonitor:self.interruptionGuard];
 }
 - (void)launch:(NSArray *)arguments { self.app.launchArguments = [@[@"-ui-testing", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"] arrayByAddingObjectsFromArray:arguments]; [self.app launch]; }
 - (void)logSyntheticScreenshot:(NSString *)name {
@@ -36,10 +46,8 @@
     [self.app resetAuthorizationStatusForResource:XCUIProtectedResourceCamera];
     __block BOOL handledAllow = NO;
     id allowMonitor = [self addUIInterruptionMonitorWithDescription:@"Allow camera" handler:^BOOL(XCUIElement *alert) {
-        XCUIElement *allow = alert.buttons[@"Allow"];
-        if (!allow.exists) allow = alert.buttons[@"OK"];
-        if (allow.exists) { [allow tap]; handledAllow = YES; return YES; }
-        return NO;
+        QRRespondToObservedCameraPrompt(alert, @"Allow");
+        handledAllow = YES; return YES;
     }];
     [self.app launch]; [self.app tap];
     NSPredicate *unavailable = [NSPredicate predicateWithFormat:@"label CONTAINS %@", @"No camera is available"];
@@ -56,10 +64,8 @@
     [self.app resetAuthorizationStatusForResource:XCUIProtectedResourceCamera];
     __block BOOL handledDeny = NO;
     id denyMonitor = [self addUIInterruptionMonitorWithDescription:@"Deny camera after reset" handler:^BOOL(XCUIElement *alert) {
-        XCUIElement *deny = alert.buttons[@"Don’t Allow"];
-        if (!deny.exists) deny = alert.buttons[@"Don't Allow"];
-        if (deny.exists) { [deny tap]; handledDeny = YES; return YES; }
-        return NO;
+        QRRespondToObservedCameraPrompt(alert, @"Don’t Allow");
+        handledDeny = YES; return YES;
     }];
     [self.app launch]; [self.app tap];
     XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
@@ -70,11 +76,9 @@
 }
 - (void)testProductionSceneLaunchWithoutCameraStub {
     self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
-    [self addUIInterruptionMonitorWithDescription:@"Camera permission" handler:^BOOL(XCUIElement *alert) {
-        XCUIElement *deny = alert.buttons[@"Don’t Allow"];
-        if (!deny.exists) deny = alert.buttons[@"Don't Allow"];
-        if (deny.exists) { [deny tap]; return YES; }
-        return NO;
+    self.cameraMonitor = [self addUIInterruptionMonitorWithDescription:@"Deny only the observed QRCatcher camera request" handler:^BOOL(XCUIElement *alert) {
+        QRRespondToObservedCameraPrompt(alert, @"Don’t Allow");
+        return YES;
     }];
     [self.app launch];
     XCTAssertTrue([self.app.tabBars.buttons[@"history.tab"] waitForExistenceWithTimeout:10]);

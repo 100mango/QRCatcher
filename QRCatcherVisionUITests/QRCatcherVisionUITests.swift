@@ -1,17 +1,26 @@
 import XCTest
+import Darwin
 import UIKit
 
 @MainActor
 final class QRCatcherVisionUITests: XCTestCase {
     private var app: XCUIApplication!
+    private var interruptionGuard: NSObjectProtocol?
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Installed before any app/system-app launch and retained through teardown.
+        interruptionGuard = addUIInterruptionMonitor(withDescription: "Stop before every unexpected system interruption") { alert in
+            QRStopForUnexpectedInterruption(alert)
+        }
         app = XCUIApplication()
-        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        let chinese = name.contains("testChineseEmptyPhotosResultAndOfflinePolicy")
+        app.launchArguments = chinese ? ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"] : ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
         app.launch()
     }
     override func tearDownWithError() throws {
+        defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
+
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); capture("vision-failure") }
         app.terminate()
     }
@@ -34,9 +43,16 @@ final class QRCatcherVisionUITests: XCTestCase {
             let deadline = Date().addingTimeInterval(100)
             while Date() < deadline && !FileManager.default.fileExists(atPath: ack.path) { Thread.sleep(forTimeInterval: 0.2) }
             let result = try JSONSerialization.jsonObject(with: Data(contentsOf: ack)) as? [String: Any]
-            XCTAssertEqual(result?["id"] as? String, id)
-            XCTAssertEqual(result?["success"] as? Bool, true, "Held simulator checkpoint failed: \(String(describing: result))")
-        } catch { XCTFail("Held simulator capture acknowledgement: \(error)") }
+            if name == "vision-failure" {
+                print("VISION_FAILURE_CAPTURE_DIAGNOSTIC", String(describing: result))
+            } else {
+                XCTAssertEqual(result?["id"] as? String, id)
+                XCTAssertEqual(result?["success"] as? Bool, true, "Held simulator checkpoint failed: \(String(describing: result))")
+            }
+        } catch {
+            if name == "vision-failure" { print("VISION_FAILURE_CAPTURE_DIAGNOSTIC", error) }
+            else { XCTFail("Held simulator capture acknowledgement: \(error)") }
+        }
         try? FileManager.default.removeItem(at: request); try? FileManager.default.removeItem(at: ack)
     }
     private func saveUsingSystemFileExporter(_ button: String, name: String, checkpoint: String) {
@@ -79,8 +95,10 @@ final class QRCatcherVisionUITests: XCTestCase {
     }
 
     private func visibleFileItem(_ name: String) -> XCUIElement? {
+        let identity = NSPredicate(format: "label == %@ OR identifier == %@ OR label BEGINSWITH %@", name, name, name + ",")
         for query in [app.cells, app.buttons, app.staticTexts] {
-            if let item = query.allElementsBoundByIndex.first(where: { ($0.label == name || $0.identifier == name || $0.label.hasPrefix(name + ",")) && $0.isHittable }) { return item }
+            let item = query.matching(identity).firstMatch
+            if item.exists && item.isHittable { return item }
         }
         return nil
     }
@@ -110,9 +128,6 @@ final class QRCatcherVisionUITests: XCTestCase {
     }
 
     func testChineseEmptyPhotosResultAndOfflinePolicy() {
-        app.terminate()
-        app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
-        app.launch()
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["vision.payload"].exists)
         capture("vision-chinese-empty")
@@ -135,4 +150,12 @@ final class QRCatcherVisionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["vision.copy"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
     }
+}
+
+// Test-runner-only stop. Returning false or throwing an XCTest assertion here
+// would permit the default interruption handler to approve an unknown prompt.
+@MainActor private func QRStopForUnexpectedInterruption(_ alert: XCUIElement) -> Never {
+    fputs("QRCATCHER_UNEXPECTED_INTERRUPTION_ABORT_BEFORE_UI_ACTION\n", stderr); fflush(stderr)
+    // Do not query AX or record a throwable assertion before this stop.
+    abort()
 }

@@ -9,8 +9,10 @@ import hashlib,json,re,subprocess,sys
 from pathlib import Path
 
 app=Path(sys.argv[1]);binary=app/'QRCatcherWatch'
+label=sys.argv[2] if len(sys.argv)>2 else 'watch'
+assert label in ['watch','ios-embedded-watch']
 sdk=subprocess.check_output(['xcrun','--sdk','watchos','--show-sdk-path'],text=True,timeout=20).strip()
-report={'executable_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'sdk':sdk,'slices':{},
+report={'actual_app_bundle':str(app),'executable_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'sdk':sdk,'slices':{},
         'older_runtime_launch':'not executed; linked-symbol review and SDK diagnostics are static gates only'}
 for arch,minimum in [('arm64_32','9.0'),('arm64','26.0')]:
     raw=subprocess.check_output(['xcrun','nm','-arch',arch,'-u',str(binary)],text=True,timeout=20)
@@ -31,5 +33,5 @@ for arch,minimum in [('arm64_32','9.0'),('arm64','26.0')]:
         report['slices'][arch]['known_newer_runtime_imports']=newer
 encoded=json.dumps(report,indent=2)+'\n';assert len(encoded.encode())<60*1024
 out=Path('build/native-release-evidence');out.mkdir(parents=True,exist_ok=True)
-(out/'watch-cpp-compatibility.json').write_text(encoded);print(encoded,flush=True)
+(out/(label+'-cpp-compatibility.json')).write_text(encoded);print(encoded,flush=True)
 assert not report['slices']['arm64_32']['known_newer_runtime_imports'],'Watch 9.0 must not import watchOS 9.3 floating-point charconv'

@@ -1,17 +1,25 @@
 import XCTest
+import Darwin
 import UIKit
 
 @MainActor
 final class QRCatcherTVUITests: XCTestCase {
     private var app: XCUIApplication!
+    private var interruptionGuard: NSObjectProtocol?
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Installed before any app/system-app launch and retained through teardown.
+        interruptionGuard = addUIInterruptionMonitor(withDescription: "Stop before every unexpected system interruption") { alert in
+            QRStopForUnexpectedInterruption(alert)
+        }
         app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages","(en)","-AppleLocale","en_US"]
         app.launchEnvironment["QRCATCHER_TV_TEST_STORE"] = UUID().uuidString
         app.launch()
     }
     override func tearDownWithError() throws {
+        defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
+
         if (testRun?.failureCount ?? 0) > 0 { print("TV_FAILURE_UI:",app.debugDescription); capture("tv-failure") }
         app.terminate()
     }
@@ -52,10 +60,17 @@ final class QRCatcherTVUITests: XCTestCase {
         let system = XCUIApplication(bundleIdentifier: "com.apple.PineBoard")
         let allow = system.buttons["Allow All Photos"].firstMatch
         if allow.waitForExistence(timeout: 8) {
-            let title = system.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "QRCatcher", "photo library")).firstMatch
-            XCTAssertTrue(title.exists, "Only QRCatcher's explicit Photos request may be accepted: \(system.debugDescription)")
-            print("TV_OBSERVED_SYSTEM_PHOTOS_DIALOG:", system.debugDescription)
-            focusAndSelect(allow, root: system)
+            // Exact title and usage text retained from run 37144655090. Nested
+            // tvOS button duplicates are expected; the action stays in this alert.
+            let alert = system.alerts["Allow “QRCatcher” to access your photo library?"].firstMatch
+            guard alert.exists,
+                  alert.staticTexts["Choose QR images and verify QR images you save in Photos. Processing happens on this TV."].exists,
+                  alert.buttons["Don’t Allow"].firstMatch.exists,
+                  alert.buttons["Allow All Photos"].firstMatch.isEnabled else {
+                QRStopForUnexpectedInterruption(system.alerts.firstMatch)
+            }
+            print("TV_OBSERVED_SYSTEM_PHOTOS_DIALOG:", alert.debugDescription)
+            focusAndSelect(alert.buttons["Allow All Photos"].firstMatch, root: alert)
         } else {
             print("TV_PHOTOS_PERMISSION_SYSTEM_UI:", system.debugDescription)
         }
@@ -176,7 +191,7 @@ final class QRCatcherTVUITests: XCTestCase {
         XCTAssertTrue(confirmation.waitForExistence(timeout: 10), app.debugDescription)
         XCUIRemote.shared.press(.menu)
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirmation)], timeout: 10), .completed)
-        XCTAssertEqual(app.buttons["tv.record"].count, 1, "Cancel must preserve the saved result")
+        XCTAssertEqual(app.buttons.matching(identifier: "tv.record").count, 1, "Cancel must preserve the saved result")
         focusAndSelect(app.buttons["tv.deleteRecord"].firstMatch)
         focusAndSelect(confirmation)
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["tv.record"].firstMatch)], timeout: 10), .completed)
@@ -185,4 +200,12 @@ final class QRCatcherTVUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No saved QR codes yet"].exists)
         capture("tv-history-after-removal")
     }
+}
+
+// Test-runner-only stop. Returning false or throwing an XCTest assertion here
+// would permit the default interruption handler to approve an unknown prompt.
+@MainActor private func QRStopForUnexpectedInterruption(_ alert: XCUIElement) -> Never {
+    fputs("QRCATCHER_UNEXPECTED_INTERRUPTION_ABORT_BEFORE_UI_ACTION\n", stderr); fflush(stderr)
+    // Do not query AX or record a throwable assertion before this stop.
+    abort()
 }

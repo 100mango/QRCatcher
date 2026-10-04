@@ -8,11 +8,16 @@ import Darwin
 @MainActor
 final class QRCatcherMacUITests: XCTestCase {
     private var app: XCUIApplication!
+    private var interruptionGuard: NSObjectProtocol?
     private var folder: URL!
     private var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent() }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Installed before any app/system-app launch and retained through teardown.
+        interruptionGuard = addUIInterruptionMonitor(withDescription: "Stop before every unexpected system interruption") { alert in
+            QRStopForUnexpectedInterruption(alert)
+        }
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcherUITest-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         app = XCUIApplication(url: expectedApplicationURL)
@@ -35,6 +40,8 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
     }
     override func tearDownWithError() throws {
+        defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
+
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); try? screenshot("mac-failure") }
         app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }
     }
@@ -72,6 +79,12 @@ final class QRCatcherMacUITests: XCTestCase {
     private func verifyRunningApplication() {
         dismissObservedRealityWidgetsCrash()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
+        let sidebar = app.groups["mac.pane.history"], detail = app.groups["mac.pane.result"]
+        XCTAssertTrue(sidebar.descendants(matching: .any).matching(identifier: "mac.history").firstMatch.exists,
+                      "The labeled native pane must retain its actual accessible history child")
+        XCTAssertTrue(detail.descendants(matching: .scrollView).firstMatch.exists,
+                      "The labeled result pane must retain its real accessible content")
+        if app.staticTexts["mac.payload"].exists { XCTAssertTrue(detail.buttons["mac.copy"].exists) }
         let candidates = NSRunningApplication.runningApplications(withBundleIdentifier: "100mango.QRCatcher").filter { !$0.isTerminated }
         XCTAssertEqual(candidates.count, 1, "Exactly one target process must be running")
         guard let running = candidates.first, let actual = running.bundleURL, let executable = running.executableURL else { XCTFail("Target process has no bundle/executable identity"); return }
@@ -407,4 +420,12 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["Done"].firstMatch.click()
         XCTAssertTrue(app.buttons["mac.import"].exists)
     }
+}
+
+// Test-runner-only stop. Returning false or throwing an XCTest assertion here
+// would permit the default interruption handler to approve an unknown prompt.
+@MainActor private func QRStopForUnexpectedInterruption(_ alert: XCUIElement) -> Never {
+    fputs("QRCATCHER_UNEXPECTED_INTERRUPTION_ABORT_BEFORE_UI_ACTION\n", stderr); fflush(stderr)
+    // Do not query AX or record a throwable assertion before this stop.
+    abort()
 }

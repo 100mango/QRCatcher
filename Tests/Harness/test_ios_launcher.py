@@ -7,7 +7,7 @@ import json,os,plistlib,shutil,subprocess,tempfile
 root=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as directory:
     folder=Path(directory);binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
-    for name in ['run_ios_platform_ui.sh','run_bounded.py','stage_owned_import_fixture.py']:
+    for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','stage_owned_import_fixture.py']:
         shutil.copyfile(root/'scripts'/name,folder/'scripts'/name)
     app=folder/'synthetic-app';app.mkdir();data=folder/'synthetic-data';data.mkdir()
     (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'100mango.QRCatcher','UIFileSharingEnabled':True,'LSSupportsOpeningDocumentsInPlace':True}))

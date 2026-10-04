@@ -2,6 +2,7 @@
 """Read-only unsigned device bundle/weak-link proof; no Store or signing work."""
 import argparse,hashlib,json,plistlib,re,subprocess
 from pathlib import Path
+from required_reason_symbols import inspect_file_reader_imports
 parser=argparse.ArgumentParser();parser.add_argument('platform',choices=['Watch','TV','Vision']);args=parser.parse_args()
 platform=args.platform;name='QRCatcher'+platform
 sdk={'Watch':'watchos','TV':'appletvos','Vision':'xros'}[platform]
@@ -28,9 +29,8 @@ for marker in ['QRCATCHER_TEST_STORE','QRCATCHER_SANDBOX_','QRCATCHER_TV_TEST_ST
 assert not list(app.rglob('*.xctest'))
 archs=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True).strip().split()
 load=subprocess.check_output(['xcrun','otool','-l',str(executable)],text=True)
-imports=subprocess.check_output(['xcrun','nm','-u',str(executable)],text=True)
-assert (' _fstat' in imports)==(platform=='Vision'),'Only the file-import target should link the bounded descriptor reader'
-report={'platform':platform,'bundle':str(app),'bundle_id':expected,'minimum_os':minimum,'version':'1.1','build':'2','architectures':archs,'executable_bytes':len(data),'executable_sha256':hashlib.sha256(data).hexdigest(),'icons':icons,'privacy':privacy,'assets_car_sha256':hashlib.sha256((app/'Assets.car').read_bytes()).hexdigest()}
+reader_symbols=inspect_file_reader_imports(executable,platform=='Vision')
+report={'platform':platform,'actual_file_metadata_imports':reader_symbols,'bundle':str(app),'bundle_id':expected,'minimum_os':minimum,'version':'1.1','build':'2','architectures':archs,'executable_bytes':len(data),'executable_sha256':hashlib.sha256(data).hexdigest(),'icons':icons,'privacy':privacy,'assets_car_sha256':hashlib.sha256((app/'Assets.car').read_bytes()).hexdigest()}
 report['architecture_minimum_os']={}
 for arch in archs:
  slice_load=subprocess.check_output(['xcrun','otool','-arch',arch,'-l',str(executable)],text=True)

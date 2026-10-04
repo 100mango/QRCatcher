@@ -2,7 +2,7 @@
 
 ## Baseline and current milestone
 
-The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. At exact checkpoint `0eebd8f` / run `37124136942`, iOS units12, Pro Max UI8 and native iPad Pro UI3 passed. Vision compiled and passed4 hosted tests; real Photos/decode/copy/reopen assertions ran but its UI test exceeded the initial time allowance. TV compiled and passed4 hosted tests; the UI stopped at the actual system Photos permission dialog. The current 3245069 checkpoint includes native Vision and TV runtime/export gates, a compiled portable Watch decoder, and ongoing Mac audit/Watch startup fixes, detailed below. The combined workflow is not yet green.
+The frozen iOS base is `9abdd5e8150b47fc176d203db23db10854c81188`. Work is isolated on `codex/apple-platforms`; the iOS modernization branch is unchanged. This milestone implements a separate native macOS executable, `QRCatcherMac`, with the original `100mango.QRCatcher` identity. It is not a Catalyst or iPhone compatibility build. At exact checkpoint `0eebd8f` / run `37124136942`, iOS units12, Pro Max UI8 and native iPad Pro UI3 passed. Vision compiled and passed4 hosted tests; real Photos/decode/copy/reopen assertions ran but its UI test exceeded the initial time allowance. TV compiled and passed4 hosted tests; the UI stopped at the actual system Photos permission dialog. The 3245069 checkpoint includes native Vision and TV runtime/export gates. The newer 737523c checkpoint executes the portable Watch decoder successfully and reaches genuine sandboxed Mac Photos import; its full matrix remains incomplete/red, as detailed below.
 
 Mac deployment floor is 13.0. Build verification covers both arm64 and x86_64; runtime XCTest proof must be reported separately for each executed architecture. A compile is not runtime proof. Release verification remains unsigned. A separate local ad-hoc Debug sandbox test is described below; no Store records, Apple-account signing resources or registered persistent capabilities are created.
 
@@ -24,7 +24,7 @@ On macOS, run `python3 scripts/materialize_qr_fixtures.py` and `python3 scripts/
 
 Run `python3 scripts/generate_project.py` after changing source inventory. The generated Xcode project is deterministic and CI rejects a difference.
 
-The `Native Apple platforms` workflow has eight fresh public `xcode-27` VM rows, serialized with `max-parallel: 1`, bounded execution, and exact-head evidence. It checks exact source/tree/toolchain, unsigned universal Mac Release, DEBUG hook exclusion, Mac unit/UI XCTest, unsigned iOS Release, original model/store preservation and iOS unit/codec-equivalence regression. It exports bounded synthetic screenshots after Mac XCTest and logs each screenshot's SHA-256 before transfer. The Mac artifact is allocated 3,000,000 bytes; each other platform/device row is allocated 2,000,000 bytes, all with one-day retention. The 17,000,000-byte sum is below the strict 20,000,000-byte whole-run cap. No full xcresult archive is uploaded.
+The `Native Apple platforms` workflow has ten fresh public `xcode-27` VM rows, serialized with `max-parallel: 1`, bounded execution, and exact-head evidence. It checks exact source/tree/toolchain, unsigned universal Mac Release, DEBUG hook exclusion, Mac unit/UI XCTest, unsigned iOS Release, original model/store preservation and iOS unit/codec-equivalence regression. It exports bounded synthetic screenshots after Mac XCTest and logs each screenshot's SHA-256 before transfer. The Mac artifact is allocated 3,000,000 bytes; the baseline native and phone/tablet rows each have 2,000,000 bytes, and the additional 40 mm/49 mm Watch rows each have 1,000,000 bytes, all with one-day retention. The 19,000,000-byte sum is below the strict 20,000,000-byte whole-run cap. No full xcresult archive is uploaded.
 
 Native UI test import and export use actual NSOpenPanel/NSSavePanel; decoding, storage and exports are production code. The only DEBUG test hook chooses an isolated store path. No real user store is deleted, TCC database is altered or OS security prompt bypassed.
 
@@ -81,8 +81,10 @@ input and own-container diagnostic export fields are DEBUG-only and excluded
 from Release. Any normal Xcode-injected `get-task-allow` is Debug-only test support; this
 is not a distribution signature or evidence of prior App Store container handover.
 No network, general Documents/Pictures or Photos-library entitlement is granted.
-A genuine Photos-picker import from a disposable Mac Photos library is a separate
-remaining gate; cancellation or a file-panel import does not substitute for it.
+At 737523c, genuine Photos-picker import from a disposable Mac Photos library
+reached the exact Unicode decoded result under the minimal sandbox. The later
+strict sidebar-count contrast audit failed, so the complete case remained red.
+Cancellation or a file-panel import does not substitute for Photos selection.
 
 Paste reads encoded PNG/TIFF bytes only after the person's explicit action.
 Source metadata is checked without caching before ImageIO expands raster data:
@@ -368,3 +370,106 @@ Vision already exposes its document folder in the existing product. These tests
 select the actual file through the native document picker and independently
 assert the exact Unicode decode plus history/process relaunch. The new routes
 await actual execution and do not substitute fixtures for provider selection.
+
+## 737523c runtime checkpoint and narrow successor repairs
+
+Run `37151432147` is tied to exact commit
+`737523c2e76f50ea5fa6971b6d21988f140f5d11`. Its Watch row completed with
+13 hosted and 4 native UI cases passing, including the genuine portable CPU
+decoder, Unicode/ECI/rotation/multiple-code fixtures, bounded serial admission,
+durable state/reply-journal recovery and process relaunch. The test-created
+Series 12 (46 mm) ran watchOS 27 without a paired phone simulator. Generic
+Release verified arm64 (minimum watchOS 26) and arm64_32 (minimum watchOS 9),
+1,881,736 executable bytes, retained icon/notices, and no Vision/CoreML load.
+This does not establish older-Watch runtime, physical photo selection or paired
+WatchConnectivity file delivery. The real system picker correctly reported
+that Photos cannot load in Simulator and its Close route passed.
+
+The 737523c result/reopened Watch attachments were taken after an audit scrolled
+to the bottom of the record. They prove that actual screen state, not visible
+payload or QR-preview containment. The successor explicitly frames the preview
+and payload before capture/audit, retains native PNG dimensions, and adds fresh
+40 mm SE 3 / 49 mm Ultra 4 device rows; those new captures await runtime proof.
+
+Mac executed 26 hosted cases: 25 passed and the new pane-child assertion failed
+because it queried an NSView property instead of SwiftUI's virtual accessibility
+children. The real XCUI hierarchy exposes both labeled panes and their children;
+the successor asserts those children through XCUI. The seven Mac UI cases
+reached a strict sidebar-count contrast finding, which remains a failure. The
+actual Photos case populated the disposable library, selected the uniquely
+verified visible Unicode QR thumbnail, and reached decoded text/history under
+the minimal sandbox before that audit failed. Its retained before/after/result
+frames are 1024×768. The successor uses primary text color for the affected
+caption/count/status and keeps all audit categories enabled. Both Mac Release
+architectures compiled; the new fstat symbol assertion failed before completion
+of packaging verification. A parser now accepts actual plain/columnar Darwin
+nm symbols and aliases, prints the observed symbols, and keeps the positive
+and negative target-boundary assertions strict.
+
+Vision's new Chinese case failed while reading an empty capture-acknowledgement
+file, before opening Photos. The host previously created that file before
+writing its JSON bytes. The successor atomically publishes complete bounded
+JSON and tests that visibility boundary. It also runs Photos/export, Files and
+Chinese cases in distinct bounded XCTest commands so a failed cleanup does not
+hide every later case. Other build/hosted-test commands also have an owned-CLI
+watchdog with a bounded pipe, rather than relying solely on Actions step limits. These changes are harness repairs, not a claim that new
+Vision Files/Chinese flows have passed. The earlier 3245069 Vision Photos,
+PNG/JSON export/readback and relaunch result remains a separate valid checkpoint.
+
+The successor adds a standard iOS target dependency and Watch-subfolder copy
+phase. Its unsigned packaging gate checks the actual nested Watch bundle, exact
+companion/version identity, producer-byte equality, correct platform, both
+device architectures/minima, notices/privacy and Release fixture exclusion.
+The device embedding build runs in the first Watch VM before lengthy UI rows,
+without duplicating that Release build in the later phone row. The simulator
+checks the actual watchsimulator producer. This embedding is
+uncompiled when staged; standalone Watch success is not embedding proof.
+
+The same 737523c TV row compiled its app and unsigned Release package (actual
+arm64/tvOS 17.0 floor, required UserDefaults reason and icon checks), but the
+UI target failed compilation at its new cancellation assertion: XCUIElement
+has no count property. Zero TV runtime cases ran on that head. The successor
+counts the matching-buttons query and retains the focused-Delete pixel-contrast,
+cancel/confirmed-delete/relaunch and strict audit gates. The earlier 3245069
+functional TV pass does not qualify that new visual repair.
+
+A follow-up Watch cancellation review found that QR already re-enumerated the
+real outstanding WCSession queue after relaunch, but its match used only the
+request UUID. The successor matches protocol kind/version, record/request IDs
+and source hash. Cancellation first persists a durable tombstone, then cancels
+only matching transfers; launch/activation finishes any interrupted cleanup
+without sending a request. New hosted fake-queue cases cover same-UUID unrelated
+transfers, failed persistence, interrupted cleanup and delayed duplicate/journal
+replies. Those tests await Apple execution and do not claim physical delivery.
+
+The 737523c Pro Max terminal log verifies 23 hosted tests and 9 legacy/picker-
+cancel UI tests passing. Both expanded import cases were red: Files hit a stale
+index-bound XCTest query while the actual Files controls loaded; Photos decoded
+the exact Unicode value and retained both records through relaunch, then the
+new test incorrectly expected the iPad scanner result instead of the established
+phone QR Code alert. The successor uses semantic Files queries and separately
+asserts the phone alert versus iPad inline result after persistence. Its Release
+build succeeded and original ID/iOS 15.0/family checks passed, but the leading-
+space nm assertion stopped the later privacy/Debug-exclusion gates. Those later
+checks remain unverified until the exact-token parser executes in the successor.
+
+The same 737523c large-iPad row passed all three substantive existing iPad
+cases, including actual Photos Unicode import and two-record process relaunch;
+only the new Files case failed its stale-index test query. The sole seed command
+completed in 119.42 seconds. Six hash-verified frames total 1,337,388 bytes; the
+History title, largest-text controls and imported result are visibly complete.
+
+The successor also sizes the Watch 1× photo preview to its actual SwiftUI
+viewport instead of a fixed 160×170-point box. Saved bytes remain unchanged,
+aspect ratio is preserved, and explicit zoom/pan remains available. Its sizing
+test is a mathematical regression; actual 40/49 mm pixels remain the acceptance
+gate, with no physical QR-readability claim.
+
+Run 37151432147 finished with overall failure at 22:25:58 UTC: one green Watch
+row, six failed rows and one cancelled Vision row. Mini matched the large iPad:
+all three existing layout/Photos/persistence cases passed, with only the new
+Files stale-query case failing. Vision's finalized log still returned
+BlobNotFound on the single post-terminal check, and it uploaded no artifact;
+its completed-case count remains incomplete. The next candidate retains all
+rows and uses the bounded watchdog/ACK fixes rather than treating that missing
+evidence as a pass.

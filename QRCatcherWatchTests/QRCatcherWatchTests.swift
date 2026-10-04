@@ -1,7 +1,18 @@
 import XCTest
+import CoreGraphics
 @testable import QRCatcherWatch
 
 @MainActor final class QRCatcherWatchTests: XCTestCase {
+    func testOneTimesPreviewFitsCompactAndLargeWatchContentProposals() {
+        let proposals: [(CGFloat, CGFloat)] = [(162, 153), (198, 194), (208, 204)]
+        for (width, height) in proposals {
+            let side = WatchPreviewLayout.side(width: width, height: height)
+            XCTAssertLessThanOrEqual(side, 160)
+            XCTAssertLessThanOrEqual(side + 16, width)
+            XCTAssertLessThanOrEqual(side + 24, height)
+            XCTAssertGreaterThanOrEqual(side, 64)
+        }
+    }
     private var folders: [URL] = []
     override func tearDownWithError() throws { for folder in folders { try? FileManager.default.removeItem(at: folder) }; folders = [] }
     private func url() throws -> URL {
@@ -107,6 +118,78 @@ import XCTest
         try JSONSerialization.data(withJSONObject: ["kind":"qrcatcher.decode.result", "version":1,
             "recordID":record.id.uuidString, "requestID":try XCTUnwrap(record.phoneRequest).uuidString,
             "sourceSHA256":record.sourceSHA256, "payloads":payloads, "status":status], options: [.sortedKeys])
+    }
+    private func requestMetadata(for record: WatchRecord) throws -> [String: Any] {
+        ["kind":"qrcatcher.decode.request", "version":1, "recordID":record.id.uuidString,
+         "requestID":try XCTUnwrap(record.phoneRequest).uuidString, "sourceSHA256":record.sourceSHA256]
+    }
+    func testCancelAfterRelaunchUsesFreshProtocolQueueAndRejectsLateSameUUIDReply() throws {
+        let path = try url(), original = WatchHistory(url: path)
+        var record = try original.append(source: fixture("unicode"), payloads: ["Existing result"])
+        record.phoneRequest = UUID(); record.phoneState = "pending"; try original.replace(record)
+        let exact = try requestMetadata(for: record)
+        var foreignKind = exact, foreignVersion = exact, foreignRecord = exact, foreignHash = exact, foreignRequest = exact
+        foreignKind["kind"] = "unrelated.protocol"; foreignVersion["version"] = 2
+        foreignRecord["recordID"] = UUID().uuidString; foreignHash["sourceSHA256"] = String(repeating: "0", count: 64)
+        foreignRequest["requestID"] = UUID().uuidString
+        let metadata: [[String: Any]?] = [exact, foreignKind, foreignVersion, foreignRecord, foreignHash, foreignRequest, nil]
+        var cancelled: [Int] = []
+        let reopened = WatchHistory(url: path)
+        let transport = WatchPhoneTransport(history: reopened, outstandingTransfers: {
+            metadata.enumerated().map { index, value in WatchQueuedFileTransfer(metadata: value, cancel: {
+                XCTAssertEqual(WatchHistory(url: path).records[0].phoneState, "cancelled", "Durable cancellation must precede the external queue mutation")
+                cancelled.append(index)
+            }) }
+        })
+        try transport.cancel(record.id)
+        XCTAssertEqual(cancelled, [0], "Same UUID is insufficient to cancel an unrelated transfer")
+        XCTAssertEqual(transport.status, NSLocalizedString("Cancelled", comment: ""))
+        let persisted = try Data(contentsOf: path)
+        let late = try reply(for: record, payloads: ["Late result must not resurrect"])
+        try transport.accept(late); try transport.accept(late)
+        XCTAssertEqual(try Data(contentsOf: path), persisted)
+        XCTAssertEqual(reopened.records[0].payloads, ["Existing result"])
+        XCTAssertEqual(reopened.records[0].phoneRequest, record.phoneRequest)
+        let journal = WatchReplyJournal(folder: WatchReplyJournal.location(for: path))
+        try journal.stage(late)
+        let nextHistory = WatchHistory(url: path)
+        _ = WatchPhoneTransport(history: nextHistory, outstandingTransfers: { [] })
+        XCTAssertEqual(nextHistory.records[0].phoneState, "cancelled")
+        XCTAssertEqual(nextHistory.records[0].payloads, ["Existing result"])
+        XCTAssertTrue(try journal.pending().isEmpty)
+    }
+    func testRelaunchFinishesCancelledTransferCleanupWithoutResending() throws {
+        let path = try url(), original = WatchHistory(url: path)
+        var record = try original.append(source: fixture("unicode"), payloads: [])
+        record.phoneRequest = UUID(); record.phoneState = "cancelled"; try original.replace(record)
+        // Models interruption after the durable tombstone, before WC cancellation.
+        let metadata = try requestMetadata(for: record)
+        var calls = 0
+        let reopened = WatchHistory(url: path)
+        _ = WatchPhoneTransport(history: reopened, outstandingTransfers: {
+            [WatchQueuedFileTransfer(metadata: metadata, cancel: { calls += 1 })]
+        })
+        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(reopened.records[0].phoneState, "cancelled")
+        XCTAssertTrue(reopened.records[0].payloads.isEmpty)
+    }
+    func testFailedDurableCancelDoesNotMutateOutstandingTransfers() throws {
+        let path = try url(), history = WatchHistory(url: path)
+        var record = try history.append(source: fixture("unicode"), payloads: [])
+        record.phoneRequest = UUID(); record.phoneState = "pending"; try history.replace(record)
+        let metadata = try requestMetadata(for: record)
+        var calls = 0
+        let transport = WatchPhoneTransport(history: history, outstandingTransfers: {
+            [WatchQueuedFileTransfer(metadata: metadata, cancel: { calls += 1 })]
+        })
+        let backup = path.appendingPathExtension("original")
+        try FileManager.default.moveItem(at: path, to: backup)
+        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: path); try? FileManager.default.moveItem(at: backup, to: path) }
+        XCTAssertThrowsError(try transport.cancel(record.id))
+        XCTAssertEqual(calls, 0)
+        XCTAssertEqual(history.records[0].phoneState, "pending")
+        XCTAssertEqual(WatchHistory(url: backup).records[0].phoneState, "pending")
     }
     func testStageSyntheticReplyForSeparateProcessRelaunchGate() async throws {
         let path = WatchHistory.defaultURL().deletingLastPathComponent().appendingPathComponent("49F5E6A7-20ED-4BD9-BF4E-C4B44F652F21.json")

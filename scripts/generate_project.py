@@ -185,7 +185,7 @@ for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRC
     common={'PRODUCT_NAME':'$(TARGET_NAME)','PRODUCT_BUNDLE_IDENTIFIER':'100mango.QRCatcher.watchkitapp' if app else '100mango.'+name,'SDKROOT':'watchos','SUPPORTED_PLATFORMS':'watchos watchsimulator','TARGETED_DEVICE_FAMILY':'4','WATCHOS_DEPLOYMENT_TARGET':'9.0','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'targeted','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks','CODE_SIGN_STYLE':'Automatic'}
     if app:
         portable_sources(files,src,common)
-        common.update(SWIFT_OBJC_BRIDGING_HEADER='QRCatcherWatch/QRCatcherWatch-Bridging-Header.h',INFOPLIST_FILE='QRCatcherWatch/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
+        common.update(SKIP_INSTALL='YES',SWIFT_OBJC_BRIDGING_HEADER='QRCatcherWatch/QRCatcherWatch-Bridging-Header.h',INFOPLIST_FILE='QRCatcherWatch/Info.plist',ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',MARKETING_VERSION='1.1',CURRENT_PROJECT_VERSION='2')
         localized=add('watchlocalized:Localizable.strings','PBXFileReference',lastKnownFileType='text.plist.strings',name='zh-Hans',path='QRCatcherWatch/zh-Hans.lproj/Localizable.strings',sourceTree='<group>')
         variant=add('watchvariant:Localizable.strings','PBXVariantGroup',children=[localized],name='Localizable.strings',sourceTree='<group>');files.append(variant);res.append(build(variant))
         r=file('Shared/Services/QRPrivacyText.swift','sourcecode.swift');files.append(r);src.append(build(r))
@@ -203,6 +203,14 @@ for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRC
         deps=[add(key+'dependency','PBXTargetDependency',target=watchID,targetProxy=proxy)]
     groups.append(add(key+'group','PBXGroup',children=files,name=name,sourceTree='<group>'))
     targets.append(add(key,'PBXNativeTarget',buildConfigurationList=configs(key,common),buildPhases=[phase(key+'sources','Sources',src),phase(key+'frameworks','Frameworks',[]),phase(key+'resources','Resources',res)],buildRules=[],dependencies=deps,name=name,productName=name,productReference=product,productType='com.apple.product-type.'+kind))
+# Modern single-target Watch counterpart. Only the iOS app depends on and embeds
+# this product; standalone Watch tests/builds remain independent of the phone.
+# Xcode resolves the producer's watchOS/watchsimulator product for the parent
+# destination. CI verifies the actual nested platform and producer byte equality.
+watchProxy=add('appWatchProxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=watchID,remoteInfo='QRCatcherWatch')
+objects[appID]['dependencies'].append(add('appWatchDependency','PBXTargetDependency',target=watchID,targetProxy=watchProxy))
+watchCopy=add('appWatchBuild','PBXBuildFile',fileRef=uid('watchproduct'),settings={'ATTRIBUTES':['RemoveHeadersOnCopy']})
+objects[appID]['buildPhases'].append(add('appWatchCopy','PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath='$(CONTENTS_FOLDER_PATH)/Watch',dstSubfolderSpec=16,files=[watchCopy],name='Embed Watch Content',runOnlyForDeploymentPostprocessing=0))
 # A file reference has one navigator owner even when several targets compile it.
 from collections import Counter
 counts=Counter(r for group in groups for r in objects[group]['children'])

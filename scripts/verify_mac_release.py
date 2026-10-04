@@ -2,6 +2,7 @@
 """Inspect the actual unsigned universal Mac product; do not infer its floor."""
 import hashlib,json,plistlib,re,subprocess
 from pathlib import Path
+from required_reason_symbols import inspect_file_reader_imports
 app=Path('build/MacRelease/Build/Products/Release/QRCatcherMac.app')
 info=plistlib.loads((app/'Contents/Info.plist').read_bytes())
 assert info['CFBundleIdentifier']=='100mango.QRCatcher'
@@ -10,7 +11,7 @@ assert info['LSMinimumSystemVersion']=='13.0'
 executable=app/'Contents/MacOS'/info['CFBundleExecutable']
 archs=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True,timeout=30).split()
 assert set(archs)=={'arm64','x86_64'}
-assert ' _fstat' in subprocess.check_output(['xcrun','nm','-u',str(executable)],text=True,timeout=30)
+reader_symbols=inspect_file_reader_imports(executable,True)
 minima={}
 for arch in archs:
     load=subprocess.check_output(['xcrun','otool','-arch',arch,'-l',str(executable)],text=True,timeout=30)
@@ -18,7 +19,7 @@ for arch in archs:
     assert match and match.group(1)=='13.0',(arch,match.group(1) if match else None)
     minima[arch]=match.group(1)
 report={'platform':'Mac','bundle_id':info['CFBundleIdentifier'],'version':info['CFBundleShortVersionString'],'build':str(info['CFBundleVersion']),
-        'minimum_os':info['LSMinimumSystemVersion'],'architecture_minimum_os':minima,
+        'actual_file_metadata_imports':reader_symbols,'minimum_os':info['LSMinimumSystemVersion'],'architecture_minimum_os':minima,
         'executable_bytes':executable.stat().st_size,'executable_sha256':hashlib.sha256(executable.read_bytes()).hexdigest(),
         'runtime_scope':'Current arm64 macOS27 only; minimum-floor and x86_64 runtime remain separate gates'}
 encoded=json.dumps(report,indent=2)+'\n';assert len(encoded.encode())<8192

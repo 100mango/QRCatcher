@@ -2,6 +2,28 @@ import Foundation
 import Combine
 import WatchConnectivity
 
+/// A fresh snapshot of the system queue, with cancellation owned by that transfer.
+/// Production reads WCSession each time, including after a process relaunch.
+struct WatchQueuedFileTransfer {
+    let metadata: [String: Any]?
+    let cancel: () -> Void
+}
+private struct WatchRequestIdentity: Sendable {
+    let recordID: UUID
+    let requestID: UUID
+    let sourceSHA256: String
+    init?(metadata: [String: Any]?) {
+        guard metadata?["kind"] as? String == "qrcatcher.decode.request", metadata?["version"] as? Int == 1,
+              let record = (metadata?["recordID"] as? String).flatMap(UUID.init(uuidString:)),
+              let request = (metadata?["requestID"] as? String).flatMap(UUID.init(uuidString:)),
+              let hash = metadata?["sourceSHA256"] as? String else { return nil }
+        recordID = record; requestID = request; sourceSHA256 = hash
+    }
+    func matches(_ record: WatchRecord) -> Bool {
+        recordID == record.id && requestID == record.phoneRequest && sourceSHA256 == record.sourceSHA256
+    }
+}
+
 /// Background delivery uses the real paired-device file API. Simulator callbacks
 /// are not supported by Apple and are not claimed as an E2E transport test.
 @MainActor
@@ -9,15 +31,31 @@ final class WatchPhoneTransport: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var status = ""
     private let history: WatchHistory
     private let session = WCSession.default
+    private let outstandingTransfers: () -> [WatchQueuedFileTransfer]
     private let folder: URL
     nonisolated private let inbox: WatchReplyJournal
-    init(history: WatchHistory) {
+    convenience init(history: WatchHistory) {
+        self.init(history: history, outstandingTransfers: {
+            WCSession.default.outstandingFileTransfers.map { transfer in
+                WatchQueuedFileTransfer(metadata: transfer.file.metadata, cancel: { transfer.cancel() })
+            }
+        }, activateSession: true)
+    }
+    #if DEBUG
+    /// Deterministic queue ownership tests never activate a real WC session or
+    /// claim simulator file delivery. This injection entry is absent in Release.
+    convenience init(history: WatchHistory, outstandingTransfers: @escaping () -> [WatchQueuedFileTransfer]) {
+        self.init(history: history, outstandingTransfers: outstandingTransfers, activateSession: false)
+    }
+    #endif
+    private init(history: WatchHistory, outstandingTransfers: @escaping () -> [WatchQueuedFileTransfer], activateSession: Bool) {
         self.history = history
+        self.outstandingTransfers = outstandingTransfers
         folder = history.url.deletingLastPathComponent().appendingPathComponent("PhoneRequests", isDirectory: true)
         inbox = WatchReplyJournal(folder: WatchReplyJournal.location(for: history.url))
         super.init()
-        do { try replayPendingReplies() } catch { status = error.localizedDescription }
-        guard WCSession.isSupported() else { return }
+        do { try replayPendingReplies(); reconcileCancelledTransfers() } catch { status = error.localizedDescription }
+        guard activateSession, WCSession.isSupported() else { return }
         session.delegate = self; session.activate()
     }
     func request(_ id: UUID) throws {
@@ -37,9 +75,24 @@ final class WatchPhoneTransport: NSObject, ObservableObject, WCSessionDelegate {
     }
     func cancel(_ id: UUID) throws {
         guard var record = history.records.first(where: { $0.id == id }), let request = record.phoneRequest else { return }
-        for transfer in session.outstandingFileTransfers where transfer.file.metadata?["requestID"] as? String == request.uuidString { transfer.cancel() }
+        // Commit the tombstone first so an already-delivered delayed reply cannot
+        // resurrect this job. Activation/relaunch repeats transport cleanup if a
+        // process interruption occurs after this commit but before cancellation.
         record.phoneState = "cancelled"; try history.replace(record)
+        cancelTransfers(for: record)
         try? FileManager.default.removeItem(at: folder.appendingPathComponent(request.uuidString + ".png"))
+        status = NSLocalizedString("Cancelled", comment: "")
+    }
+    private func cancelTransfers(for record: WatchRecord) {
+        for transfer in outstandingTransfers() where WatchRequestIdentity(metadata: transfer.metadata)?.matches(record) == true { transfer.cancel() }
+    }
+    private func reconcileCancelledTransfers() {
+        for record in history.records where record.phoneState == "cancelled" {
+            cancelTransfers(for: record)
+            if let request = record.phoneRequest {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(request.uuidString + ".png"))
+            }
+        }
     }
     private func enqueue(_ record: WatchRecord, path: URL) {
         guard let request = record.phoneRequest else { return }
@@ -49,7 +102,7 @@ final class WatchPhoneTransport: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in
             if let error { self.status = error.localizedDescription }
-            do { try self.replayPendingReplies() } catch { self.status = error.localizedDescription }
+            do { try self.replayPendingReplies(); self.reconcileCancelledTransfers() } catch { self.status = error.localizedDescription }
             // Activation never resends a retained request to a changed phone.
             // The user can cancel and explicitly retry from the record screen.
         }
@@ -101,9 +154,9 @@ final class WatchPhoneTransport: NSObject, ObservableObject, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
         guard let error else { return } // Completion is not a decoded-result acknowledgement.
-        let request = fileTransfer.file.metadata?["requestID"] as? String
+        guard let identity = WatchRequestIdentity(metadata: fileTransfer.file.metadata) else { return }
         Task { @MainActor in
-            guard var record = self.history.records.first(where: { $0.phoneRequest?.uuidString == request && $0.phoneState == "pending" }) else { return }
+            guard var record = self.history.records.first(where: { $0.phoneState == "pending" && identity.matches($0) }) else { return }
             record.phoneState = "failed"; record.phoneError = error.localizedDescription
             do { try self.history.replace(record) } catch { self.status = error.localizedDescription }
         }

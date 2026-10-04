@@ -31,7 +31,7 @@ struct MacMainView: View {
                 Group {
                     if history.error != nil { Text("History unavailable") }
                     else { Text("\(history.items.count) saved on this Mac") }
-                }.font(.caption).foregroundStyle(.secondary).padding()
+                }.font(.caption).foregroundStyle(.primary).padding()
             }
             .background(MacPaneAccessibility(label: QRL("Saved QR history"), identifier: "mac.pane.history"))
             .navigationTitle("History")
@@ -126,14 +126,14 @@ private struct QRResultView: View {
                     }
                     Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload")
                     MacResultActions(workspace: workspace, canOpen: QRPayload.safeWebURL(payload) != nil)
-                    Text("Links open only when you choose Open in Browser.").font(.caption).foregroundStyle(.secondary)
+                    Text("Links open only when you choose Open in Browser.").font(.caption).foregroundStyle(.primary)
                 } else {
                     Text("Use an image from Files, Photos or your clipboard. You can also drop an image here, or use an available camera.")
                         .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 400)
                     Button("Open Image…", action: workspace.importFile).buttonStyle(.borderedProminent)
                 }
                 if workspace.isReading { HStack { ProgressView().controlSize(.small); Button("Cancel", action: workspace.cancelRead) } }
-                Text(workspace.status).foregroundStyle(.secondary).multilineTextAlignment(.center).accessibilityIdentifier("mac.status")
+                Text(workspace.status).foregroundStyle(.primary).multilineTextAlignment(.center).accessibilityIdentifier("mac.status")
                 if let historyError { Text(historyError).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("mac.historyError") }
             }.padding(36).frame(maxWidth: .infinity)
         }.navigationTitle("QRCatcher")

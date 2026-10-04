@@ -8,6 +8,8 @@
     "iphone_pro": 2000000,
     "iphone_se3": 2000000,
     "ipad_pro": 2000000,
-    "ipad_mini": 2000000
+    "ipad_mini": 2000000,
+    "watchos_40": 1000000,
+    "watchos_49": 1000000
   }
 }

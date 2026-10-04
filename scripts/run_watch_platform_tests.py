@@ -22,7 +22,10 @@ def run(args,seconds=120,check=True,log=None):
 raw=json.loads(run(['xcrun','simctl','list','devices','available','-j'])[1])
 rows=[d for runtime,devices in raw['devices'].items() if runtime.endswith('watchOS-27-0') for d in devices]
 assert rows,'No installed Watch 27 simulator; SDK build is not runtime proof'
-device=next((d for d in rows if '46mm' in d['name']),rows[0])
+scope=os.environ.get('EVIDENCE_SCOPE','watchos');assert scope in ['watchos','watchos_40','watchos_49']
+requested={'watchos':'Apple Watch Series 12 (46mm)','watchos_40':'Apple Watch SE 3 (40mm)','watchos_49':'Apple Watch Ultra 4 (49mm)'}[scope]
+matches=[d for d in rows if d['name']==requested];assert matches,'Requested endpoint is not present in this VM inventory: '+requested
+device=matches[0];report.update(scope=scope,requested_model=requested)
 runtime=next(runtime for runtime,devices in raw['devices'].items() if device in devices)
 _,created=run(['xcrun','simctl','create','QRCatcher Native Watch Validation',device['deviceTypeIdentifier'],runtime],60)
 udid=str(uuid.UUID(created.strip())).upper();report.update(device_type=device['deviceTypeIdentifier'],runtime=runtime,device_udid=udid,device_ownership='created solely for this disposable validation')

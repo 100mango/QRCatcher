@@ -80,6 +80,11 @@ private struct WatchCollectionContent: View {
         }.onChange(of: selection) { value in if let value { model.startRead(value) } }
     }
 }
+enum WatchPreviewLayout {
+    static func side(width: CGFloat, height: CGFloat) -> CGFloat {
+        max(64, min(160, width - 16, height - 24))
+    }
+}
 private struct WatchRecordView: View {
     @ObservedObject var model: WatchWorkspace
     @ObservedObject var history: WatchHistory
@@ -90,29 +95,32 @@ private struct WatchRecordView: View {
     @Environment(\.dismiss) private var dismiss
     private var record: WatchRecord? { history.records.first { $0.id == id } }
     var body: some View {
-        ScrollView {
-            if let record {
-                VStack(spacing: 12) {
-                    if let image = WatchPhotoCodec.preview(record.sourcePNG) {
-                        ScrollView([.horizontal, .vertical]) {
-                            Image(image, scale: 1, label: Text("Saved QR photo preview")).resizable().interpolation(.none)
-                                .aspectRatio(contentMode: .fit).frame(width: 160 * zoom).accessibilityIdentifier("watch.source-image")
-                        }.frame(height: 170)
-                        HStack { Button("−") { zoom = max(1, zoom - 1) }.accessibilityLabel("Zoom out"); Button("+") { zoom = min(4, zoom + 1) }.accessibilityLabel("Zoom in") }
-                        Text("Saved QR photo preview, up to 1536 pixels").font(.caption2)
-                    } else { Text("The saved preview could not be read. Your text result is still available.").font(.footnote) }
-                    ForEach(Array(record.payloads.enumerated()), id: \.offset) { _, payload in Text(payload).accessibilityIdentifier("watch.payload") }
-                    if let state = record.phoneState { Text(LocalizedStringKey(state.capitalized)).accessibilityIdentifier("watch.phone-state") }
-                    if let error = record.phoneError { Text(error).font(.footnote) }
-                    if record.phoneState == "pending" {
-                        Text("Waiting for paired iPhone. Delivery may happen later.").font(.footnote)
-                        Button("Cancel Request") { do { try phone.cancel(id) } catch { model.error = error.localizedDescription } }
-                    } else {
-                        Button("Read on iPhone") { do { try phone.request(id) } catch { model.error = error.localizedDescription } }.accessibilityIdentifier("watch.phone-request")
+        GeometryReader { geometry in
+            let previewSide = WatchPreviewLayout.side(width: geometry.size.width, height: geometry.size.height)
+            ScrollView {
+                if let record {
+                    VStack(spacing: 12) {
+                        if let image = WatchPhotoCodec.preview(record.sourcePNG) {
+                            ScrollView([.horizontal, .vertical]) {
+                                Image(image, scale: 1, label: Text("Saved QR photo preview")).resizable().interpolation(.none)
+                                    .aspectRatio(contentMode: .fit).frame(width: previewSide * CGFloat(zoom), height: previewSide * CGFloat(zoom)).accessibilityIdentifier("watch.source-image")
+                            }.frame(height: previewSide + 8)
+                            HStack { Button("−") { zoom = max(1, zoom - 1) }.accessibilityLabel("Zoom out"); Button("+") { zoom = min(4, zoom + 1) }.accessibilityLabel("Zoom in") }
+                            Text("Saved QR photo preview, up to 1536 pixels").font(.caption2)
+                        } else { Text("The saved preview could not be read. Your text result is still available.").font(.footnote) }
+                        ForEach(Array(record.payloads.enumerated()), id: \.offset) { _, payload in Text(payload).accessibilityIdentifier("watch.payload") }
+                        if let state = record.phoneState { Text(LocalizedStringKey(state.capitalized)).accessibilityIdentifier("watch.phone-state") }
+                        if let error = record.phoneError { Text(error).font(.footnote) }
+                        if record.phoneState == "pending" {
+                            Text("Waiting for paired iPhone. Delivery may happen later.").font(.footnote)
+                            Button("Cancel Request") { do { try phone.cancel(id) } catch { model.error = error.localizedDescription } }
+                        } else {
+                            Button("Read on iPhone") { do { try phone.request(id) } catch { model.error = error.localizedDescription } }.accessibilityIdentifier("watch.phone-request")
+                        }
+                        Text("Read on iPhone sends this saved photo preview to your paired iPhone. The original Photos asset stays unchanged. No link opens automatically.").font(.footnote)
+                        if !phone.status.isEmpty { Text(phone.status).font(.footnote) }
+                        Button("Remove from Watch", role: .destructive) { confirmDelete = true }.accessibilityIdentifier("watch.remove")
                     }
-                    Text("Read on iPhone sends this saved photo preview to your paired iPhone. The original Photos asset stays unchanged. No link opens automatically.").font(.footnote)
-                    if !phone.status.isEmpty { Text(phone.status).font(.footnote) }
-                    Button("Remove from Watch", role: .destructive) { confirmDelete = true }.accessibilityIdentifier("watch.remove")
                 }
             }
         }.confirmationDialog("Remove this local item?", isPresented: $confirmDelete) {
