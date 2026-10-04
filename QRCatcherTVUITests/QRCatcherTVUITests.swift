@@ -102,7 +102,10 @@ final class QRCatcherTVUITests: XCTestCase {
         let cropRect = CGRect(x: labelFrame.minX * scaleX, y: labelFrame.minY * scaleY,
                               width: labelFrame.width * scaleX, height: labelFrame.height * scaleY).integral
         guard cropRect.minX >= 0, cropRect.minY >= 0, cropRect.maxX <= CGFloat(full.width), cropRect.maxY <= CGFloat(full.height),
-              let crop = full.cropping(to: cropRect), crop.width * crop.height < 200_000 else {
+              // Largest public-trait text legitimately occupies more pixels than
+              // the ordinary 369×72 crop. Keep an explicit one-megapixel bound
+              // while measuring original glyph pixels without resampling.
+              let crop = full.cropping(to: cropRect), crop.width * crop.height <= 1_000_000 else {
             XCTFail("Focused Delete label does not have a bounded screen crop"); return
         }
         var rgba = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
@@ -134,6 +137,19 @@ final class QRCatcherTVUITests: XCTestCase {
         print("PRECONDITIONED_SIMULATOR_PHOTOS_GRANTED: this does not qualify system prompt interaction")
         realPhotosWorkflow(expectPrompt: false)
     }
+    func testPreconditionedPhotosWorkflowAtLargestPublicTrait() {
+        print("PRECONDITIONED_TV_PUBLIC_TRAIT_STRESS: app rendering only, not system setting propagation")
+        realPhotosWorkflow(expectPrompt: false, publicTraitStress: true)
+    }
+    private func traitReadback(_ payload: XCUIElement) -> (String, Double) {
+        let raw = (payload.value as? String) ?? ""
+        let fields = raw.split(separator: ";").map(String.init)
+        guard fields.count == 2, fields[0].hasPrefix("trait="), fields[1].hasPrefix("bodyMetric="),
+              let metric = Double(fields[1].dropFirst("bodyMetric=".count)), metric.isFinite, metric > 0 else {
+            XCTFail("Missing actual TV trait/font readback: \(raw)"); return ("missing", 0)
+        }
+        return (String(fields[0].dropFirst("trait=".count)), metric)
+    }
     func testExplicitlyRevokedPhotosRecovery() {
         print("PRECONDITIONED_SIMULATOR_PHOTOS_REVOKED: separate from real prompt denial interaction")
         focusAndSelect(app.buttons["tv.photos"])
@@ -144,7 +160,27 @@ final class QRCatcherTVUITests: XCTestCase {
         XCUIRemote.shared.press(.menu)
         XCTAssertTrue(app.buttons["tv.photos"].waitForExistence(timeout: 10))
     }
-    private func realPhotosWorkflow(expectPrompt: Bool) {
+    private func realPhotosWorkflow(expectPrompt: Bool, publicTraitStress: Bool = false) {
+        var baselineMetric: Double = 0
+        var baselineHeight: CGFloat = 0
+        let viewport = app.frame
+        if publicTraitStress {
+            app.terminate(); app.launchEnvironment["QRCATCHER_TV_LAYOUT_PROBE"] = "1"; app.launch()
+            focusAndSelect(app.buttons["tv.photos"])
+            let source = app.buttons["tv.asset.0"]
+            XCTAssertTrue(source.waitForExistence(timeout: 20)); focusAndSelect(source)
+            let baseline = app.staticTexts["tv.payload"]
+            XCTAssertTrue(baseline.waitForExistence(timeout: 20)); XCTAssertEqual(baseline.label, "QRCatcher 你好 🌈 123")
+            let observation = traitReadback(baseline); XCTAssertEqual(observation.0, "baseline")
+            baselineMetric = observation.1; baselineHeight = baseline.frame.height
+            app.terminate()
+            // A fresh synthetic history keeps every existing count/delete oracle
+            // independent of the baseline measurement's genuine Photos import.
+            app.launchEnvironment["QRCATCHER_TV_TEST_STORE"] = UUID().uuidString
+            app.launchEnvironment["QRCATCHER_TV_LAYOUT_STRESS"] = "accessibility5"; app.launch()
+            XCTAssertEqual(app.frame.width, viewport.width, accuracy: 0.5)
+            XCTAssertEqual(app.frame.height, viewport.height, accuracy: 0.5)
+        }
         focusAndSelect(app.buttons["tv.photos"])
         // The actual tvOS 27 permission dialog belongs to the system app, not
         // the target app's accessibility subtree. Exact title/button only.
@@ -155,6 +191,23 @@ final class QRCatcherTVUITests: XCTestCase {
         let payload = app.staticTexts["tv.payload"]
         XCTAssertTrue(payload.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertEqual(payload.label, "QRCatcher 你好 🌈 123")
+        if publicTraitStress {
+            let observation = traitReadback(payload)
+            XCTAssertEqual(observation.0, "accessibility5"); XCTAssertGreaterThan(observation.1, baselineMetric)
+            XCTAssertGreaterThan(payload.frame.height, baselineHeight + 1)
+            XCTAssertTrue(app.frame.contains(payload.frame), "Actual largest-trait payload must be visible")
+            let preview = app.images["tv.qrPreview"]
+            XCTAssertTrue(preview.exists); XCTAssertTrue(app.frame.contains(preview.frame))
+            XCTAssertEqual(preview.frame.width, preview.frame.height, accuracy: 1)
+            let proof: [String: Any] = ["trait": observation.0, "baseline_body_metric": baselineMetric,
+                "actual_body_metric": observation.1, "baseline_payload_height": Double(baselineHeight),
+                "actual_payload_height": Double(payload.frame.height), "viewport_width_points": Double(app.frame.width),
+                "viewport_height_points": Double(app.frame.height), "system_setting_propagation": false]
+            do {
+                let data = try JSONSerialization.data(withJSONObject: proof, options: .sortedKeys)
+                print("TV_PUBLIC_TRAIT_PROOF " + String(decoding: data, as: UTF8.self)); fflush(stdout)
+            } catch { XCTFail("Could not retain actual TV public-trait rendering proof: \(error)") }
+        }
         capture("tv-real-photo-result")
         focusAndSelect(app.buttons["tv.export"])
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Saved to Photos and verified"), object: app.staticTexts["tv.status"])
@@ -188,6 +241,10 @@ final class QRCatcherTVUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [resultReady], timeout: 10), .completed)
         XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
         XCTAssertEqual(app.buttons["tv.photos"].label, "照片")
+        if publicTraitStress {
+            XCTAssertEqual(traitReadback(app.staticTexts["tv.payload"]).0, "accessibility5")
+            XCTAssertTrue(app.frame.contains(app.staticTexts["tv.payload"].frame))
+        }
         capture("tv-chinese-result")
         app.terminate(); app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]; app.launch()
         focusAndSelect(app.buttons["tv.history"])

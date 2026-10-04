@@ -29,6 +29,9 @@ final class QRCatcherVisionUITests: XCTestCase {
             do { try app.performAccessibilityAudit(for: .all) { issue in print("VISION_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("VISION accessibility audit failed: \(error)") }
         }
+        // Audits can scroll the sheet. Re-establish the actual visible policy
+        // ending before the held pixel capture, rather than trusting its AX label.
+        if name == "vision-chinese-policy" { revealPolicyEnding() }
         // Native Vision XCTest explicitly reports manual screenshots unsupported.
         // The cloud script takes actual public simctl pixels at this checkpoint.
         let description = String(app.debugDescription.prefix(20000))
@@ -54,6 +57,18 @@ final class QRCatcherVisionUITests: XCTestCase {
             else { XCTFail("Held simulator capture acknowledgement: \(error)") }
         }
         try? FileManager.default.removeItem(at: request); try? FileManager.default.removeItem(at: ack)
+    }
+    private func revealPolicyEnding() {
+        let scroll = app.scrollViews["vision.privacyScroll"]
+        let end = app.staticTexts["privacy.offlineEnd"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5)); XCTAssertTrue(end.exists)
+        for _ in 0..<12 {
+            let lastLine = CGRect(x: end.frame.minX, y: end.frame.maxY - min(end.frame.height, UIFont.preferredFont(forTextStyle: .body).lineHeight),
+                                  width: end.frame.width, height: min(end.frame.height, UIFont.preferredFont(forTextStyle: .body).lineHeight))
+            if end.isHittable && scroll.frame.contains(lastLine) { return }
+            scroll.swipeUp()
+        }
+        XCTFail("The rendered end of the policy is not reachable inside its scroll viewport: \(end.debugDescription)")
     }
     private func saveUsingSystemFileExporter(_ button: String, name: String, checkpoint: String) {
         app.buttons[button].tap()
@@ -143,7 +158,8 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.buttons["vision.privacy"].tap()
         let body = app.staticTexts["privacy.offlineBody"]
         XCTAssertTrue(body.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(body.label.contains("本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。"))
+        let ending = app.staticTexts["privacy.offlineEnd"]
+        XCTAssertEqual(ending.label, "本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。")
         XCTAssertTrue(body.label.contains("100mango@gmail.com"))
         capture("vision-chinese-policy")
         app.buttons["vision.privacyDone"].tap()

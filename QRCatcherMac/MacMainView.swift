@@ -168,5 +168,6 @@ private struct MacPrivacyView: View {
             Link("Read the privacy policy", destination: URL(string: "https://100mango.github.io/app-privacy/")!)
             Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
         }.padding(28).frame(width: 480)
+            .background(MacSheetAccessibility(label: QRL("Privacy"), identifier: "mac.sheet.privacy"))
     }
 }

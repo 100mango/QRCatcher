@@ -4,7 +4,17 @@ import CoreTransferable
 import UniformTypeIdentifiers
 
 @main struct QRCatcherWatchApp: App {
-    var body: some Scene { WindowGroup { WatchCollectionView() } }
+    var body: some Scene {
+        WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["QRCATCHER_WATCH_LAYOUT_STRESS"] == "accessibility5" {
+                WatchCollectionView().dynamicTypeSize(.accessibility5)
+            } else { WatchCollectionView() }
+            #else
+            WatchCollectionView()
+            #endif
+        }
+    }
 }
 @MainActor final class WatchWorkspace: ObservableObject {
     let history = WatchHistory()
@@ -108,7 +118,13 @@ private struct WatchRecordView: View {
                             HStack { Button("−") { zoom = max(1, zoom - 1) }.accessibilityLabel("Zoom out"); Button("+") { zoom = min(4, zoom + 1) }.accessibilityLabel("Zoom in") }
                             Text("Saved QR photo preview, up to 1536 pixels").font(.caption2)
                         } else { Text("The saved preview could not be read. Your text result is still available.").font(.footnote) }
-                        ForEach(Array(record.payloads.enumerated()), id: \.offset) { _, payload in Text(payload).accessibilityIdentifier("watch.payload") }
+                        ForEach(Array(record.payloads.enumerated()), id: \.offset) { _, payload in
+                            #if DEBUG
+                            Text(payload).modifier(WatchTraitReadback()).accessibilityIdentifier("watch.payload")
+                            #else
+                            Text(payload).accessibilityIdentifier("watch.payload")
+                            #endif
+                        }
                         if let state = record.phoneState { Text(LocalizedStringKey(state.capitalized)).accessibilityIdentifier("watch.phone-state") }
                         if let error = record.phoneError { Text(error).font(.footnote) }
                         if record.phoneState == "pending" {
@@ -129,6 +145,20 @@ private struct WatchRecordView: View {
         } message: { Text("Only this Watch copy is removed. Photos and iPhone history are unchanged.") }
     }
 }
+#if DEBUG
+/// Only the explicit layout-stress test requests this observation. It reports
+/// the rendered view's public environment and scaled body metric; it does not
+/// change font, frame, persistence, payload, or system preferences.
+private struct WatchTraitReadback: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var size
+    @ScaledMetric(relativeTo: .body) private var bodyMetric = 17.0
+    func body(content: Content) -> some View {
+        if ProcessInfo.processInfo.environment["QRCATCHER_WATCH_LAYOUT_PROBE"] == "1" {
+            content.accessibilityValue("trait=\(size == .accessibility5 ? "accessibility5" : "baseline");bodyMetric=\(bodyMetric)")
+        } else { content }
+    }
+}
+#endif
 private struct WatchSelectedPhoto: Transferable {
     let data: Data
     static var transferRepresentation: some TransferRepresentation {

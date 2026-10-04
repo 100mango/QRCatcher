@@ -29,10 +29,14 @@ struct TVMainView: View {
                     }
                     if let payload = session.payload {
                         HStack(alignment: .center, spacing: 60) {
-                            if let code { Image(uiImage: code).resizable().interpolation(.none).scaledToFit().frame(width: 360, height: 360).accessibilityLabel("Scannable QR representation of this result") }
+                            if let code { Image(uiImage: code).resizable().interpolation(.none).scaledToFit().frame(width: 360, height: 360).accessibilityLabel("Scannable QR representation of this result").accessibilityIdentifier("tv.qrPreview") }
                             else { Text("This result is too large to display as a QR image. Its text is still available.").frame(width: 360) }
                             VStack(alignment: .leading, spacing: 28) {
+                                #if DEBUG
+                                Text(verbatim: payload).font(.title2).modifier(TVTraitReadback()).accessibilityIdentifier("tv.payload")
+                                #else
                                 Text(verbatim: payload).font(.title2).accessibilityIdentifier("tv.payload")
+                                #endif
                                 if code != nil { Text("Scan this QR code with your phone. Nothing opens automatically.").foregroundStyle(.secondary) }
                                 if session.decodedResults.count > 1 {
                                     Text("Code \(session.resultIndex + 1) of \(session.decodedResults.count)")
@@ -166,3 +170,17 @@ private struct TVPrivacyView: View {
         }.onExitCommand { dismiss() }
     }
 }
+
+#if DEBUG
+// Observes the actual production Text environment. Only an explicitly launched
+// layout-stress test adds this value; Release contains neither test switch.
+private struct TVTraitReadback: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var size
+    @ScaledMetric(relativeTo: .title2) private var bodyMetric = 40.0
+    func body(content: Content) -> some View {
+        if ProcessInfo.processInfo.environment["QRCATCHER_TV_LAYOUT_PROBE"] == "1" {
+            content.accessibilityValue("trait=\(size == .accessibility5 ? "accessibility5" : "baseline");bodyMetric=\(bodyMetric)")
+        } else { content }
+    }
+}
+#endif

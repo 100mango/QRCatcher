@@ -192,6 +192,16 @@
     [record tap];
     XCTAssertTrue(self.app.alerts.buttons[@"Copy Result"].hittable);
     XCTAssertTrue(self.app.alerts.buttons[@"Cancel"].hittable);
+    XCUIElement *alert = self.app.alerts[@"QR Code"];
+    XCUIElement *title = alert.staticTexts[@"QR Code"];
+    XCUIElement *body = alert.staticTexts[@"Long QR text that must wrap without hiding navigation or losing access to the scan again control."];
+    XCTAssertTrue(title.exists); XCTAssertTrue(body.exists);
+    NSLog(@"PHONE_LARGEST_NATIVE_ALERT_RENDERING:%@ TITLE:%@ BODY:%@ COPY:%@ CANCEL:%@", NSStringFromCGRect(alert.frame), NSStringFromCGRect(title.frame), NSStringFromCGRect(body.frame), NSStringFromCGRect(alert.buttons[@"Copy Result"].frame), NSStringFromCGRect(alert.buttons[@"Cancel"].frame));
+    XCTAssertTrue(CGRectContainsRect(self.app.frame, alert.frame));
+    for (XCUIElement *element in @[title, body, alert.buttons[@"Copy Result"], alert.buttons[@"Cancel"]]) {
+        XCTAssertTrue(CGRectContainsRect(alert.frame, element.frame), @"Largest native alert element must be fully framed: %@", element.debugDescription);
+    }
+    [self logSyntheticScreenshot:@"phone-largest-history-alert"];
     [self.app.alerts.buttons[@"Cancel"] tap];
 }
 - (void)testAccessibilityOfResultAndHistory {

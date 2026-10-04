@@ -145,12 +145,23 @@ private struct VisionResultView: View {
 
 private struct VisionPrivacyView: View {
     @Environment(\.dismiss) private var dismiss
+    private var paragraphs: (String, String) {
+        let text = QRPrivacyText.body
+        let marker = text.contains("本地数据可") ? "本地数据可" : "Local data can be deleted"
+        guard let end = text.range(of: marker) else { return (text, "") }
+        return (String(text[..<end.lowerBound]), String(text[end.lowerBound...]))
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Privacy").font(.title.bold())
-            Text(QRPrivacyText.body).accessibilityIdentifier("privacy.offlineBody")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(paragraphs.0).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("privacy.offlineBody")
+                    Text(paragraphs.1).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("privacy.offlineEnd")
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.accessibilityIdentifier("vision.privacyScroll")
             Link("Read the privacy policy", destination: URL(string: "https://100mango.github.io/app-privacy/")!)
             Button("Done") { dismiss() }.accessibilityIdentifier("vision.privacyDone")
-        }.padding(32).frame(width: 520)
+        }.padding(32).frame(width: 520, height: 560)
     }
 }

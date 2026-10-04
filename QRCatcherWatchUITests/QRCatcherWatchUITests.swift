@@ -53,6 +53,30 @@ import CoreGraphics
             catch { XCTFail("Watch accessibility audit failed: \(error)") }
         }
     }
+    private func revealPayload(_ payload: XCUIElement, publicTraitStress: Bool, phase: String) -> Bool {
+        XCTAssertTrue(payload.waitForExistence(timeout: 10))
+        let top = app.frame.minY + 44, bottom = app.frame.maxY - 12
+        guard publicTraitStress, payload.frame.height > bottom - top else { reveal(payload); return false }
+        // Large text can legitimately exceed this Watch's viewport. Keep its
+        // full intrinsic height and prove both edges can be scrolled into view.
+        for atTop in [true, false] {
+            var reached = false
+            for _ in 0..<24 {
+                let edge = atTop ? payload.frame.minY : payload.frame.maxY
+                let goal = atTop ? top + 4 : bottom - 4
+                if payload.isHittable && abs(edge - goal) <= 6 { reached = true; break }
+                let delta = goal - edge
+                let movement = (delta > 0 ? CGFloat(1) : -1) * min(40, max(4, abs(delta) * 0.5))
+                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: delta > 0 ? 0.65 : 0.9))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: movement)),
+                            withVelocity: .slow, thenHoldForDuration: 0.2)
+            }
+            XCTAssertTrue(reached, "The full large payload's \(atTop ? "top" : "bottom") is not reachable: \(payload.debugDescription)")
+            XCTAssertEqual(payload.label, "QRCatcher 你好 🌈 123")
+            capture("watch-trait-\(phase)-payload-\(atTop ? "top" : "bottom")")
+        }
+        return true
+    }
     func testNativeEmptyCollectionAndOfflinePolicy() {
         XCTAssertTrue(app.buttons["watch.photos"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["watch.store-error"].exists)
@@ -87,7 +111,30 @@ import CoreGraphics
         XCTAssertEqual(app.staticTexts["watch.phone-state"].label, "Completed")
     }
     func testFixtureFedOfflineResultSourceImageAndRelaunch() {
-        app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_STORE"] = "81F3B791-5049-4ED7-B88E-9684DA76DDB8"; app.launch()
+        exerciseFixtureResultAndRelaunch(publicTraitStress: false)
+    }
+    func testFixtureResultAndRelaunchAtLargestPublicTrait() {
+        exerciseFixtureResultAndRelaunch(publicTraitStress: true)
+    }
+    private func exerciseFixtureResultAndRelaunch(publicTraitStress: Bool) {
+        app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_STORE"] = "81F3B791-5049-4ED7-B88E-9684DA76DDB8"
+        if publicTraitStress { app.launchEnvironment["QRCATCHER_WATCH_LAYOUT_PROBE"] = "1" }
+        app.launch()
+        var baselineHeight: CGFloat = 0
+        var baselineMetric: Double = 0
+        let nativeFrame = app.frame
+        if publicTraitStress {
+            let baselineRecord = app.buttons["watch.record"].firstMatch
+            XCTAssertTrue(baselineRecord.waitForExistence(timeout: 20)); baselineRecord.tap()
+            let baselinePayload = app.staticTexts["watch.payload"]; reveal(baselinePayload)
+            XCTAssertEqual(baselinePayload.label, "QRCatcher 你好 🌈 123")
+            let observation = traitReadback(baselinePayload)
+            XCTAssertEqual(observation.0, "baseline")
+            baselineHeight = baselinePayload.frame.height; baselineMetric = observation.1
+            app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_LAYOUT_STRESS"] = "accessibility5"; app.launch()
+            XCTAssertEqual(app.frame.width, nativeFrame.width, accuracy: 0.5)
+            XCTAssertEqual(app.frame.height, nativeFrame.height, accuracy: 0.5)
+        }
         // Hosted test prepared this source photo using the genuine Watch decoder.
         // This checks offline UI/persistence, not system Photos selection.
         let record = app.buttons["watch.record"].firstMatch
@@ -95,12 +142,38 @@ import CoreGraphics
         let sourceImage = app.images["watch.source-image"]
         capture("watch-saved-preview", revealing: sourceImage)
         let payload = app.staticTexts["watch.payload"]
-        reveal(payload)
+        let oversized = revealPayload(payload, publicTraitStress: publicTraitStress, phase: "initial")
         XCTAssertTrue(payload.waitForExistence(timeout: 10)); XCTAssertEqual(payload.label, "QRCatcher 你好 🌈 123")
-        capture("watch-fixture-offline-result", revealing: payload)
+        if publicTraitStress {
+            let observation = traitReadback(payload)
+            XCTAssertEqual(observation.0, "accessibility5")
+            XCTAssertGreaterThan(observation.1, baselineMetric)
+            XCTAssertGreaterThan(payload.frame.height, baselineHeight + 1,
+                                 "The actual rendered payload must grow; a requested trait alone is not evidence")
+            let proof: [String: Any] = ["trait": observation.0, "baseline_body_metric": baselineMetric,
+                "actual_body_metric": observation.1, "baseline_payload_height": Double(baselineHeight),
+                "actual_payload_height": Double(payload.frame.height), "viewport_width_points": Double(app.frame.width),
+                "viewport_height_points": Double(app.frame.height), "system_setting_propagation": false]
+            if let data = try? JSONSerialization.data(withJSONObject: proof, options: .sortedKeys), let text = String(data: data, encoding: .utf8) {
+                print("WATCH_PUBLIC_TRAIT_PROOF " + text)
+            } else { XCTFail("Could not retain actual public-trait layout measurements") }
+        }
+        if !oversized { capture("watch-fixture-offline-result", revealing: payload) }
         app.terminate(); app.launch()
         XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
-        XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123"); capture("watch-reopened-qr", revealing: app.staticTexts["watch.payload"])
+        XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123")
+        let oversizedReopened = revealPayload(app.staticTexts["watch.payload"], publicTraitStress: publicTraitStress, phase: "reopened")
+        if !oversizedReopened { capture("watch-reopened-qr", revealing: app.staticTexts["watch.payload"]) }
+        if publicTraitStress { XCTAssertEqual(traitReadback(app.staticTexts["watch.payload"]).0, "accessibility5") }
+    }
+    private func traitReadback(_ payload: XCUIElement) -> (String, Double) {
+        let raw = (payload.value as? String) ?? ""
+        let fields = raw.split(separator: ";").map(String.init)
+        guard fields.count == 2, fields[0].hasPrefix("trait="), fields[1].hasPrefix("bodyMetric="),
+              let metric = Double(fields[1].dropFirst("bodyMetric=".count)), metric.isFinite, metric > 0 else {
+            XCTFail("Missing actual rendered SwiftUI trait/metric readback: \(raw)"); return ("missing", 0)
+        }
+        return (String(fields[0].dropFirst("trait=".count)), metric)
     }
 }
 

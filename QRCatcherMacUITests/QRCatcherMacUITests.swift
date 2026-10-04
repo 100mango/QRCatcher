@@ -387,6 +387,10 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.privacy"].click()
         let body = app.staticTexts["privacy.offlineBody"]
         XCTAssertTrue(body.waitForExistence(timeout: 5))
+        let privacyGroup = app.sheets.groups["mac.sheet.privacy"]
+        XCTAssertTrue(privacyGroup.exists); XCTAssertEqual(privacyGroup.label, "隐私")
+        XCTAssertTrue(privacyGroup.staticTexts["privacy.offlineBody"].exists)
+        XCTAssertTrue(privacyGroup.buttons["完成"].exists)
         let text = (body.value as? String) ?? body.label
         XCTAssertTrue(text.contains("本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。"))
         XCTAssertTrue(text.contains("系统 iCloud 同步"))
@@ -437,11 +441,20 @@ final class QRCatcherMacUITests: XCTestCase {
         let status = app.staticTexts["mac.cameraStatus"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertTrue(status.label.contains("No camera") || (status.value as? String)?.contains("No camera") == true, "Hosted cloud test must report the actual camera state: \(status.debugDescription)")
+        let cameraGroup = app.sheets.groups["mac.sheet.camera"]
+        XCTAssertTrue(cameraGroup.exists); XCTAssertEqual(cameraGroup.label, "Camera")
+        XCTAssertTrue(cameraGroup.staticTexts["mac.cameraStatus"].exists)
+        XCTAssertTrue(cameraGroup.buttons["Done"].exists)
+        XCTAssertFalse(app.popUpButtons["mac.cameraDevice"].isEnabled,
+                       "An absent camera list must not expose an actionable source selector")
         try screenshot("mac-camera-unavailable")
         app.buttons["Done"].firstMatch.click()
         app.buttons["mac.privacy"].click()
         let policy = app.staticTexts["privacy.offlineBody"]
         XCTAssertTrue(policy.waitForExistence(timeout: 5))
+        let privacyGroup = app.sheets.groups["mac.sheet.privacy"]
+        XCTAssertTrue(privacyGroup.exists); XCTAssertEqual(privacyGroup.label, "Privacy")
+        XCTAssertTrue(privacyGroup.staticTexts["privacy.offlineBody"].exists)
         let text = (policy.value as? String) ?? policy.label
         XCTAssertTrue(text.contains("100mango@gmail.com"))
         XCTAssertTrue(text.contains("Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings."))

@@ -29,7 +29,11 @@ def records(value):
  elif isinstance(value,list):
   for child in value:yield from records(child)
 screenshots=[];warnings=[]
-names=['mac-system-picker-before-selection','mac-system-picker-after-selection','mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-imported-unicode','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-failure']
+names=['mac-system-picker-before-selection','mac-system-picker-after-selection','mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-imported-unicode','mac-failure']
+def checkpoint_name(entry):
+ text=' '.join(v for v in entry.values() if isinstance(v,str))
+ return next((n for n in names if n in text),None)
+first_failure_retained=False
 # Prefer the stricter sandbox's actual pixels; keep both full structured summaries.
 for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.xcresult','native')]:
  if not pathlib.Path(result,'Info.plist').is_file():
@@ -39,7 +43,13 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
  if summary.returncode==0:warnings.extend(json.loads(summary.stdout).get('runtimeWarnings',[]))
  folder=pathlib.Path('build/mac-screenshots')/label;folder.mkdir(parents=True,exist_ok=True)
  subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
- for entry in records(json.loads((folder/'manifest.json').read_text())):
+ entries=list(records(json.loads((folder/'manifest.json').read_text())))
+ first_failure=next((entry for entry in entries if checkpoint_name(entry)=='mac-failure'),None)
+ # Seven nearly duplicate failure frames previously consumed the image slots
+ # before the real Photos picker checkpoints. Preserve the first failure and
+ # then the explicit workflow priorities, within the same twelve-image cap.
+ entries.sort(key=lambda entry:-1 if entry is first_failure else names.index(checkpoint_name(entry)) if checkpoint_name(entry) in names else len(names))
+ for entry in entries:
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   if 'mac-audit-element' in text:
@@ -47,6 +57,9 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
    count=len(list(out.glob('*-audit-*.txt')))
    (out/f'{label}-audit-{count+1}.txt').write_bytes(data);continue
   if not name:continue
+  if name=='mac-failure':
+   if first_failure_retained:continue
+   first_failure_retained=True
   data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
   digest=hashlib.sha256(data).hexdigest()
   existing=next((item for item in screenshots if item['sha256']==digest),None)

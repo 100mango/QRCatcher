@@ -154,7 +154,8 @@ struct MacCameraView: View {
             Picker("Camera", selection: $deviceID) {
                 Text("Default camera").tag(String?.none)
                 ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
-            }.disabled(camera.running)
+            }.disabled(camera.running || camera.devices.isEmpty)
+                .accessibilityIdentifier("mac.cameraDevice")
             Text(camera.status).multilineTextAlignment(.center).accessibilityIdentifier("mac.cameraStatus")
             HStack {
                 Button("Start Camera") { camera.start(deviceID: deviceID) }.disabled(camera.running).accessibilityIdentifier("mac.cameraStart")
@@ -162,6 +163,7 @@ struct MacCameraView: View {
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }.padding(24).frame(width: 620)
+        .background(MacSheetAccessibility(label: QRL("Camera"), identifier: "mac.sheet.camera"))
         .onAppear { camera.onRead = { values in onRead(values); dismiss() } }
         .onDisappear { camera.onRead = nil; camera.stop() }
     }

@@ -53,3 +53,30 @@ struct MacPaneAccessibility: NSViewRepresentable {
         DispatchQueue.main.async { [weak view] in view?.apply() }
     }
 }
+
+/// Name only the presented sheet's native hosting group. Its controls remain
+/// separate accessibility children with their existing labels and actions.
+struct MacSheetAccessibility: NSViewRepresentable {
+    let label: String
+    let identifier: String
+    final class Marker: NSView {
+        var sheetLabel = ""
+        var sheetIdentifier = ""
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
+        override func layout() { super.layout(); apply() }
+        func apply() {
+            guard let window, window.sheetParent != nil, let content = window.contentView else { return }
+            if content.accessibilityLabel() != sheetLabel { content.setAccessibilityLabel(sheetLabel) }
+            if content.accessibilityIdentifier() != sheetIdentifier { content.setAccessibilityIdentifier(sheetIdentifier) }
+        }
+    }
+    func makeNSView(context: Context) -> Marker {
+        let view = Marker(frame: .zero); view.setAccessibilityElement(false)
+        view.sheetLabel = label; view.sheetIdentifier = identifier
+        return view
+    }
+    func updateNSView(_ view: Marker, context: Context) {
+        view.sheetLabel = label; view.sheetIdentifier = identifier; view.apply()
+        DispatchQueue.main.async { [weak view] in view?.apply() }
+    }
+}

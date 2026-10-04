@@ -24,7 +24,7 @@ assert expected_icon in json.dumps(icons),icons
 assert (app/'Assets.car').stat().st_size>0
 executable=app/info['CFBundleExecutable'];data=executable.read_bytes()
 strings=subprocess.check_output(['strings',str(executable)],text=True)
-for marker in ['QRCATCHER_TEST_STORE','QRCATCHER_SANDBOX_','QRCATCHER_TV_TEST_STORE','QRCATCHER_WATCH_STORE','fixture-payload','reset-history','QRCatcherExportTestReceipts','Export readback verification failed']:
+for marker in ['QRCATCHER_TEST_STORE','QRCATCHER_SANDBOX_','QRCATCHER_TV_TEST_STORE','QRCATCHER_WATCH_STORE','QRCATCHER_WATCH_LAYOUT_STRESS','QRCATCHER_WATCH_LAYOUT_PROBE','QRCATCHER_TV_LAYOUT_STRESS','QRCATCHER_TV_LAYOUT_PROBE','fixture-payload','reset-history','QRCatcherExportTestReceipts','Export readback verification failed']:
  assert marker not in strings,(platform,marker)
 assert not list(app.rglob('*.xctest'))
 archs=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True).strip().split()
