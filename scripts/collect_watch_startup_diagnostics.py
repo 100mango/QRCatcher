@@ -4,6 +4,7 @@ No service restart, TCC edit, permission grant, stack dump or credential capture
 """
 import json,re,sys,uuid
 from watch_process import execute
+from owned_process_barrier import blocked,mark_unconfirmed
 from pathlib import Path
 
 udid=str(uuid.UUID(sys.argv[1])).upper();out=Path('build/watch-runtime');out.mkdir(parents=True,exist_ok=True)
@@ -14,6 +15,8 @@ command=['xcrun','simctl','spawn',udid,'log','show','--last','4m','--style','com
 try:
     code,output,operation=execute(command,25,output_limit=256*1024,tail_limit=32*1024,echo=False)
     report['log_exit']=code;report['log_operation']=operation
+    if code==126 or operation.get('cleanup_confirmed') is not True:
+        report['cleanup_unconfirmed']=True;mark_unconfirmed(operation)
     # Keep only relevant launch/error lines. Exclude credential-looking entries
     # and never retain a full simulator or machine log.
     lines=[line[:1200] for line in output.splitlines()
@@ -38,3 +41,4 @@ for pattern in ['QRCatcherWatch*.ips','testmanagerd*.ips','xctest*.ips']:
             report['crashes'].append(row)
 data=json.dumps(report,indent=2)+'\n';assert len(data.encode())<32*1024
 (out/(stage+'-startup-diagnostics.json')).write_text(data);print(data,flush=True)
+if report.get('cleanup_unconfirmed') or blocked():raise SystemExit(126)

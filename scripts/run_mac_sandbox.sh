@@ -18,6 +18,10 @@ xcrun swift scripts/prepare_sandbox_boundary.swift build/MacSandbox/Build/Produc
 trap 'python3 - <<"CLEANUP"
 import json,uuid
 from pathlib import Path
+import sys
+sys.path.insert(0,"scripts")
+from owned_process_barrier import blocked
+if blocked():raise SystemExit(126)
 value=json.loads(Path("build/MacSandbox/Build/Products/Debug/qrcatcher-boundary-control.json").read_text())
 folder=Path(value["folder"])
 assert folder.parent==Path.home() and folder.name.startswith("QRCatcherBoundaryProbe-")

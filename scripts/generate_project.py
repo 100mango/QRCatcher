@@ -17,6 +17,9 @@ def configs(key,common):
         else:settings.update(GCC_OPTIMIZATION_LEVEL='s',VALIDATE_PRODUCT='YES')
         if name=='Debug' and key=='app':
             settings['INFOPLIST_FILE']='QRCatcher/Debug-Info.plist'
+            # Preserve the actual Watch simulator launcher/debug/preview dylibs
+            # during embedding; Debug packages are verified byte-for-byte.
+            settings['COPY_PHASE_STRIP']='NO'
         refs.append(add(key+name,'XCBuildConfiguration',buildSettings=settings,name=name))
     return add(key+'configs','XCConfigurationList',buildConfigurations=refs,defaultConfigurationIsVisible=0,defaultConfigurationName='Release')
 source=[]; appfiles=[]

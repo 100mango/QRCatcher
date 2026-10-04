@@ -3,6 +3,10 @@
 import hashlib,json,os,pathlib,subprocess
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes']['macos']
 out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
+barrier=pathlib.Path('build/owned-process-cleanup.json')
+if barrier.exists():
+ assert not barrier.is_symlink() and barrier.stat().st_size<=2048
+ (out/barrier.name).write_bytes(barrier.read_bytes())
 provenance={'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'workflow_sha':os.environ.get('GITHUB_WORKFLOW_SHA'),'run_id':os.environ.get('GITHUB_RUN_ID'),'toolchain':subprocess.check_output(['xcodebuild','-version'],text=True).strip(),'architecture':subprocess.check_output(['uname','-m'],text=True).strip()}
 icon=pathlib.Path('build/icon-verification/mac-bundled-icon.png')
 package=pathlib.Path('build/native-release-evidence/mac-release.json')

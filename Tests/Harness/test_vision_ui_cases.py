@@ -21,13 +21,20 @@ class Capture:
     def kill(self): self.killed = True
 
 class VisionRoutingTests(unittest.TestCase):
-    def exercise(self, failed_case=None, capture_mode='success'):
+    def setUp(self):
+        isolation=patch.dict(os.environ);isolation.start();self.addCleanup(isolation.stop)
+        for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','QRCATCHER_OWNED_PROCESS_BARRIER','GITHUB_ENV','GITHUB_WORKSPACE']:os.environ.pop(key,None)
+    def exercise(self, failed_case=None, capture_mode='success',unknown_at=None,missing=False):
         calls = []
         def execute(command, seconds):
             calls.append((command, seconds))
             selector = next((v for v in command if v.startswith('-only-testing:')), None)
             code = 124 if selector and failed_case and failed_case in selector else 0
-            return code, 'bounded diagnostic tail', {'exit': code, 'timeout_seconds': seconds}
+            detail={'exit':code,'timeout_seconds':seconds,'cleanup_confirmed':True}
+            if unknown_at==len(calls):
+                code=126;detail.update(exit=126,state='cleanup_unconfirmed',cleanup_confirmed=False)
+                if missing:detail.pop('cleanup_confirmed')
+            return code, 'bounded diagnostic tail', detail
         worker = types.ModuleType('watch_process')
         worker.execute = execute
         capture = Capture(capture_mode)
@@ -39,8 +46,10 @@ class VisionRoutingTests(unittest.TestCase):
                      patch.dict(os.environ, {'GITHUB_SHA': 'a' * 40}), \
                      patch.object(sys, 'argv', ['run_vision_ui_cases.py', '11111111-1111-4111-8111-111111111111']), \
                      patch('subprocess.Popen', return_value=capture) as launch, \
+                     patch('owned_process_group.stop_group',return_value=True) as group_cleanup, \
+                     patch('run_native_size_case.run_case',return_value=(0,{'status':'largest_ui_passed'})) as largest, \
                      contextlib.redirect_stdout(io.StringIO()):
-                    if failed_case or capture_mode != 'success':
+                    if failed_case or capture_mode != 'success' or unknown_at:
                         with self.assertRaises(SystemExit):
                             runpy.run_path(str(ROOT / 'scripts/run_vision_ui_cases.py'), run_name='__main__')
                     else:
@@ -49,8 +58,14 @@ class VisionRoutingTests(unittest.TestCase):
                 self.assertTrue(Path('build/vision-runtime/ui-completed.marker').exists())
                 self.assertEqual(launch.call_count, 1)
                 self.assertEqual(launch.call_args.args[0][:3], ['python3', '-u', 'scripts/capture_vision_checkpoints.py'])
+                group_cleanup.assert_called_once_with(capture)
+                if unknown_at:largest.assert_not_called()
+                else:largest.assert_called_once_with('vision','11111111-1111-4111-8111-111111111111')
             finally:
                 os.chdir(old)
+        if unknown_at:
+            self.assertEqual(len(calls),unknown_at);self.assertTrue(report['cleanup_unconfirmed'])
+            return report,capture
         self.assertEqual(len(calls), 6)
         self.assertEqual([row['state'] for row in report['cases']], ['finished'] * 3)
         self.assertEqual([row['operation']['timeout_seconds'] for row in report['cases']], [600, 300, 300])
@@ -73,8 +88,11 @@ class VisionRoutingTests(unittest.TestCase):
     def test_capture_timeout_terminates_only_owned_helper_and_marks_failure(self):
         report, capture = self.exercise(capture_mode='timeout')
         self.assertEqual(report['capture_process_exit'], 124)
-        self.assertTrue(capture.terminated)
-        self.assertFalse(capture.killed)
-        self.assertEqual(capture.waits, [30, 10])
+        self.assertTrue(report['capture_cleanup_confirmed']);self.assertEqual(capture.waits,[30])
+    def test_unresolved_termination_or_xctest_blocks_every_later_case(self):
+        for position in [1,2]:
+            for missing in [True,False]:
+                os.environ.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
+                with self.subTest(position=position,missing=missing):self.exercise(unknown_at=position,missing=missing)
 
 if __name__ == '__main__': unittest.main()

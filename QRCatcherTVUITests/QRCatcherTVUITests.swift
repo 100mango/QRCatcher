@@ -181,6 +181,11 @@ final class QRCatcherTVUITests: XCTestCase {
         focusAndSelect(app.buttons["tv.history"])
         let chineseRecord = app.buttons["tv.record"].firstMatch
         XCTAssertTrue(chineseRecord.waitForExistence(timeout: 15)); focusAndSelect(chineseRecord)
+        let historyClosed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: chineseRecord)
+        XCTAssertEqual(XCTWaiter.wait(for: [historyClosed], timeout: 10), .completed,
+                       "The Chinese result capture must wait for the real history sheet to dismiss")
+        let resultReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["tv.photos"])
+        XCTAssertEqual(XCTWaiter.wait(for: [resultReady], timeout: 10), .completed)
         XCTAssertEqual(app.staticTexts["tv.payload"].label, "QRCatcher 你好 🌈 123")
         XCTAssertEqual(app.buttons["tv.photos"].label, "照片")
         capture("tv-chinese-result")

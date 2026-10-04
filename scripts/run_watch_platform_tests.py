@@ -4,9 +4,14 @@ WCSession background transfer is intentionally a paired-physical-device gate.
 """
 import json,os,time,uuid
 from watch_process import execute
+from owned_process_barrier import mark_unconfirmed
+from run_native_size_case import run_case
 from pathlib import Path
 out=Path('build/watch-runtime');out.mkdir(parents=True,exist_ok=True)
 report={'commit':os.environ['GITHUB_SHA'],'background_file_transport':'requires_paired_physical_devices','operations':[]}
+def cleanup_guard(unconfirmed):
+ report['cleanup_unconfirmed']=unconfirmed
+ with open(os.environ['GITHUB_ENV'],'a') as f:f.write('WATCH_SIZE_CLEANUP_UNCONFIRMED='+str(unconfirmed).lower()+'\n')
 def record():
  encoded=json.dumps(report,indent=2)+'\n';assert len(encoded.encode())<64*1024
  (out/'runtime.json').write_text(encoded)
@@ -15,6 +20,8 @@ def run(args,seconds=120,check=True,log=None):
  report['operations'].append(operation);record();print('WATCH_COMMAND_START '+json.dumps(operation),flush=True)
  code,data,details=execute(args,seconds)
  operation.update(details);record()
+ if code==126 or details.get('cleanup_confirmed') is not True:
+  mark_unconfirmed(details);cleanup_guard(True);record();raise RuntimeError('Owned command group exit is unconfirmed; stop until disposable VM teardown')
  if log:Path(log).write_text(data)
  print('WATCH_COMMAND_END '+json.dumps(operation),flush=True)
  if check and code:raise RuntimeError('Command failed: '+str(code)+' '+args[0])
@@ -51,6 +58,7 @@ try:
  report['photo_seeding']='Not attempted: actual Watch Photos picker explicitly reports simulator unavailability; hosted fixtures exercise the real decoder separately'
  common=['xcodebuild','test-without-building','-project','QRCatcher.xcodeproj','-scheme','QRCatcherWatch','-configuration','Debug','-derivedDataPath','build/WatchTests','-destination','platform=watchOS Simulator,id='+udid,'-parallel-testing-enabled','NO','-maximum-concurrent-test-simulator-destinations','1','-collect-test-diagnostics','never','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','90','-maximum-test-execution-time-allowance','150','CODE_SIGNING_ALLOWED=NO']
  code,_=run(common+['-only-testing:QRCatcherWatchTests','-resultBundlePath','WatchUnitResults.xcresult'],600,False,'watch-unit.log');report['hosted_tests_exit']=code;failed|=code!=0
+ hosted_passed=code==0
  options=['-only-testing:QRCatcherWatchUITests']
  if code:
   report['dependent_offline_ui']='Not executed: hosted fixture preparation did not pass; independent empty/policy and actual system-picker limitation UI still runs'
@@ -58,10 +66,16 @@ try:
   run(['python3','scripts/collect_watch_startup_diagnostics.py',udid],45,False)
  code,_=run(common+options+['-resultBundlePath','WatchUIResults.xcresult'],360,False,'watch-ui.log');report['ui_tests_exit']=code;failed|=code!=0
  if code:run(['python3','scripts/collect_watch_startup_diagnostics.py',udid,'ui'],45,False)
+ cleanup_guard(True);record()
+ size_exit,size_report=run_case('watch',udid,precondition=hosted_passed)
+ report['system_text_size_ui_exit']=size_exit;report['largest_text_ui']=size_report['status'];failed|=size_exit!=0
+ if size_exit==126:raise RuntimeError('System-size UI gate is unresolved; no further simulator action')
+ cleanup_guard(False)
  report['photos_import_gate']='physical_device_required_system_picker_explicitly_unavailable_in_simulator'
  report['ui_fixture_scope']='offline_collection_only_prepared_by_actual_hosted_decoder_not_system_Photos_import'
 finally:
  record()
- run(['xcrun','simctl','shutdown',udid],45,False)
- run(['xcrun','simctl','delete',udid],45,False) # Only the UUID created above, never a pre-existing device.
+ if not report.get('cleanup_unconfirmed'):
+  run(['xcrun','simctl','shutdown',udid],45,False)
+  run(['xcrun','simctl','delete',udid],45,False) # Only the UUID created above, never a pre-existing device.
 if failed:raise SystemExit('One or more native Watch gates are not satisfied; see actual runtime evidence')

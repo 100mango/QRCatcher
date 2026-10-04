@@ -1,13 +1,18 @@
 #!/bin/bash
 set -euo pipefail
+python3 scripts/owned_process_barrier.py --check
 DEVICE=$1
 RESULT=$2
 CLASS=$3
 shift 3
 for PREVIOUS in "$@"; do
-  if [ -n "$PREVIOUS" ]; then xcrun simctl shutdown "$PREVIOUS" || true; fi
+  if [ -n "$PREVIOUS" ]; then
+    python3 -u scripts/run_bounded.py 45 xcrun simctl shutdown "$PREVIOUS" || true
+    python3 scripts/owned_process_barrier.py --check
+  fi
 done
 python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$DEVICE" || true
+python3 scripts/owned_process_barrier.py --check
 python3 -u scripts/run_bounded.py 300 xcrun simctl bootstatus "$DEVICE" -b
 # Every Bash 3.2 array is populated, including phone/no-seed branches under -u.
 COMMON=(xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 CODE_SIGNING_ALLOWED=NO)

@@ -157,12 +157,41 @@ final class QRCatcherMacUITests: XCTestCase {
     private func screenshot(_ name: String) throws {
         try capturePixels(name)
         if name != "mac-failure" {
-            try app.performAccessibilityAudit(for: .all) { issue in
-                let detail = String((issue.compactDescription + "\n" + issue.detailedDescription + "\n" + (issue.element?.debugDescription ?? "no issue element")).prefix(20000))
-                print("MAC_ACCESSIBILITY_ISSUE", detail)
-                let evidence = XCTAttachment(string: detail); evidence.name = "mac-audit-element"; evidence.lifetime = .keepAlways; self.add(evidence)
-                return false
+            print("MAC_AUDIT_BEFORE", name, "appEnabled", app.isEnabled, "windowEnabled", app.windows.firstMatch.isEnabled,
+                  "sheets", app.sheets.count, "dialogs", app.dialogs.count)
+            let previousFailureMode = continueAfterFailure
+            continueAfterFailure = true
+            defer { continueAfterFailure = previousFailureMode }
+            var issueCount = 0
+            var auditFailed = false
+            do {
+                try app.performAccessibilityAudit(for: .all) { issue in
+                    issueCount += 1
+                    auditFailed = true
+                    let summary = String(issue.compactDescription.prefix(512))
+                    // Every issue is a real failure. Bounded detail is retained
+                    // separately; no audit category or element is ignored.
+                    XCTFail("Accessibility audit [\(name)]: \(summary)")
+                    if issueCount <= 8 {
+                        let detail = String(("Checkpoint: " + name + "\n" + issue.compactDescription + "\n" + issue.detailedDescription + "\n" + (issue.element?.debugDescription ?? "no issue element")).prefix(20000))
+                        print("MAC_ACCESSIBILITY_ISSUE", detail)
+                        let evidence = XCTAttachment(string: detail); evidence.name = "mac-audit-element"; evidence.lifetime = .keepAlways; self.add(evidence)
+                    }
+                    return false
+                }
+            } catch {
+                auditFailed = true
+                // Some audit failures arrive before any issue callback. They
+                // must still fail the test, while later functional checks run.
+                if issueCount == 0 { XCTFail("Accessibility audit [\(name)] could not complete: \(error)") }
+                print("MAC_AUDIT_FAILED", name, "reportedIssues", issueCount, error)
             }
+            continueAfterFailure = previousFailureMode
+            print("MAC_AUDIT_AFTER", name, "appEnabled", app.isEnabled, "windowEnabled", app.windows.firstMatch.isEnabled,
+                  "sheets", app.sheets.count, "dialogs", app.dialogs.count)
+            print("MAC_FUNCTIONAL_CHECKPOINT_REACHED", name, "auditFailed", auditFailed, "auditIssueCount", issueCount)
+            // The defer restores fail-fast before any subsequent prerequisite,
+            // output-file, persistence or other functional assertion executes.
         }
     }
 

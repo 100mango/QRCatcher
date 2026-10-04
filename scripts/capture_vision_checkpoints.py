@@ -6,11 +6,13 @@ simctl get_app_container; no accessibility/TCC/database mutation is involved.
 import hashlib,json,plistlib,re,subprocess,sys,time,uuid
 from pathlib import Path
 from atomic_json import write_json
+from owned_process_barrier import blocked
 udid,log=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
 runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionUITests-Runner.app/Info.plist')
 runner_id=plistlib.loads(runner.read_bytes())['CFBundleIdentifier']
-seen=set();report=[];deadline=time.monotonic()+1440
+seen=set();report=[];deadline=time.monotonic()+1650
 while time.monotonic()<deadline:
+ if blocked():raise SystemExit('Owned command cleanup is unresolved; no further simulator capture command')
  text=log.read_text(errors='replace') if log.exists() else ''
  for request_id in re.findall(r'QRCATCHER_VISION_CAPTURE_REQUEST:([A-F0-9-]{36})',text):
   if request_id in seen:continue
@@ -41,6 +43,10 @@ while time.monotonic()<deadline:
     (out/('actual-export.'+kind)).write_bytes(saved_bytes)
     row['actual_export_readback']=receipt
    row['checkpoint']=name;raw=out/(request_id+'.raw.png');jpeg=out/(name+'.jpg')
+   # A separate largest-system-size case repeats existing named checkpoints;
+   # retain both proven states instead of overwriting earlier pixels/hashes.
+   index=2
+   while jpeg.exists():jpeg=out/(name+'-'+str(index)+'.jpg');index+=1
    # simctl can write complete pixels before its process times out. Preserve a
    # valid bounded image as evidence, while keeping that command/ACK gate red.
    try:

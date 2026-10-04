@@ -6,7 +6,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 
 class EmbeddedWatchGateTests(unittest.TestCase):
-    def check(self, kind='device', defect=None):
+    def check(self, kind='device', defect=None, stripped=False):
         config, phone_sdk, watch_sdk = ('Release', 'iphoneos', 'watchos') if kind == 'device' else ('Debug', 'iphonesimulator', 'watchsimulator')
         with tempfile.TemporaryDirectory() as directory:
             old = Path.cwd()
@@ -34,8 +34,16 @@ class EmbeddedWatchGateTests(unittest.TestCase):
                 nested.parent.mkdir()
                 shutil.copytree(producer, nested)
                 if defect == 'bytes': (nested / 'Assets.car').write_bytes(b'mismatched nested asset')
+                if stripped: (nested / 'QRCatcherWatch').write_bytes(b'synthetic deterministic strip output, not executable')
+                if defect == 'executable': (nested / 'QRCatcherWatch').write_bytes(b'unexpected executable replacement')
 
                 def command(args, **kwargs):
+                    if args[:5] == ['xcrun', 'strip', '-D', '-S', '-no_atom_info']:
+                        self.assertEqual(kind, 'device')
+                        self.assertEqual(args[5], str(producer / 'QRCatcherWatch'))
+                        self.assertEqual(args[6], '-o')
+                        Path(args[7]).write_bytes(b'synthetic deterministic strip output, not executable')
+                        return ''
                     if args[:3] == ['xcrun', 'lipo', '-archs']:
                         return 'arm64\n' if kind == 'simulator' or defect == 'missing_slice' else 'arm64 arm64_32\n'
                     if args[:3] == ['xcrun', 'otool', '-arch']:
@@ -51,13 +59,15 @@ class EmbeddedWatchGateTests(unittest.TestCase):
 
                 with patch.object(sys, 'argv', ['verify_embedded_watch.py', kind]), \
                      patch('subprocess.check_output', side_effect=command), contextlib.redirect_stdout(io.StringIO()):
-                    if defect:
+                    if defect or (stripped and kind=='simulator'):
                         with self.assertRaises(AssertionError):
                             runpy.run_path(str(ROOT / 'scripts/verify_embedded_watch.py'), run_name='__main__')
                     else:
                         runpy.run_path(str(ROOT / 'scripts/verify_embedded_watch.py'), run_name='__main__')
                         report = json.loads(Path('build/native-release-evidence/ios-embedded-watch-' + kind + '.json').read_text())
-                        self.assertTrue(report['producer_bundle_bytes_match'])
+                        self.assertTrue(report['producer_bundle_matches_observed_copy'])
+                        self.assertEqual(report['producer_bundle_bytes_match'], not stripped)
+                        self.assertEqual(report['producer_executable_transform'], 'strip -D -S -no_atom_info' if stripped else 'exact')
                         self.assertEqual(report['kind'], kind)
             finally:
                 os.chdir(old)
@@ -68,5 +78,8 @@ class EmbeddedWatchGateTests(unittest.TestCase):
     def test_wrong_binary_platform_rejected(self): self.check(defect='platform')
     def test_raised_watch_floor_rejected(self): self.check(defect='minimum')
     def test_changed_nested_bytes_rejected(self): self.check(defect='bytes')
+    def test_exact_observed_release_strip_transform_is_required(self): self.check(stripped=True)
+    def test_unexpected_executable_change_rejected(self): self.check(defect='executable')
+    def test_simulator_executable_must_remain_byte_exact(self): self.check('simulator', stripped=True)
 
 if __name__ == '__main__': unittest.main()

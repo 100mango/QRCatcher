@@ -5,6 +5,10 @@ scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
 summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{}}
+barrier=pathlib.Path('build/owned-process-cleanup.json')
+if barrier.exists():
+ assert not barrier.is_symlink() and barrier.stat().st_size<=2048
+ (out/barrier.name).write_bytes(barrier.read_bytes())
 fixture=pathlib.Path('build/import-fixture/fixture.json')
 if fixture.is_file():
  data=fixture.read_bytes();assert len(data)<4096;(out/'owned-import-fixture.json').write_bytes(data)
@@ -34,7 +38,7 @@ def records(value):
   for child in value.values():yield from records(child)
  elif isinstance(value,list):
   for child in value:yield from records(child)
-for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
+for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('WatchLargestUIResults.xcresult','watch-largest'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('TVLargestUIResults.xcresult','apple-tv-largest'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('VisionLargestUIResults.xcresult','vision-largest'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
  if not pathlib.Path(result,'Info.plist').is_file():
   summary['results'][label]={'not_produced':True};continue
  report=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
@@ -44,6 +48,9 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
  for entry in records(json.loads((folder/'manifest.json').read_text())):
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
   if not name or 'accessibility' in text:continue
+  # Keep the complete largest-size case result, with representative actual
+  # result/focus/Chinese pixels inside the unchanged TV evidence allocation.
+  if label=='apple-tv-largest' and name not in ['tv-chinese-result','tv-history-focused-delete','tv-real-photo-result','tv-failure']:continue
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=path.read_bytes()
   source_bytes=len(data)

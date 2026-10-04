@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Inspect the real iOS product's nested Watch app, not a standalone substitute."""
-import hashlib,json,plistlib,re,subprocess,sys
+import hashlib,json,plistlib,re,subprocess,sys,tempfile
 from pathlib import Path
 kind=sys.argv[1];assert kind in ['device','simulator']
 configuration='Release' if kind=='device' else 'Debug'
@@ -35,7 +35,22 @@ def inventory(root):
             assert len(result)<=256
     return result
 nested_files=inventory(watch);producer_files=inventory(producer)
-assert nested_files==producer_files,{'changed':[p for p in sorted(set(nested_files)|set(producer_files)) if nested_files.get(p)!=producer_files.get(p)]}
+assert set(nested_files)==set(producer_files),'Embedded bundle file set changed'
+assert info['CFBundleExecutable']=='QRCatcherWatch'
+changed=[p for p in sorted(nested_files) if nested_files[p]!=producer_files[p]]
+copy_transform='exact'
+if changed:
+    # Xcode 27's actual Release copy in run 37176649273 invokes this precise
+    # deterministic strip command. Compare its output bytes, never accept an
+    # arbitrary executable mismatch or exclude the executable from provenance.
+    assert kind=='device' and changed==['QRCatcherWatch'],{'changed':changed}
+    with tempfile.TemporaryDirectory(prefix='QRCatcherEmbeddedWatch-') as folder:
+        normalized=Path(folder)/'QRCatcherWatch'
+        subprocess.check_output(['xcrun','strip','-D','-S','-no_atom_info',str(producer/'QRCatcherWatch'),'-o',str(normalized)],text=True,timeout=30)
+        assert normalized.is_file() and not normalized.is_symlink() and normalized.stat().st_size<=20*1024*1024
+        expected_hash=hashlib.sha256(normalized.read_bytes()).hexdigest()
+        assert nested_files['QRCatcherWatch']==expected_hash,'Embedded executable differs from the observed deterministic copy transform'
+    copy_transform='strip -D -S -no_atom_info'
 executable=watch/info['CFBundleExecutable']
 architectures=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True,timeout=30).split()
 assert set(architectures)==({'arm64','arm64_32'} if kind=='device' else {'arm64'}),architectures
@@ -52,7 +67,9 @@ if kind=='device':
     for marker in ['QRCATCHER_WATCH_STORE','fixture-payload','reset-history']:assert marker not in strings
     linked=subprocess.check_output(['xcrun','otool','-L',str(executable)],text=True,timeout=30)
     assert '/Vision.framework/' not in linked and '/CoreML.framework/' not in linked
-report={'parent':str(parent),'nested':str(watch),'producer':str(producer),'kind':kind,'producer_bundle_bytes_match':True,
+report={'parent':str(parent),'nested':str(watch),'producer':str(producer),'kind':kind,
+        'producer_bundle_bytes_match':not changed,'producer_bundle_matches_observed_copy':True,
+        'producer_executable_transform':copy_transform,'producer_executable_sha256':producer_files['QRCatcherWatch'],
         'bundle_id':info['CFBundleIdentifier'],'companion':info['WKCompanionAppBundleIdentifier'],
         'version':info['CFBundleShortVersionString'],'build':str(info['CFBundleVersion']),
         'architectures':architectures,'architecture_minimum_os':minimums,'mach_o_platforms':platforms,

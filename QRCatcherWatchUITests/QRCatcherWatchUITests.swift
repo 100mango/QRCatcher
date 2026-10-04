@@ -23,14 +23,22 @@ import CoreGraphics
         XCTAssertTrue(target.waitForExistence(timeout: 10), app.debugDescription)
         let window = app.frame
         let top = window.minY + 44, bottom = window.maxY - 12
-        for _ in 0..<16 {
+        for attempt in 0..<16 {
             let frame = target.frame
             if target.isHittable && frame.height > 0 && frame.minY >= top && frame.maxY <= bottom { return }
-            // Small supported drags avoid jumping over the intended text row.
-            // The right edge stays outside the nested source-image pan area.
-            let movement: CGFloat = frame.minY < top ? 45 : -45
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.65))
-            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: movement)))
+            // A fixed fast 45-point release oscillated past the payload after a
+            // full swipe in run 37176649273. Move toward the measured overflow
+            // and hold at the endpoint so scroll momentum cannot fling it away.
+            let above = frame.minY < top
+            let overflow = above ? top - frame.minY : frame.maxY - bottom
+            let movement = (above ? CGFloat(1) : -1) * min(40, max(8, (overflow + 4) * 0.5))
+            print("WATCH_REVEAL_FRAME", target.identifier, attempt, frame, "movement", movement)
+            // The compact preview occupies the center of the screen. Starting
+            // below it when revealing later content keeps this gesture in the
+            // outer record scroller, rather than the nested image pan viewport.
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: above ? 0.65 : 0.9))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: movement)),
+                        withVelocity: .slow, thenHoldForDuration: 0.2)
         }
         XCTFail("Actual Watch target is not fully framed: \(target.debugDescription)")
     }
@@ -69,12 +77,12 @@ import CoreGraphics
         app.terminate(); app.launchEnvironment["QRCATCHER_WATCH_STORE"] = "49F5E6A7-20ED-4BD9-BF4E-C4B44F652F21"; app.launch()
         print("WATCH_SYNTHETIC_JOURNAL_RECOVERY: actual separate app process and persistence, not WC file delivery")
         let record = app.buttons["watch.record"].firstMatch
-        XCTAssertTrue(record.waitForExistence(timeout: 20)); record.tap(); app.swipeUp()
+        XCTAssertTrue(record.waitForExistence(timeout: 20)); record.tap(); reveal(app.staticTexts["watch.payload"])
         XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123")
         XCTAssertEqual(app.staticTexts["watch.phone-state"].label, "Completed")
         capture("watch-recovered-journal", revealing: app.staticTexts["watch.payload"])
         app.terminate(); app.launch()
-        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap(); app.swipeUp()
+        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap(); reveal(app.staticTexts["watch.payload"])
         XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123")
         XCTAssertEqual(app.staticTexts["watch.phone-state"].label, "Completed")
     }
@@ -91,7 +99,7 @@ import CoreGraphics
         XCTAssertTrue(payload.waitForExistence(timeout: 10)); XCTAssertEqual(payload.label, "QRCatcher 你好 🌈 123")
         capture("watch-fixture-offline-result", revealing: payload)
         app.terminate(); app.launch()
-        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap(); app.swipeUp()
+        XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
         XCTAssertEqual(app.staticTexts["watch.payload"].label, "QRCatcher 你好 🌈 123"); capture("watch-reopened-qr", revealing: app.staticTexts["watch.payload"])
     }
 }
