@@ -18,13 +18,13 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
         app.launch()
     }
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
 
-        if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); capture("vision-failure") }
+        if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); await capture("vision-failure") }
         app.terminate()
     }
-    private func capture(_ name: String) {
+    private func capture(_ name: String) async {
         if name != "vision-failure" {
             do { try app.performAccessibilityAudit(for: .all) { issue in print("VISION_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("VISION accessibility audit failed: \(error)") }
@@ -43,8 +43,12 @@ final class QRCatcherVisionUITests: XCTestCase {
             let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name, "test_store": app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] ?? ""])
             try descriptor.write(to: request, options: .atomic)
             print("QRCATCHER_VISION_CAPTURE_REQUEST:" + id); fflush(stdout)
-            let deadline = Date().addingTimeInterval(100)
-            while Date() < deadline && !FileManager.default.fileExists(atPath: ack.path) { Thread.sleep(forTimeInterval: 0.2) }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(100))
+            // Hold the same UI state while yielding the runner's main actor to
+            // its system services. Never block that actor for the ACK deadline.
+            while ContinuousClock.now < deadline && !FileManager.default.fileExists(atPath: ack.path) {
+                try await Task.sleep(nanoseconds: 200_000_000)
+            }
             let result = try JSONSerialization.jsonObject(with: Data(contentsOf: ack)) as? [String: Any]
             if name == "vision-failure" {
                 print("VISION_FAILURE_CAPTURE_DIAGNOSTIC", String(describing: result))
@@ -70,7 +74,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         }
         XCTFail("The rendered end of the policy is not reachable inside its scroll viewport: \(end.debugDescription)")
     }
-    private func saveUsingSystemFileExporter(_ button: String, name: String, checkpoint: String) {
+    private func saveUsingSystemFileExporter(_ button: String, name: String, checkpoint: String) async {
         app.buttons[button].tap()
         // These identifiers were observed in the native SDK 27 document picker.
         let filename = app.textFields["DOCPicker.filenameTextField"]
@@ -82,10 +86,11 @@ final class QRCatcherVisionUITests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(save.isEnabled, app.debugDescription); save.tap()
         let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Export completed"), object: app.staticTexts["vision.status"])
-        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 20), .completed, app.debugDescription)
-        capture(checkpoint) // Host independently verifies bytes read from the saved URL.
+        let outcome = await XCTWaiter.fulfillment(of: [finished], timeout: 20)
+        XCTAssertEqual(outcome, .completed, app.debugDescription)
+        await capture(checkpoint) // Host independently verifies bytes read from the saved URL.
     }
-    func testRealPhotosImportCopyAndReopen() {
+    func testRealPhotosImportCopyAndReopen() async {
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
         app.buttons["vision.photos"].tap()
         let asset = app.images["PXGGridLayout-Info"].firstMatch
@@ -96,17 +101,17 @@ final class QRCatcherVisionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["vision.openWebsite"].exists)
         app.buttons["vision.copy"].tap()
         XCTAssertEqual(app.staticTexts["vision.status"].label, "Result copied")
-        capture("vision-imported-qr")
+        await capture("vision-imported-qr")
         app.terminate(); app.launch()
         let record = app.staticTexts["QRCatcher 你好 🌈 123"]
         XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
         XCTAssertTrue(app.buttons["vision.exportQR"].waitForExistence(timeout: 5))
-        capture("vision-reopened-history")
-        saveUsingSystemFileExporter("vision.exportQR", name: "QRCatcher Synthetic QR", checkpoint: "vision-exported-qr")
+        await capture("vision-reopened-history")
+        await saveUsingSystemFileExporter("vision.exportQR", name: "QRCatcher Synthetic QR", checkpoint: "vision-exported-qr")
         // Copy resets the status, so a prior successful save cannot satisfy the
         // second completion assertion before that system exporter actually ends.
         app.buttons["vision.copy"].tap()
-        saveUsingSystemFileExporter("vision.exportHistory", name: "QRCatcher Synthetic History", checkpoint: "vision-exported-history")
+        await saveUsingSystemFileExporter("vision.exportHistory", name: "QRCatcher Synthetic History", checkpoint: "vision-exported-history")
     }
 
     private func visibleFileItem(_ name: String) -> XCUIElement? {
@@ -123,7 +128,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         guard let item else { XCTFail("Missing actual Files item \(name): \(app.debugDescription)"); return }
         item.tap()
     }
-    func testRealFilesImportAndReopen() {
+    func testRealFilesImportAndReopen() async {
         XCTAssertTrue(app.buttons["vision.import"].waitForExistence(timeout: 20)); app.buttons["vision.import"].tap()
         XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 20), app.debugDescription)
         if visibleFileItem("QRCatcher-Test-Imports") == nil {
@@ -139,13 +144,13 @@ final class QRCatcherVisionUITests: XCTestCase {
         let record = app.staticTexts["QRCatcher 你好 🌈 123"]
         XCTAssertTrue(record.waitForExistence(timeout: 15)); record.tap()
         XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
-        capture("vision-files-import-reopened")
+        await capture("vision-files-import-reopened")
     }
 
-    func testChineseEmptyPhotosResultAndOfflinePolicy() {
+    func testChineseEmptyPhotosResultAndOfflinePolicy() async {
         XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["vision.payload"].exists)
-        capture("vision-chinese-empty")
+        await capture("vision-chinese-empty")
         app.buttons["vision.photos"].tap()
         let asset = app.images["PXGGridLayout-Info"].firstMatch
         XCTAssertTrue(asset.waitForExistence(timeout: 20), app.debugDescription); asset.tap()
@@ -154,14 +159,14 @@ final class QRCatcherVisionUITests: XCTestCase {
         XCTAssertEqual(app.buttons["vision.copy"].label, "复制")
         app.buttons["vision.copy"].tap()
         XCTAssertEqual(app.staticTexts["vision.status"].label, "已复制结果")
-        capture("vision-chinese-result")
+        await capture("vision-chinese-result")
         app.buttons["vision.privacy"].tap()
         let body = app.staticTexts["privacy.offlineBody"]
         XCTAssertTrue(body.waitForExistence(timeout: 10), app.debugDescription)
         let ending = app.staticTexts["privacy.offlineEnd"]
         XCTAssertEqual(ending.label, "本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。")
         XCTAssertTrue(body.label.contains("100mango@gmail.com"))
-        capture("vision-chinese-policy")
+        await capture("vision-chinese-policy")
         app.buttons["vision.privacyDone"].tap()
         XCTAssertTrue(app.buttons["vision.copy"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")

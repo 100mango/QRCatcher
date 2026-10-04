@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded native XCTest evidence. No app binaries or full xcresult upload."""
-import hashlib,json,os,pathlib,subprocess
+import hashlib,json,os,pathlib,struct,subprocess
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes']['macos']
 out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
 barrier=pathlib.Path('build/owned-process-cleanup.json')
@@ -33,6 +33,7 @@ names=['mac-system-picker-before-selection','mac-system-picker-after-selection',
 def checkpoint_name(entry):
  text=' '.join(v for v in entry.values() if isinstance(v,str))
  return next((n for n in names if n in text),None)
+lossless_controls={'mac-before-resize','mac-minimum-window','mac-before-export','mac-pasted-url'}
 first_failure_retained=False
 # Prefer the stricter sandbox's actual pixels; keep both full structured summaries.
 for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.xcresult','native')]:
@@ -60,15 +61,25 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
   if name=='mac-failure':
    if first_failure_retained:continue
    first_failure_retained=True
-  data=path.read_bytes();assert data.startswith(b'\xff\xd8') and len(data)<=800*1024
+  data=path.read_bytes()
+  if len(data)>800*1024:raise ValueError('Oversized native Mac screenshot')
+  dimensions=None
+  if name in lossless_controls:
+   if not (data.startswith(b'\x89PNG\r\n\x1a\n') and len(data)>24 and data[12:16]==b'IHDR'):raise ValueError('Paired Mac controls require native PNG bytes')
+   dimensions=list(struct.unpack('>II',data[16:24]))
+   if not all(0<v<=4096 for v in dimensions):raise ValueError('Invalid native Mac screenshot dimensions')
+  elif not data.startswith(b'\xff\xd8'):raise ValueError('Only the four paired Mac controls may use PNG')
   digest=hashlib.sha256(data).hexdigest()
   existing=next((item for item in screenshots if item['sha256']==digest),None)
   if existing:
    existing.setdefault('additional_checkpoint_names',[]).append(name);continue
   if len(screenshots)>=14 or sum(p.stat().st_size for p in out.iterdir())+len(data)>limit-256*1024:
    print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
-  filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
-  item={'name':filename,'scope':label,'bytes':len(data),'sha256':digest};screenshots.append(item);print(json.dumps(item),flush=True)
+  suffix='png' if dimensions else 'jpg'
+  filename=f'{len(screenshots)+1}-{label}-{name}.{suffix}';(out/filename).write_bytes(data)
+  item={'name':filename,'scope':label,'bytes':len(data),'sha256':digest}
+  if dimensions:item.update(native_pixel_dimensions=dimensions,source_bytes_preserved=True)
+  screenshots.append(item);print(json.dumps(item),flush=True)
 (out/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
 # These four exact checkpoints form two fixed-state controls. Missing one must
 # stay visible as an evidence failure, including when a prerequisite stopped it.

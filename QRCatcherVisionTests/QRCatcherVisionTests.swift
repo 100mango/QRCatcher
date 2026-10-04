@@ -1,5 +1,6 @@
 import XCTest
 import CoreData
+import Combine
 @testable import QRCatcherVision
 
 @MainActor
@@ -22,12 +23,25 @@ final class QRCatcherVisionTests: QRManagedStoreTestCase {
         let history = makeHistory(url: url)
         let session = VisionReadSession(history: history)
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "unicode", withExtension: "png"))
+        let started = ContinuousClock.now
         session.read(url: fixture)
-        for _ in 0..<80 { if session.payload != nil { break }; try await Task.sleep(nanoseconds: 100_000_000) }
-        XCTAssertEqual(session.payload, "QRCatcher 你好 🌈 123")
-        XCTAssertEqual(makeHistory(url: url).items.first?.payload, session.payload)
+        defer { session.cancel() }
+        let finished = expectation(description: "Actual asynchronous image read completed")
+        // Subscribe after read() synchronously marks the session busy. Completion
+        // is a lifecycle event, not an assumed number of short scheduler sleeps.
+        let observation = session.$isReading.dropFirst().filter { !$0 }.prefix(1).sink { _ in finished.fulfill() }
+        defer { observation.cancel() }
+        let outcome = await XCTWaiter.fulfillment(of: [finished], timeout: 60)
+        print("VISION_ACTUAL_READ_COMPLETION", "elapsed", started.duration(to: .now), "wait", outcome.rawValue,
+              "isReading", session.isReading, "status", session.status, "error", session.error ?? "none")
+        XCTAssertEqual(outcome, .completed)
+        XCTAssertFalse(session.isReading)
+        XCTAssertNil(session.error)
+        let payload = try XCTUnwrap(session.payload, "Actual read must produce a result before persistence is checked")
+        XCTAssertEqual(payload, "QRCatcher 你好 🌈 123")
+        XCTAssertEqual(makeHistory(url: url).items.first?.payload, "QRCatcher 你好 🌈 123")
         let export = try XCTUnwrap(JSONSerialization.jsonObject(with: history.exportData()) as? [String:Any])
-        XCTAssertEqual((export["records"] as? [[String:Any]])?.first?["payload"] as? String, session.payload)
+        XCTAssertEqual((export["records"] as? [[String:Any]])?.first?["payload"] as? String, "QRCatcher 你好 🌈 123")
     }
     func testCancellationAndSafeActions() async throws {
         let history = makeHistory(url: try storeURL())

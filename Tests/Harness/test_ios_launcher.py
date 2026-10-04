@@ -43,11 +43,15 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
     for name in ['xcrun','xcodebuild']:
         (binary/name).write_text(stub);(binary/name).chmod(0o755)
     scenarios=[(0,0,0,0,False),(13,0,0,0,False),(124,0,0,0,False),(0,7,0,0,False),(0,0,65,0,False),(0,0,0,65,False),(0,0,126,0,False),(13,0,65,0,False),(0,0,65,7,False),(0,0,65,126,False),(0,0,0,0,True)]
-    for test_class in ['QRCatcherUITests','QRCatcherPadUITests']:
+    profiles=[('QRCatcherUITests','PhoneUIResults.xcresult',360),
+              ('QRCatcherUITests','CompactPhoneUIResults.xcresult',240),
+              ('QRCatcherPadUITests','PadUIResults.xcresult',240),
+              ('QRCatcherPadUITests','MiniUIResults.xcresult',240)]
+    for test_class,result_name,file_cap in profiles:
       for seed,test_exit,file_exit,photo_exit,barrier in scenarios:
         observed=folder/'command.json';observed.unlink(missing_ok=True)
         marker=folder/'build/owned-process-cleanup.json';marker.unlink(missing_ok=True)
-        result=subprocess.run(['bash','scripts/run_ios_platform_ui.sh','11111111-2222-4333-8444-555555555555','SyntheticResults.xcresult',test_class],cwd=folder,
+        result=subprocess.run(['bash','scripts/run_ios_platform_ui.sh','11111111-2222-4333-8444-555555555555',result_name,test_class],cwd=folder,
             env={**fixture_env,'PATH':str(binary)+':'+os.environ['PATH'],'SEED_STATUS':str(seed),'TEST_STATUS':str(test_exit),'FILE_STATUS':str(file_exit),'PHOTO_STATUS':str(photo_exit),'BARRIER_AFTER_FILES':str(barrier).lower(),'QRCATCHER_OWNED_PROCESS_BARRIER':str(marker),'GITHUB_WORKSPACE':str(folder),'OBSERVED_COMMAND':str(observed),'SYNTHETIC_APP':str(app),'SYNTHETIC_DATA':str(data)},capture_output=True,text=True,timeout=15)
         expected=test_exit or (126 if file_exit==126 or barrier else seed or (126 if photo_exit==126 else file_exit or photo_exit))
         assert result.returncode==expected,(test_class,seed,test_exit,file_exit,photo_exit,result.returncode,result.stdout,result.stderr)
@@ -60,12 +64,16 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
             assert not any(v.startswith('-skip-testing:') for v in commands[0])
         else:
             assert '-skip-testing:QRCatcherUITests/QRCatcherPadUITests/testRealPhotoImportReplacesSelectionAndPreservesBothRecords' in commands[0]
-            assert 'SyntheticResults-layout.xcresult' in commands[0]
+            assert result_name.removesuffix('.xcresult')+'-layout.xcresult' in commands[0]
         attempts=[i for i,x in enumerate(rows) if 'addmedia' in x['args']]
         assert len(attempts)==(0 if test_exit or file_exit==126 or barrier else 1)
         if len(commands)>=2:
+            bounded=[json.loads(line.split('BOUNDED_COMMAND_START ',1)[1]) for line in result.stdout.splitlines() if line.startswith('BOUNDED_COMMAND_START ')]
+            file_commands=[row for row in bounded if '-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealFilesImportAndReopen' in row['command']]
+            assert len(file_commands)==1
+            assert file_commands[0]['seconds']==file_cap
             assert '-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealFilesImportAndReopen' in commands[1]
-            assert 'SyntheticResults-files.xcresult' in commands[1]
+            assert result_name.removesuffix('.xcresult')+'-files.xcresult' in commands[1]
         if attempts:
             file_index=next(i for i,x in enumerate(rows) if '-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealFilesImportAndReopen' in x['args'])
             assert file_index<attempts[0]
@@ -74,11 +82,12 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
             wanted='testRealPhotoImportReplacesSelectionAndPreservesBothRecords' if test_class=='QRCatcherPadUITests' else 'testRealPhotosImportAndReopen'
             assert any(v.endswith('/'+wanted) for v in commands[2])
         setup=json.loads((folder/'build/ios-platform-setup.json').read_text())
+        assert setup['real_files_timeout_seconds']==file_cap
         assert setup['seed_attempts']==len(attempts) and setup['photo_seed_exit']==(-1 if not attempts else seed)
         assert setup['real_files_case_exit']==(-1 if test_exit else file_exit)
         assert setup['real_photo_case_exit']==(photo_exit if len(commands)==3 else -1)
         assert setup['timeout_does_not_prove_asset_absence'] is True
-        print('SHELL_ARGUMENT_ROUTING_PASS',test_class,seed,test_exit,file_exit,photo_exit,barrier,'(command doubles only; no app runtime)',flush=True)
+        print('SHELL_ARGUMENT_ROUTING_PASS',test_class,result_name,seed,test_exit,file_exit,photo_exit,barrier,'(command doubles only; no app runtime)',flush=True)
 
 # The four real workflow result basenames must be retained by the exporter,
 # including Files results when Photos was never executable.

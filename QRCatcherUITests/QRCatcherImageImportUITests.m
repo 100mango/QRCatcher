@@ -24,15 +24,88 @@
     XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.jpeg"];
     attachment.name=name; attachment.lifetime=XCTAttachmentLifetimeKeepAlways; [self addAttachment:attachment];
 }
-- (void)auditCurrentResult {
-    if (@available(iOS 17.0, *)) {
-        NSError *error=nil;
-        BOOL passed=[self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:^BOOL(XCUIAccessibilityAuditIssue *issue) {
-            NSLog(@"REAL_IMPORTED_RESULT_AUDIT:%@ %@ %@",issue.compactDescription,issue.detailedDescription,issue.element.debugDescription);
-            return NO;
-        } error:&error];
-        XCTAssertTrue(passed,@"Real imported/reopened result accessibility audit: %@",error);
+- (NSDictionary *)auditCurrentResultPhase:(NSString *)phase {
+    NSUInteger failuresBefore = self.testRun.failureCount;
+    __block NSUInteger callbackIssues = 0;
+    NSError *error = nil;
+    BOOL apiReturnedSuccess = NO;
+    BOOL previousContinuation = self.continueAfterFailure;
+    // Only audits continue after their retained failures. Data/navigation
+    // assertions outside this method keep their fail-fast behavior.
+    self.continueAfterFailure = YES;
+    @try {
+        if (@available(iOS 17.0, *)) {
+            apiReturnedSuccess = [self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:^BOOL(XCUIAccessibilityAuditIssue *issue) {
+                callbackIssues += 1;
+                NSLog(@"REAL_IMPORTED_RESULT_AUDIT:%@ %@ %@ PHASE:%@", issue.compactDescription, issue.detailedDescription, issue.element.debugDescription, phase);
+                return NO;
+            } error:&error];
+            XCTAssertTrue(apiReturnedSuccess, @"Real imported/reopened result accessibility audit: %@", error);
+        } else { XCTFail(@"The strict imported-result audit is unavailable on this runtime"); }
+    } @finally { self.continueAfterFailure = previousContinuation; }
+    NSDictionary *receipt = @{@"phase": phase, @"callback_issues": @(callbackIssues),
+        @"registered_failure_delta": @(self.testRun.failureCount - failuresBefore),
+        @"api_returned_success": @(apiReturnedSuccess), @"error": error.localizedDescription ?: @""};
+    NSLog(@"REAL_IMPORTED_RESULT_AUDIT_RECEIPT:%@", receipt);
+    return receipt; // An API return value alone is never an audit-pass claim.
+}
+- (void)attachBoundedText:(NSString *)text name:(NSString *)name {
+    XCTAssertLessThanOrEqual([text lengthOfBytesUsingEncoding:NSUTF8StringEncoding], 64 * 1024);
+    XCTAttachment *attachment = [XCTAttachment attachmentWithString:text];
+    attachment.name = name; attachment.lifetime = XCTAttachmentLifetimeKeepAlways; [self addAttachment:attachment];
+}
+- (void)attachImportAuditTree:(NSString *)name {
+    NSString *tree = self.app.debugDescription;
+    [self attachBoundedText:[tree substringToIndex:MIN(tree.length, 16000)] name:name];
+}
+- (NSArray *)importedHistoryRows {
+    XCUIElement *table = self.app.tables[@"history.table"];
+    XCTAssertEqual(table.cells.count, 2);
+    if (table.cells.count != 2) return nil;
+    NSMutableArray *rows = [NSMutableArray new];
+    for (XCUIElement *cell in table.cells.allElementsBoundByIndex) {
+        NSMutableArray *labels = [NSMutableArray new];
+        for (XCUIElement *text in cell.staticTexts.allElementsBoundByIndex) [labels addObject:text.label];
+        [rows addObject:labels];
     }
+    XCTAssertTrue(table.cells.firstMatch.staticTexts[@"QRCatcher 你好 🌈 123"].exists);
+    XCTAssertTrue([table.cells elementBoundByIndex:1].staticTexts[@"Previous selected result"].exists);
+    return rows;
+}
+- (void)auditCurrentResult {
+    if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone) {
+        [self auditCurrentResultPhase:@"selected-result"]; return;
+    }
+    XCUIElement *alert = self.app.alerts[@"QR Code"];
+    XCTAssertTrue(alert.exists && alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists);
+    if (!alert.exists || !alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists) return;
+    NSArray *before = [self importedHistoryRows];
+    if (!before) return;
+    [self attachBoundedText:@"phone-alert-history" name:@"image-import-audit-pair-required"];
+    [self attachImportAuditTree:@"image-import-alert-audit-tree"];
+    NSDictionary *first = [self auditCurrentResultPhase:@"native-alert"];
+    // The action must belong to this same native QR alert. Never dismiss an
+    // unrelated system dialog or infer Cancel from a screen coordinate.
+    XCUIElement *cancel = alert.buttons[@"Cancel"];
+    BOOL canCancel = alert.exists && alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists &&
+                     cancel.exists && cancel.enabled && cancel.hittable;
+    XCTAssertTrue(canCancel, @"The original native QR alert must own an available Cancel");
+    if (!canCancel) return;
+    [cancel tap];
+    XCTNSPredicateExpectation *closed = [[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:alert];
+    XCTWaiterResult closeResult = [XCTWaiter waitForExpectations:@[closed] timeout:10];
+    XCTAssertEqual(closeResult, XCTWaiterResultCompleted);
+    if (closeResult != XCTWaiterResultCompleted) return;
+    NSArray *after = [self importedHistoryRows];
+    XCTAssertEqualObjects(after, before, @"Cancel must preserve the same payload/date rows before the second audit");
+    if (![after isEqual:before]) return;
+    [self capture:@"image-import-history-after-cancel"];
+    [self attachImportAuditTree:@"image-import-history-audit-tree"];
+    NSDictionary *second = [self auditCurrentResultPhase:@"same-history-after-cancel"];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@[first, second] options:0 error:nil];
+    XCTAssertNotNil(data);
+    if (!data) return;
+    [self attachBoundedText:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] name:@"image-import-audit-pair-receipts"];
 }
 - (void)chooseSource:(NSString *)title {
     XCUIElement *button=self.app.buttons[@"scan.import"];
@@ -95,7 +168,24 @@
 }
 - (void)testRealFilesImportAndReopen {
     [self chooseSource:@"Choose File"];
-    XCTAssertTrue([self.app.buttons[@"Cancel"].firstMatch waitForExistenceWithTimeout:20],@"%@",self.app.debugDescription);
+    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
+        // SDK27 SE3 exposes the X icon as Cancel inside this real Files context.
+        // Readiness observes that scoped control; it performs no UI action.
+        NSPredicate *pickerReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+            XCUIApplication *app = object;
+            XCUIElement *picker = app.otherElements[@"Browse View (Picker)"].firstMatch;
+            XCUIElement *bar = picker.navigationBars[@"FullDocumentManagerViewControllerNavigationBar"].firstMatch;
+            XCUIElement *cancel = bar.buttons[@"Cancel"].firstMatch;
+            return picker.exists && bar.exists && cancel.exists && cancel.enabled && cancel.hittable;
+        }];
+        XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc] initWithPredicate:pickerReady object:self.app];
+        XCTWaiterResult outcome = [XCTWaiter waitForExpectations:@[ready] timeout:20];
+        XCTAssertEqual(outcome, XCTWaiterResultCompleted,
+                       @"Expected the observed native Files picker and its available Cancel control: %@", self.app.debugDescription);
+        if (outcome != XCTWaiterResultCompleted) return;
+    } else {
+        XCTAssertTrue([self.app.buttons[@"Cancel"].firstMatch waitForExistenceWithTimeout:20],@"%@",self.app.debugDescription);
+    }
     if (![self visibleItem:@"QRCatcher-Test-Imports"]) {
         XCUIElement *browse=[self visibleItem:@"Browse"]; if(browse)[browse tap];
         NSString *location=UIDevice.currentDevice.userInterfaceIdiom==UIUserInterfaceIdiomPad ? @"On My iPad" : @"On My iPhone";

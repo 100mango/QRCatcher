@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import runpy
 import subprocess
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,7 +16,7 @@ CONTROLS = ['mac-before-resize', 'mac-minimum-window', 'mac-before-export', 'mac
 
 
 class MacEvidenceExportTests(unittest.TestCase):
-    def export(self, names, *, same_pixels=(), allocation=3_000_000):
+    def export(self, names, *, same_pixels=(), allocation=3_000_000, jpeg_controls=False, extra_png=()):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'scripts').mkdir()
@@ -30,6 +31,8 @@ class MacEvidenceExportTests(unittest.TestCase):
                 if command == ['uname', '-m']: return 'arm64\n'
                 raise AssertionError(command)
 
+            expected_payloads = {}
+
             def run(command, **kwargs):
                 if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
                     return subprocess.CompletedProcess(command, 0, json.dumps({'runtimeWarnings': []}), '')
@@ -41,7 +44,11 @@ class MacEvidenceExportTests(unittest.TestCase):
                         filename = f'{number}.jpg'
                         # Only the exporter's byte-budget/retention contract is
                         # tested here. No synthetic bytes qualify as app pixels.
-                        payload = b'\xff\xd8' + (b'same' if name in same_pixels else name.encode())
+                        body = b'same' if name in same_pixels else name.encode()
+                        if (name in CONTROLS and not jpeg_controls) or name in extra_png:
+                            payload = b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\rIHDR' + struct.pack('>II', 1024, 768) + body
+                        else: payload = b'\xff\xd8' + body
+                        expected_payloads[name] = payload
                         (destination / filename).write_bytes(payload)
                         entries.append({'name': name, 'exportedFileName': filename})
                     (destination / 'manifest.json').write_text(json.dumps(entries))
@@ -54,6 +61,9 @@ class MacEvidenceExportTests(unittest.TestCase):
                 with patch('subprocess.check_output', output), patch('subprocess.run', run), contextlib.redirect_stdout(io.StringIO()):
                     runpy.run_path(str(SCRIPT), run_name='__main__')
                 manifest = json.loads((root / 'build/mac-evidence/screenshots.json').read_text())
+                for item in manifest:
+                    checkpoint = next(name for name in names if name in item['name'])
+                    self.assertEqual((root / 'build/mac-evidence' / item['name']).read_bytes(), expected_payloads[checkpoint])
                 size = sum(p.stat().st_size for p in (root / 'build/mac-evidence').iterdir())
                 return manifest, size
             finally:
@@ -63,6 +73,19 @@ class MacEvidenceExportTests(unittest.TestCase):
         manifest, size = self.export(CONTROLS)
         self.assertEqual(len(manifest), 4)
         self.assertLessEqual(size, 3_000_000)
+
+    def test_control_png_bytes_and_native_dimensions_are_preserved(self):
+        manifest, _ = self.export(CONTROLS)
+        self.assertTrue(all(x['name'].endswith('.png') and x['source_bytes_preserved'] for x in manifest))
+        self.assertTrue(all(x['native_pixel_dimensions'] == [1024, 768] for x in manifest))
+
+    def test_control_cannot_silently_fall_back_to_jpeg(self):
+        with self.assertRaisesRegex(ValueError, 'require native PNG'):
+            self.export(CONTROLS, jpeg_controls=True)
+
+    def test_unrequested_checkpoint_cannot_expand_png_scope(self):
+        with self.assertRaisesRegex(ValueError, 'Only the four paired'):
+            self.export(['mac-failure'] + CONTROLS, extra_png=['mac-failure'])
 
     def test_missing_control_fails_closed(self):
         with self.assertRaisesRegex(SystemExit, 'mac-before-export'):

@@ -148,10 +148,20 @@ final class QRCatcherMacUITests: XCTestCase {
     }
     private func capturePixels(_ name: String) throws {
         let png = XCUIScreen.main.screenshot().pngRepresentation
-        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: png))
-        let jpeg = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: 0.55]))
-        XCTAssertLessThanOrEqual(jpeg.count, 800 * 1024)
-        let attachment = XCTAttachment(data: jpeg, uniformTypeIdentifier: "public.jpeg")
+        let lossless = ["mac-before-resize", "mac-minimum-window", "mac-before-export", "mac-pasted-url"].contains(name)
+        let data: Data
+        let type: String
+        if lossless {
+            // These exact paired controls need native pixels for diagnosis.
+            // No color conversion, crop, resize or JPEG recompression is applied.
+            data = png; type = "public.png"
+        } else {
+            let bitmap = try XCTUnwrap(NSBitmapImageRep(data: png))
+            data = try XCTUnwrap(bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: 0.55]))
+            type = "public.jpeg"
+        }
+        XCTAssertLessThanOrEqual(data.count, 800 * 1024)
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: type)
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
     }
     private func screenshot(_ name: String) throws {
