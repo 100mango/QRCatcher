@@ -9,9 +9,16 @@ final class QRCatcherVisionUITests: XCTestCase {
     private var captureLease: String?
     private var captureSource: String?
     private var captureDevice: String?
+    private var captureCase: String?
+    private var captureScope: String?
+    private var captureResult: String?
+    private var captureStoreName = ""
+    private func tracePhase(_ message: String) { print(message); fflush(stdout) }
     override func setUp() async throws {
         try await super.setUp()
         app = nil; captureLease = nil; captureSource = nil; captureDevice = nil
+        captureCase = nil; captureScope = nil; captureResult = nil
+        captureStoreName = ""
         continueAfterFailure = false
         // Installed before any app/system-app launch and retained through teardown.
         interruptionGuard = addUIInterruptionMonitor(withDescription: "Stop before every unexpected system interruption") { alert in
@@ -23,14 +30,24 @@ final class QRCatcherVisionUITests: XCTestCase {
         app = XCUIApplication()
         let chinese = name.contains("testChineseEmptyPhotosResultAndOfflinePolicy")
         app.launchArguments = chinese ? ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"] : ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = UUID().uuidString
+        captureStoreName = UUID().uuidString
+        app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = captureStoreName
         app.launch()
     }
     override func tearDown() async throws {
+        tracePhase("VISION_TEARDOWN_ENTRY_BEFORE_FAILURE_COUNT")
         defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
+        let failures = testRun?.failureCount ?? 0
+        tracePhase("VISION_TEARDOWN_AFTER_FAILURE_COUNT \(failures)")
         if let app {
-            if (testRun?.failureCount ?? 0) > 0, captureLease != nil { await capture("vision-failure") }
+            if failures > 0, captureLease != nil {
+                tracePhase("VISION_TEARDOWN_BEFORE_FAILURE_CAPTURE")
+                await capture("vision-failure")
+                tracePhase("VISION_TEARDOWN_AFTER_FAILURE_CAPTURE")
+            }
+            tracePhase("VISION_TEARDOWN_BEFORE_APP_TERMINATE")
             app.terminate()
+            tracePhase("VISION_TEARDOWN_AFTER_APP_TERMINATE")
         }
         if let captureLease {
             let request = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcher-runner-" + captureLease + ".json")
@@ -38,12 +55,22 @@ final class QRCatcherVisionUITests: XCTestCase {
             try? FileManager.default.removeItem(at: request.deletingPathExtension().appendingPathExtension("ack"))
         }
         captureLease = nil; captureSource = nil; captureDevice = nil
+        captureCase = nil; captureScope = nil; captureResult = nil
+        captureStoreName = ""
+        tracePhase("VISION_TEARDOWN_FINISHED")
     }
     private func bindCaptureRunner() async throws {
         let id = UUID().uuidString
         let runner = try XCTUnwrap(Bundle.main.bundleIdentifier)
         let pid = Int(ProcessInfo.processInfo.processIdentifier)
-        let exports = name.contains("testRealPhotosImportCopyAndReopen")
+        let methods = ["testRealPhotosImportCopyAndReopen", "testRealFilesImportAndReopen", "testChineseEmptyPhotosResultAndOfflinePolicy"]
+        // Bind the actual XCTest identity, rather than inferring a case from
+        // an arbitrary substring or silently selecting a default workflow.
+        let actualMethod = try XCTUnwrap(methods.first { method in
+            name == "-[QRCatcherVisionUITests.QRCatcherVisionUITests \(method)]"
+                || name == "-[QRCatcherVisionUITests \(method)]"
+        }, "Unrecognized actual Vision XCTest method identity")
+        let exports = actualMethod == "testRealPhotosImportCopyAndReopen"
         let request = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcher-runner-" + id + ".json")
         let ack = request.deletingPathExtension().appendingPathExtension("ack")
         var accepted = false
@@ -51,20 +78,32 @@ final class QRCatcherVisionUITests: XCTestCase {
             try? FileManager.default.removeItem(at: ack)
             if !accepted { try? FileManager.default.removeItem(at: request) }
         }
-        let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "runner": runner, "pid": pid, "exports": exports])
+        let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "runner": runner, "pid": pid, "exports": exports, "case": actualMethod])
         try descriptor.write(to: request, options: .atomic)
         print("QRCATCHER_VISION_RUNNER_READY:" + id); fflush(stdout)
         // One 20-second public lookup, or two for the export case's own app
         // container. This setup has its own bounded ACK and no retry route.
         let seconds = exports ? 60 : 30
+        let bindingStarted = ProcessInfo.processInfo.systemUptime
         let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
         while ContinuousClock.now < deadline && !FileManager.default.fileExists(atPath: ack.path) {
             try await Task.sleep(nanoseconds: 200_000_000)
         }
+        tracePhase("VISION_BINDING_ACK_WAIT_FINISHED exists=\(FileManager.default.fileExists(atPath: ack.path)) elapsed=\(ProcessInfo.processInfo.systemUptime - bindingStarted) configured_seconds=\(seconds)")
         let result = try JSONSerialization.jsonObject(with: Data(contentsOf: ack)) as? [String: Any]
+        let scopes = [
+            "visionos_photos": ["testRealPhotosImportCopyAndReopen", "VisionPhotosUIResults.xcresult"],
+            "visionos_files": ["testRealFilesImportAndReopen", "VisionFilesUIResults.xcresult"],
+            "visionos_chinese": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionChineseUIResults.xcresult"],
+            "visionos_largest": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionLargestUIResults.xcresult"]
+        ]
         guard result?["success"] as? Bool == true, result?["lease"] as? String == id,
               result?["runner"] as? String == runner, result?["pid"] as? Int == pid,
               result?["exports"] as? Bool == exports,
+              result?["case"] as? String == actualMethod,
+              let scope = result?["scope"] as? String,
+              let resultName = result?["result"] as? String,
+              scopes[scope] == [actualMethod, resultName],
               let source = result?["source_commit"] as? String,
               source.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
               let device = result?["device"] as? String, UUID(uuidString: device)?.uuidString == device else {
@@ -72,9 +111,12 @@ final class QRCatcherVisionUITests: XCTestCase {
                           userInfo: [NSLocalizedDescriptionKey: "No matching source/device/current-runner binding before UI"])
         }
         captureLease = id; captureSource = source; captureDevice = device; accepted = true
+        captureCase = actualMethod; captureScope = scope; captureResult = resultName
     }
     private func capture(_ name: String) async {
-        guard let captureLease, let captureSource, let captureDevice else {
+        if name == "vision-failure" { tracePhase("VISION_FAILURE_CAPTURE_ENTRY") }
+        guard let captureLease, let captureSource, let captureDevice,
+              let captureCase, let captureScope, let captureResult else {
             if name == "vision-failure" { print("VISION_FAILURE_CAPTURE_WITHOUT_BINDING") }
             else { XCTFail("No current runner binding; no success checkpoint requested") }
             return
@@ -95,15 +137,17 @@ final class QRCatcherVisionUITests: XCTestCase {
             // A failed AX query can leave its snapshot service unresponsive.
             // Preserve XCTest's original issue; do not repeat that query while
             // teardown only requests a bounded, non-AX simulator screenshot.
-            print("VISION_FAILURE_CAPTURE_WITHOUT_NEW_AX_QUERY", testRun?.failureCount ?? 0)
+            tracePhase("VISION_FAILURE_CAPTURE_WITHOUT_NEW_AX_QUERY")
         }
         let id = UUID().uuidString
         let request = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcher-capture-" + id + ".json")
         let ack = request.deletingPathExtension().appendingPathExtension("ack")
         do {
-            let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name, "test_store": app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] ?? "",
+            if name == "vision-failure" { tracePhase("VISION_FAILURE_CAPTURE_BEFORE_REQUEST_WRITE " + id) }
+            let descriptor = try JSONSerialization.data(withJSONObject: ["id": id, "name": name, "test_store": captureStoreName,
                 "runner": Bundle.main.bundleIdentifier ?? "", "lease": captureLease,
-                "pid": Int(ProcessInfo.processInfo.processIdentifier), "source_commit": captureSource, "device": captureDevice])
+                "pid": Int(ProcessInfo.processInfo.processIdentifier), "source_commit": captureSource, "device": captureDevice,
+                "case": captureCase, "scope": captureScope, "result": captureResult])
             try descriptor.write(to: request, options: .atomic)
             print("QRCATCHER_VISION_CAPTURE_REQUEST:" + id); fflush(stdout)
             let deadline = ContinuousClock.now.advanced(by: .seconds(100))
@@ -120,6 +164,9 @@ final class QRCatcherVisionUITests: XCTestCase {
                 XCTAssertEqual(result?["lease"] as? String, captureLease)
                 XCTAssertEqual(result?["source_commit"] as? String, captureSource)
                 XCTAssertEqual(result?["device"] as? String, captureDevice)
+                XCTAssertEqual(result?["case"] as? String, captureCase)
+                XCTAssertEqual(result?["scope"] as? String, captureScope)
+                XCTAssertEqual(result?["result"] as? String, captureResult)
                 XCTAssertEqual(result?["success"] as? Bool, true, "Held simulator checkpoint failed: \(String(describing: result))")
             }
         } catch {
@@ -165,7 +212,10 @@ final class QRCatcherVisionUITests: XCTestCase {
         let asset = grid.images["PXGGridLayout-Info"].firstMatch
         let ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == true AND hittable == true"), object: asset)
+        let readinessStarted = ProcessInfo.processInfo.systemUptime
+        tracePhase("VISION_PHOTOS_READINESS_BEGIN configured_seconds=20")
         let outcome = await XCTWaiter.fulfillment(of: [ready], timeout: 20)
+        tracePhase("VISION_PHOTOS_READINESS_END outcome=\(outcome.rawValue) elapsed=\(ProcessInfo.processInfo.systemUptime - readinessStarted) configured_seconds=20")
         guard outcome == .completed else {
             XCTFail("Native Photos asset was not present and hittable in its observed viewport within 20 seconds")
             return nil

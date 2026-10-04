@@ -1,6 +1,29 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
 #import "QRUIInterruptionSafety.h"
+#import "QRFilesPickerSnapshot.h"
+
+static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) {
+    if (!root) return NO;
+    NSMutableArray<id<XCUIElementSnapshot>> *queue = [NSMutableArray arrayWithObject:root];
+    NSMutableArray<NSNumber *> *parents = [NSMutableArray arrayWithObject:@(-1)];
+    QRFilesNode nodes[QR_FILES_SNAPSHOT_MAX_NODES];
+    for (NSUInteger index = 0; index < queue.count; index++) {
+        id<XCUIElementSnapshot> snapshot = queue[index];
+        CGRect frame = snapshot.frame;
+        QRFilesKind kind = snapshot.elementType == XCUIElementTypeWindow ? QRFilesWindow :
+            snapshot.elementType == XCUIElementTypeNavigationBar ? QRFilesNavigationBar :
+            snapshot.elementType == XCUIElementTypeButton ? QRFilesButton :
+            snapshot.elementType == XCUIElementTypeOther ? QRFilesOther : QRFilesUnknown;
+        nodes[index] = (QRFilesNode){parents[index].intValue, kind, snapshot.identifier.UTF8String,
+            snapshot.label.UTF8String, snapshot.enabled, {frame.origin.x, frame.origin.y, frame.size.width, frame.size.height}};
+        for (id<XCUIElementSnapshot> child in snapshot.children) {
+            if (queue.count >= QR_FILES_SNAPSHOT_MAX_NODES) return NO;
+            [queue addObject:child]; [parents addObject:@(index)];
+        }
+    }
+    return QRFilesPickerPresentationReady(nodes, queue.count);
+}
 @interface QRCatcherImageImportUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
@@ -119,7 +142,7 @@
     NSPredicate *match=[NSPredicate predicateWithFormat:@"label == %@ OR identifier == %@ OR label BEGINSWITH %@",name,name,[name stringByAppendingString:@","]];
     for (XCUIElementQuery *query in @[self.app.cells,self.app.buttons,self.app.staticTexts]) {
         XCUIElement *item=[query matchingPredicate:match].firstMatch;
-        if (item.exists && item.hittable) return item;
+        if (item.exists && item.enabled && item.hittable) return item;
     }
     return nil;
 }
@@ -169,14 +192,16 @@
 - (void)testRealFilesImportAndReopen {
     [self chooseSource:@"Choose File"];
     if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone) {
-        // SDK27 SE3 exposes the X icon as Cancel inside this real Files context.
-        // Readiness observes that scoped control; it performs no UI action.
+        // One immutable public snapshot classifies the exact native context.
+        // This avoids separate remote resolutions consuming six to seven
+        // seconds after the picker appeared on both observed phone profiles.
+        // Classification performs no action and is not a hittability claim;
+        // each subsequent real action resolves fresh enabled/hittable state.
         NSPredicate *pickerReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
             XCUIApplication *app = object;
-            XCUIElement *picker = app.otherElements[@"Browse View (Picker)"].firstMatch;
-            XCUIElement *bar = picker.navigationBars[@"FullDocumentManagerViewControllerNavigationBar"].firstMatch;
-            XCUIElement *cancel = bar.buttons[@"Cancel"].firstMatch;
-            return picker.exists && bar.exists && cancel.exists && cancel.enabled && cancel.hittable;
+            NSError *error = nil;
+            id<XCUIElementSnapshot> snapshot = [app snapshotWithError:&error];
+            return snapshot && !error && QRPhoneFilesPresentationSnapshotReady(snapshot);
         }];
         XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc] initWithPredicate:pickerReady object:self.app];
         XCTWaiterResult outcome = [XCTWaiter waitForExpectations:@[ready] timeout:20];

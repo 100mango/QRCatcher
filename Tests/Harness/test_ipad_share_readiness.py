@@ -11,11 +11,36 @@ class IPadShareReadinessTests(unittest.TestCase):
     def test_observed_native_context_and_cell_role_are_mandatory(self):
         for token in ['self.app.popovers containingType:XCUIElementTypeOther identifier:@"ActivityListView"',
                       'activity.otherElements[@"LP.CaptionBar.BottomCaption"]',
-                      'activity.cells matchingPredicate:', '@"actionGroupCell", @"Copy"',
+                      'activity.cells matchingIdentifier:@"actionGroupCell"', 'containingPredicate:',
+                      'XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"', 'copyCells.count == 1',
                       'popovers.count == 1', '[caption.label isEqualToString:@"Native iPad QR result 你好"]',
                       'copy.exists && copy.enabled && copy.hittable']:
             self.assertIn(token, CASE)
         self.assertNotIn('self.app.buttons[@"Copy"]', CASE)
+
+    def test_both_retained_copy_cell_forms_use_the_same_owned_descendant(self):
+        def matches(cell):
+            return cell['activity'] == 'selected-ActivityListView' and cell['role'] == 'Cell' and cell['identifier'] == 'actionGroupCell' and any(
+                child['role'] == 'StaticText' and child['identifier'] == 'cellTitleLabel' and child['label'] == 'Copy'
+                for child in cell['descendants'])
+        title = {'role': 'StaticText', 'identifier': 'cellTitleLabel', 'label': 'Copy'}
+        for own_label in ['Copy', '']:
+            cell = {'activity': 'selected-ActivityListView', 'role': 'Cell', 'identifier': 'actionGroupCell', 'label': own_label, 'descendants': [title]}
+            self.assertTrue(matches(cell))
+            for key, value in [('activity', 'unrelated-ActivityListView'), ('role', 'Button'), ('identifier', 'shareCell'), ('descendants', [])]:
+                self.assertFalse(matches({**cell, key: value}))
+            for key, value in [('role', 'Button'), ('identifier', 'unrelatedTitle'), ('label', 'Print')]:
+                self.assertFalse(matches({**cell, 'descendants': [{**title, key: value}]}))
+            self.assertFalse(len([item for item in [cell, cell] if matches(item)]) == 1)
+        self.assertNotIn('identifier == %@ AND label == %@", @"actionGroupCell", @"Copy"', CASE)
+
+    def test_copy_query_never_escapes_the_caption_bound_activity(self):
+        query = CASE.split('XCUIElementQuery *copyCells =', 1)[1].split('NSPredicate *shareReady', 1)[0]
+        self.assertIn('activity.cells matchingIdentifier:', query)
+        self.assertNotIn('self.app.cells', query)
+        self.assertNotIn('self.app.buttons', query)
+        self.assertIn('elementType == %lu AND identifier == %@ AND label == %@', query)
+        self.assertIn('copyCells.count == 1 && copy.exists && copy.enabled && copy.hittable', CASE)
 
     def test_one_passive_ten_second_wait_guards_capture_and_dismiss(self):
         predicate = CASE.split('NSPredicate *shareReady = ', 1)[1].split('NSTimeInterval readinessStarted', 1)[0]

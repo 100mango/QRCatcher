@@ -57,10 +57,15 @@ static BOOL QRPadFiniteNonemptyRect(CGRect rect) {
     XCUIElement *popover = popovers.firstMatch;
     XCUIElement *activity = popover.otherElements[@"ActivityListView"];
     XCUIElement *caption = activity.otherElements[@"LP.CaptionBar.BottomCaption"];
-    XCUIElement *copy = [activity.cells matchingPredicate:[NSPredicate predicateWithFormat:@"identifier == %@ AND label == %@", @"actionGroupCell", @"Copy"]].firstMatch;
+    // Both retained SDK27 hierarchies have this owned Copy title. The
+    // action cell's own label may be empty, so it cannot identify the action.
+    XCUIElementQuery *copyCells = [[activity.cells matchingIdentifier:@"actionGroupCell"]
+        containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",
+            (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];
+    XCUIElement *copy = copyCells.firstMatch;
     NSPredicate *shareReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
         return popovers.count == 1 && popover.exists && activity.exists && caption.exists &&
-            [caption.label isEqualToString:@"Native iPad QR result 你好"] && copy.exists && copy.enabled && copy.hittable;
+            [caption.label isEqualToString:@"Native iPad QR result 你好"] && copyCells.count == 1 && copy.exists && copy.enabled && copy.hittable;
     }];
     NSTimeInterval readinessStarted = NSProcessInfo.processInfo.systemUptime;
     XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc] initWithPredicate:shareReady object:nil];

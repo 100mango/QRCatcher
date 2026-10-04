@@ -31,17 +31,19 @@ def inspect(folder: Path,required=True,limit=FOLDER_LIMIT):
 def allocation():
  value=json.loads(Path(__file__).with_name('evidence-allocation.json').read_text())
  limits=value['scope_limits_bytes']
- assert set(limits)=={'macos','visionos','tvos','watchos','iphone_pro','iphone_se3','ipad_pro','ipad_mini','watchos_40','watchos_49'}
- assert value['whole_run_limit_bytes']==COMBINED_LIMIT
- assert all(isinstance(n,int) and 0<n<=FOLDER_LIMIT for n in limits.values())
- assert sum(limits.values())<=COMBINED_LIMIT
+ from vision_case_contract import CASES
+ expected={'macos':3000000,'tvos':2000000,'watchos':2000000,'iphone_pro':2000000,'iphone_se3':2000000,'ipad_pro':2000000,'ipad_mini':2000000,'watchos_40':1000000,'watchos_49':1000000}
+ expected.update({case.scope:case.evidence_bytes for case in CASES})
+ if limits!=expected or any(type(n) is not int for n in limits.values()):raise ValueError('Evidence allocation differs from the closed reviewed per-case limits')
+ if type(value['whole_run_limit_bytes']) is not int or value['whole_run_limit_bytes']!=COMBINED_LIMIT:raise ValueError('Whole-run evidence cap must remain 20,000,000 bytes')
+ if sum(limits.values())!=19_800_000 or sum(limits.values())>COMBINED_LIMIT:raise ValueError('Reviewed 19,800,000-byte allocation exceeds whole-run cap')
  return value
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('folder',type=Path,nargs='?');parser.add_argument('--previous',type=Path);parser.add_argument('--report',type=Path);parser.add_argument('--scope');parser.add_argument('--validate-allocation',action='store_true');args=parser.parse_args()
  reserved=allocation()
  if args.validate_allocation:
   print(json.dumps(reserved),flush=True);return
- assert args.folder and args.report and args.scope in reserved['scope_limits_bytes']
+ if not args.folder or not args.report or args.scope not in reserved['scope_limits_bytes']:raise ValueError('Expected evidence folder, report, and exact allocated scope')
  limit=reserved['scope_limits_bytes'][args.scope]
  current=inspect(args.folder,limit=limit);prior=inspect(args.previous,False) if args.previous else {'bytes':0,'files':[]}
  combined=current['bytes']+prior['bytes']

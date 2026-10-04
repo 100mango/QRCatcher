@@ -13,6 +13,7 @@ import uuid
 from atomic_json import write_json
 from owned_process_barrier import blocked
 from watch_process import execute
+from vision_case_contract import case_identity
 
 RUNNER = '100mango.QRCatcherVisionUITests.xctrunner'
 APP = '100mango.QRCatcher'
@@ -38,11 +39,13 @@ def read_request(path):
 
 
 class RunnerBinding:
-    def __init__(self, device, runner, source_commit, device_root=None, lookup=None):
+    def __init__(self, device, runner, source_commit, case, device_root=None, lookup=None):
         self.device = exact_uuid(device)
         if runner != RUNNER or not re.fullmatch('[0-9a-f]{40}', source_commit):
             raise ValueError('Unexpected runner/source identity')
         self.runner, self.source = runner, source_commit
+        self.case = case
+        self.case_identity = case_identity(case, source_commit, device)
         root = Path(device_root) if device_root else Path.home() / 'Library/Developer/CoreSimulator/Devices'
         self.expected = (root / device / 'data/Containers/Data/Application').resolve(strict=True)
         self.lookup = lookup or self._lookup
@@ -86,17 +89,19 @@ class RunnerBinding:
             raise ValueError('Runner temporary directory escaped its container')
         request = temporary / ('QRCatcher-runner-' + lease + '.json')
         value = read_request(request)
-        if set(value) != {'id', 'runner', 'pid', 'exports'} or value['id'] != lease or value['runner'] != self.runner:
+        if set(value) != {'id', 'runner', 'pid', 'exports', 'case'} or value['id'] != lease or value['runner'] != self.runner:
             raise ValueError('Current runner nonce/product mismatch')
         if type(value['pid']) is not int or value['pid'] <= 0 or type(value['exports']) is not bool:
             raise ValueError('Invalid runner PID or export scope')
+        if value['case'] != self.case.name or value['exports'] != (self.case.scope == 'visionos_photos'):
+            raise ValueError('Runner method/export scope does not match selected case')
         app = self._container(APP) if value['exports'] else None
         if read_request(request) != value or self._identity(container) != identity or self._identity(temporary) != temporary_identity:
             raise ValueError('Runner changed during binding')
         binding = {'lease': lease, 'container': container, 'identity': identity,
                    'temporary': temporary, 'temporary_identity': temporary_identity,
                    'descriptor': value, 'app': app}
-        result = {'success': True, 'device': self.device, 'runner': self.runner,
+        result = {**self.case_identity, 'success': True, 'device': self.device, 'runner': self.runner,
                   'source_commit': self.source, 'lease': lease, 'pid': value['pid'],
                   'exports': value['exports'], 'container_id': container.name}
         write_json(request.with_suffix('.ack'), result, limit=4096)
@@ -119,7 +124,7 @@ class RunnerBinding:
         b = self.current()
         path = b['temporary'] / ('QRCatcher-capture-' + identifier + '.json')
         value = read_request(path)
-        expected = {'id': identifier, 'runner': self.runner, 'lease': b['lease'],
+        expected = {**self.case_identity, 'id': identifier, 'runner': self.runner, 'lease': b['lease'],
                     'pid': b['descriptor']['pid'], 'source_commit': self.source, 'device': self.device}
         if any(value.get(key) != wanted for key, wanted in expected.items()) or value.get('name') not in names:
             raise ValueError('Capture does not match the current source/device/runner lease')

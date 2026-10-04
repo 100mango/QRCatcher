@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import vision_runner_binding as lease
+from vision_case_contract import select_case
 
 
 class VisionRunnerBindingTests(unittest.TestCase):
@@ -24,20 +25,25 @@ class VisionRunnerBindingTests(unittest.TestCase):
         self.lookup = Mock(side_effect=lambda bundle: str(self.container if bundle == lease.RUNNER else self.app))
         self.barrier = patch.object(lease, 'blocked', return_value=False)
         self.barrier.start(); self.addCleanup(self.barrier.stop)
-        self.binding = lease.RunnerBinding(self.device, lease.RUNNER, self.source, self.root, self.lookup)
+        self.case = select_case('visionos_chinese')
+        self.binding = lease.RunnerBinding(self.device, lease.RUNNER, self.source, self.case, self.root, self.lookup)
         self.identifier = str(uuid.uuid4()).upper()
         self.request_id = str(uuid.uuid4()).upper()
-        self.descriptor = {'id': self.identifier, 'runner': lease.RUNNER, 'pid': 12345, 'exports': False}
+        self.descriptor = {'id': self.identifier, 'runner': lease.RUNNER, 'pid': 12345, 'exports': False, 'case': self.case.name}
         self.lease_file = self.container / 'tmp' / ('QRCatcher-runner-' + self.identifier + '.json')
         self.lease_file.write_text(json.dumps(self.descriptor))
 
     def prime(self, exports=False):
+        if exports:
+            self.case = select_case('visionos_photos')
+            self.binding = lease.RunnerBinding(self.device, lease.RUNNER, self.source, self.case, self.root, self.lookup)
+            self.descriptor['case'] = self.case.name
         self.descriptor['exports'] = exports
         self.lease_file.write_text(json.dumps(self.descriptor))
         return self.binding.prime(self.identifier)
 
     def request(self, **overrides):
-        data = {'id': self.request_id, 'runner': lease.RUNNER, 'lease': self.identifier,
+        data = {**self.binding.case_identity, 'id': self.request_id, 'runner': lease.RUNNER, 'lease': self.identifier,
                 'pid': 12345, 'source_commit': self.source, 'device': self.device,
                 'name': 'vision-chinese-empty', 'test_store': str(uuid.uuid4()).upper()}
         data.update(overrides)
@@ -72,13 +78,13 @@ class VisionRunnerBindingTests(unittest.TestCase):
         for runner, source, device in [('unrelated.runner', self.source, self.device),
                                       (lease.RUNNER, 'not-a-commit', self.device),
                                       (lease.RUNNER, self.source, self.device.lower())]:
-            with self.assertRaises(ValueError): lease.RunnerBinding(device, runner, source, self.root, self.lookup)
+            with self.assertRaises(ValueError): lease.RunnerBinding(device, runner, source, self.case, self.root, self.lookup)
         self.lookup.assert_not_called()
 
     def test_wrong_device_root_rejects_container(self):
         other = str(uuid.uuid4()).upper()
         (self.root / other / 'data/Containers/Data/Application').mkdir(parents=True)
-        binding = lease.RunnerBinding(other, lease.RUNNER, self.source, self.root, self.lookup)
+        binding = lease.RunnerBinding(other, lease.RUNNER, self.source, self.case, self.root, self.lookup)
         with self.assertRaises(ValueError): binding.prime(self.identifier)
         self.assertIsNone(binding.bound)
         self.assertFalse(self.lease_file.with_suffix('.ack').exists())
@@ -92,7 +98,8 @@ class VisionRunnerBindingTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.binding.prime(self.identifier)
 
     def test_nonce_runner_pid_and_scope_must_match_schema(self):
-        for key, bad in [('id', str(uuid.uuid4()).upper()), ('runner', 'wrong.runner'), ('pid', 0), ('pid', True), ('exports', 1)]:
+        for key, bad in [('id', str(uuid.uuid4()).upper()), ('runner', 'wrong.runner'), ('pid', 0), ('pid', True), ('exports', 1),
+                         ('case', 'testRealFilesImportAndReopen'), ('exports', True)]:
             data = {**self.descriptor, key: bad}; self.lease_file.write_text(json.dumps(data))
             with self.subTest(key=key, bad=bad), self.assertRaises(ValueError): self.binding.prime(self.identifier)
             self.assertIsNone(self.binding.bound)
@@ -130,7 +137,8 @@ class VisionRunnerBindingTests(unittest.TestCase):
     def test_capture_identity_mismatch_never_acknowledges(self):
         self.prime()
         for key, bad in [('source_commit', 'b' * 40), ('device', str(uuid.uuid4()).upper()),
-                         ('runner', 'wrong.runner'), ('lease', str(uuid.uuid4()).upper()), ('pid', 12346), ('name', 'not-a-checkpoint')]:
+                         ('runner', 'wrong.runner'), ('lease', str(uuid.uuid4()).upper()), ('pid', 12346), ('name', 'not-a-checkpoint'),
+                         ('case', 'testRealFilesImportAndReopen'), ('scope', 'visionos_largest'), ('result', 'VisionLargestUIResults.xcresult')]:
             path = self.request(**{key: bad})
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.binding.acknowledge(self.request_id, {'vision-chinese-empty'}, {'success': True})
@@ -158,7 +166,7 @@ class VisionRunnerBindingTests(unittest.TestCase):
         self.assertIsNone(self.binding.bound); self.assertEqual(target.read_text(), 'unchanged')
 
     def test_default_lookup_uses_same_twenty_second_owned_process_bound(self):
-        binding = lease.RunnerBinding(self.device, lease.RUNNER, self.source, self.root)
+        binding = lease.RunnerBinding(self.device, lease.RUNNER, self.source, self.case, self.root)
         with patch.object(lease, 'execute', return_value=(0, str(self.container), {'cleanup_confirmed': True})) as call:
             binding.prime(self.identifier)
         self.assertEqual(call.call_args.args, (['xcrun', 'simctl', 'get_app_container', self.device, lease.RUNNER, 'data'], 20))
@@ -183,7 +191,7 @@ class VisionBindingSourceContracts(unittest.TestCase):
     def test_new_setup_bounds_cover_only_exact_export_scope_and_leave_capture_bound(self):
         source = (ROOT / 'QRCatcherVisionUITests/QRCatcherVisionUITests.swift').read_text()
         binding = source.split('private func bindCaptureRunner()', 1)[1].split('private func capture(', 1)[0]
-        self.assertIn('name.contains("testRealPhotosImportCopyAndReopen")', binding)
+        self.assertIn('let exports = actualMethod == "testRealPhotosImportCopyAndReopen"', binding)
         self.assertIn('let seconds = exports ? 60 : 30', binding)
         self.assertIn('try await Task.sleep', binding)
         self.assertNotIn('Thread.sleep', binding)

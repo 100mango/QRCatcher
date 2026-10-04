@@ -8,11 +8,15 @@ from pathlib import Path
 from atomic_json import write_json
 from owned_process_barrier import blocked
 from vision_runner_binding import RunnerBinding, exact_uuid
-udid,log=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
+from vision_case_contract import select_case
+from vision_failure_diagnostic import FailureDiagnostic
+udid,log,scope=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
+case=select_case(scope)
 runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionUITests-Runner.app/Info.plist')
 runner_id=plistlib.loads(runner.read_bytes())['CFBundleIdentifier']
-binding=RunnerBinding(udid,runner_id,os.environ['GITHUB_SHA'])
-names={'vision-imported-qr','vision-reopened-history','vision-exported-qr','vision-exported-history','vision-files-import-reopened','vision-chinese-empty','vision-chinese-result','vision-chinese-policy','vision-failure'}
+binding=RunnerBinding(udid,runner_id,os.environ['GITHUB_SHA'],case)
+failure=FailureDiagnostic(binding,out)
+names=set(case.frames)|{'vision-failure'}
 seen=set();report=[];bindings=[];deadline=time.monotonic()+1650
 while time.monotonic()<deadline:
  if blocked():raise SystemExit('Owned command cleanup is unresolved; no further simulator capture command')
@@ -23,14 +27,25 @@ while time.monotonic()<deadline:
   exact_uuid(request_id)
   seen.add((event,request_id))
   if event=='RUNNER_READY':
-   try:row=binding.prime(request_id)
-   except Exception as error:row={'lease':request_id,'success':False,'error':str(error)[:1600]}
+   try:
+    if bindings:
+     binding.bound=None
+     raise ValueError('A second runner lease is forbidden for the sole selected case')
+    row=binding.prime(request_id)
+   except Exception as error:row={**binding.case_identity,'lease':request_id,'success':False,'error':str(error)[:1600]}
    bindings.append(row);write_json(out/'runner-bindings.json',bindings);print('VISION_RUNNER_BINDING '+json.dumps(row),flush=True)
    continue
-  row={'id':request_id,'source':'public simctl screenshot at held XCTest checkpoint','success':False};ack=None;raw=None;staged=None
+  row={**binding.case_identity,'id':request_id,'source':'public simctl screenshot at held XCTest checkpoint','success':False};ack=None;raw=None;staged=None
   try:
    descriptor,ack=binding.request(request_id,names);name=descriptor['name']
    row.update(lease=descriptor['lease'],source_commit=descriptor['source_commit'],device=descriptor['device'],runner=descriptor['runner'],pid=descriptor['pid'])
+   if name=='vision-failure':
+    diagnostic=failure.capture('native failure teardown request')
+    row.update(checkpoint=name,diagnostic_only=True,diagnostic_report='host-failure-capture.json')
+    row['error']='Original XCTest failure retained; failure pixels cannot qualify a success checkpoint'
+    # The finally block sends only success=false to release failure teardown.
+    # No success screenshot, audit, export receipt or required frame is replaced.
+    continue
    if name in ['vision-exported-qr','vision-exported-history']:
     test_store=exact_uuid(descriptor['test_store'])
     kind='png' if name=='vision-exported-qr' else 'json'
@@ -84,8 +99,10 @@ while time.monotonic()<deadline:
    if ack:
     try:binding.acknowledge(request_id,names,row)
     except Exception as error:row.update(success=False,acknowledgement_error=str(error)[:1600])
-  report.append(row);write_json(out/'checkpoint-captures.json',report);print(json.dumps(row),flush=True)
+   report.append(row);write_json(out/'checkpoint-captures.json',report);print(json.dumps(row),flush=True)
+ failure.observe(text)
  if (out/'ui-completed.marker').exists():break
  time.sleep(.25)
 if not bindings or any(not row['success'] for row in bindings):raise SystemExit('A pre-UI Vision runner binding failed')
+if failure.attempted:raise SystemExit('Original XCTest failure retained after diagnostic-only capture')
 if not report or any(not row['success'] for row in report):raise SystemExit('A held Vision screenshot checkpoint was not captured')

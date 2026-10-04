@@ -202,49 +202,62 @@ jobs:
         if-no-files-found: error
     - name: Compile the native Vision test bundles
       id: vision_test_build
-      if: ${{ ((matrix.scope == 'visionos') && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((startsWith(matrix.scope, 'visionos_')) && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 8
       run: |
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
         python3 -u scripts/run_bounded.py 435 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination 'generic/platform=visionOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee vision-test-build.log
     - name: Probe installed visionOS runtime on the standard runner
-      if: ${{ ((matrix.scope == 'visionos') && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((startsWith(matrix.scope, 'visionos_')) && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 12
       run: |
         python3 scripts/owned_process_barrier.py --check
         python3 -u scripts/probe_vision_runtime.py
+    - name: Install the exact built Vision app before any fixtures
+      id: vision_app_install
+      if: ${{ (startsWith(matrix.scope, 'visionos_') && !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 2
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/run_bounded.py 90 xcrun simctl install "$VISION_SIMULATOR_ID" build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVision.app
     - name: Execute native Vision hosted decode and persistence
-      if: ${{ ((matrix.scope == 'visionos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((matrix.scope == 'visionos_photos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_app_install.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 10
       run: |
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
         python3 -u scripts/run_bounded.py 555 xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcherVision -configuration Debug -derivedDataPath build/VisionTests -destination "platform=visionOS Simulator,id=$VISION_SIMULATOR_ID" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 150 -only-testing:QRCatcherVisionTests -resultBundlePath VisionTestResults.xcresult CODE_SIGNING_ALLOWED=NO | tee vision-test.log
-    - name: Seed only the independent Vision QR photo
+    - name: Seed the Vision QR photo only for the selected Photos case
       id: vision_photo_seed
-      if: ${{ (matrix.scope == 'visionos' && !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((matrix.scope == 'visionos_photos' || matrix.scope == 'visionos_chinese' || matrix.scope == 'visionos_largest') && !cancelled() && steps.vision_app_install.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 3
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/run_bounded.py 150 xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
+    - name: Stage only the selected Vision Files fixture
+      id: vision_files_stage
+      if: ${{ (matrix.scope == 'visionos_files' && !cancelled() && steps.vision_app_install.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 3
       run: |
         python3 scripts/owned_process_barrier.py --check
         python3 scripts/stage_owned_import_fixture.py "$VISION_SIMULATOR_ID"
-        python3 -u scripts/run_bounded.py 150 xcrun simctl addmedia "$VISION_SIMULATOR_ID" Tests/Fixtures/unicode.png
-    - name: Execute independent native Vision UI cases
-      if: ${{ (matrix.scope == 'visionos' && !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success' && steps.vision_photo_seed.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+    - name: Execute exactly one existing Vision UI case on this fresh VM
+      if: ${{ (startsWith(matrix.scope, 'visionos_') && !cancelled() && steps.vision_app_install.outcome == 'success' && ((matrix.scope == 'visionos_files' && steps.vision_files_stage.outcome == 'success') || (matrix.scope != 'visionos_files' && steps.vision_photo_seed.outcome == 'success'))) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 28
       run: |
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
         python3 -u scripts/launch_optional_simulator.py "$VISION_SIMULATOR_ID"
-        python3 -u scripts/run_vision_ui_cases.py "$VISION_SIMULATOR_ID" | tee vision-ui-test.log
+        python3 -u scripts/run_vision_ui_cases.py "$VISION_SIMULATOR_ID" "$EVIDENCE_SCOPE" | tee vision-ui-test.log
     - name: Stop the Vision simulator before other platform tests
-      if: ${{ ((matrix.scope == 'visionos') && (always() && env.VISION_SIMULATOR_ID != '' && env.VISION_SIZE_CLEANUP_UNCONFIRMED != 'true')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((startsWith(matrix.scope, 'visionos_')) && (always() && env.VISION_SIMULATOR_ID != '' && env.VISION_SIZE_CLEANUP_UNCONFIRMED != 'true')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 1
       run: |
         python3 scripts/owned_process_barrier.py --check
         python3 -u scripts/run_bounded.py 45 xcrun simctl shutdown "$VISION_SIMULATOR_ID"
     - name: Record bounded Vision component crash metadata
-      if: ${{ (matrix.scope == 'visionos') && (always()) }}
+      if: ${{ (startsWith(matrix.scope, 'visionos_')) && (always()) }}
       timeout-minutes: 1
       run: python3 -u scripts/summarize_vision_runtime_crash.py
     - name: Compile native TV PhotoKit and bounded-history tests
@@ -303,7 +316,7 @@ jobs:
         python3 -u scripts/run_bounded.py 435 xcodebuild build -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Release -derivedDataPath build/ReleaseTV -destination 'generic/platform=tvOS' CODE_SIGNING_ALLOWED=NO | tee release-tv.log
         python3 scripts/verify_native_release.py TV
     - name: Verify unsigned native Vision device Release package
-      if: ${{ ((matrix.scope == 'visionos') && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      if: ${{ ((matrix.scope == 'visionos_files') && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 8
       run: |
         python3 scripts/owned_process_barrier.py --check
@@ -359,9 +372,13 @@ jobs:
         python3 scripts/owned_process_barrier.py --check
         bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests
     - name: Export bounded phone and iPad evidence
-      if: ${{ (matrix.scope != 'macos') && (always()) }}
+      if: ${{ (matrix.scope != 'macos' && !startsWith(matrix.scope, 'visionos_')) && (always()) }}
       timeout-minutes: 3
       run: python3 -u scripts/export_ios_platform_screenshots.py
+    - name: Export exact case-bound Vision evidence
+      if: ${{ startsWith(matrix.scope, 'visionos_') && always() }}
+      timeout-minutes: 3
+      run: python3 -u scripts/export_vision_case_evidence.py "$EVIDENCE_SCOPE"
     - name: Validate isolated platform and whole-run evidence allocation
       id: platform_evidence_budget
       if: ${{ (matrix.scope != 'macos') && (always()) }}
@@ -379,7 +396,7 @@ jobs:
       if: always()
       timeout-minutes: 3
       run: |
-        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult VisionPhotosUIResults.xcresult VisionFilesUIResults.xcresult VisionChineseUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
+        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult VisionPhotosUIResults.xcresult VisionFilesUIResults.xcresult VisionChineseUIResults.xcresult VisionLargestUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
           if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
         done
         echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect and paired Watch background file transport remain physical-device gates; exact sandbox/platform outcomes are reported separately.' >> "$GITHUB_STEP_SUMMARY"
@@ -400,7 +417,10 @@ jobs:
         - macos
         - watchos_40
         - watchos_49
-        - visionos
+        - visionos_photos
+        - visionos_files
+        - visionos_chinese
+        - visionos_largest
         - tvos
         - iphone_pro
         - iphone_se3
