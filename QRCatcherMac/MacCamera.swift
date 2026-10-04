@@ -151,11 +151,13 @@ struct MacCameraView: View {
             Text("Camera").font(.title.bold())
             CameraPreview(session: camera.session).frame(width: 560, height: 320).background(.black).clipShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityLabel("Live camera preview")
-            Picker("Camera", selection: $deviceID) {
-                Text("Default camera").tag(String?.none)
-                ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
-            }.disabled(camera.running || camera.devices.isEmpty)
-                .accessibilityIdentifier("mac.cameraDevice")
+            if !camera.devices.isEmpty {
+                Picker("Camera", selection: $deviceID) {
+                    Text("Default camera").tag(String?.none)
+                    ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
+                }.disabled(camera.running)
+                    .accessibilityIdentifier("mac.cameraDevice")
+            }
             Text(camera.status).multilineTextAlignment(.center).accessibilityIdentifier("mac.cameraStatus")
             HStack {
                 Button("Start Camera") { camera.start(deviceID: deviceID) }.disabled(camera.running).accessibilityIdentifier("mac.cameraStart")

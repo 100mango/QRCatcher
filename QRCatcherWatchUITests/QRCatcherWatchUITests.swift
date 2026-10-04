@@ -26,12 +26,14 @@ import CoreGraphics
         for attempt in 0..<16 {
             let frame = target.frame
             if target.isHittable && frame.height > 0 && frame.minY >= top && frame.maxY <= bottom { return }
-            // A fixed fast 45-point release oscillated past the payload after a
-            // full swipe in run 37176649273. Move toward the measured overflow
-            // and hold at the endpoint so scroll momentum cannot fling it away.
+            // Keep the gesture slow and held to avoid the momentum overshoot
+            // seen in run 37176649273. In run 37205686597 the 40-point drag
+            // moved content 30 points, while repeated 10.25-point drags did not
+            // move it at all. Include the measured 10-point activation slop
+            // plus 2 points inward, rather than damping toward that dead zone.
             let above = frame.minY < top
             let overflow = above ? top - frame.minY : frame.maxY - bottom
-            let movement = (above ? CGFloat(1) : -1) * min(40, max(8, (overflow + 4) * 0.5))
+            let movement = (above ? CGFloat(1) : -1) * min(40, max(18, overflow + 12))
             print("WATCH_REVEAL_FRAME", target.identifier, attempt, frame, "movement", movement)
             // The compact preview occupies the center of the screen. Starting
             // below it when revealing later content keeps this gesture in the

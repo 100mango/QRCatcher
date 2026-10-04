@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 """Bounded synthetic phone/iPad evidence. Never uploads full xcresult archives."""
 import hashlib,json,os,pathlib,struct,subprocess
+def required_alert_endpoints(mode):
+ if mode=='scrolled':return {'phone-largest-history-alert-top','phone-largest-history-alert-end'}
+ if mode=='unscrolled':return {'phone-largest-history-alert'}
+ raise ValueError('Unknown native alert evidence mode')
+def missing_alert_endpoints(requirements,screenshots,expected_results):
+ missing=[];seen=set()
+ for requirement in requirements:
+  label=requirement['result_label']
+  if label not in {'pro-max','SE3'} or label in seen:raise ValueError('Unknown or duplicate native alert evidence result')
+  seen.add(label)
+  required=required_alert_endpoints(requirement['mode'])
+  retained={item.get('checkpoint') for item in screenshots if item.get('result_label')==label}
+  absent=sorted(required-retained)
+  if absent:missing.append({'result_label':label,'missing':absent})
+ for label in sorted(set(expected_results)-seen):missing.append({'result_label':label,'missing':['native alert evidence mode and required pixels']})
+ return missing
 scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
-summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{}}
+summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'alert_evidence_requirements':[]}
 barrier=pathlib.Path('build/owned-process-cleanup.json')
 if barrier.exists():
  assert not barrier.is_symlink() and barrier.stat().st_size<=2048
@@ -28,17 +44,17 @@ for label,relative in [('watch','QRCatcherWatch/Assets.xcassets/AppIcon.appicons
  path=pathlib.Path(relative)
  if path.is_file() and scope=={'watch':'watchos','vision':'visionos','tv':'tvos'}[label]:
   data=path.read_bytes();assert len(data)<=800*1024;(out/(label+'-retained-icon-source.png')).write_bytes(data)
-for name in ['release-watch.log','release-tv.log','release-vision.log','watch-test-build.log','watch-unit.log','watch-ui.log','tv-test-build.log','tv-test.log','tv-authorized-test.log','tv-revoked-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log','PadUIResults-layout.log','MiniUIResults-layout.log','PhoneUIResults-imports.log','CompactPhoneUIResults-imports.log']:
+for name in ['release-watch.log','release-tv.log','release-vision.log','watch-test-build.log','watch-unit.log','watch-ui.log','tv-test-build.log','tv-test.log','tv-authorized-test.log','tv-revoked-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log','PadUIResults-layout.log','MiniUIResults-layout.log','PhoneUIResults-imports.log','CompactPhoneUIResults-imports.log','PhoneUIResults-files.log','CompactPhoneUIResults-files.log','PadUIResults-files.log','MiniUIResults-files.log']:
  path=pathlib.Path(name)
  if path.is_file():(out/name).write_bytes(path.read_bytes()[-64*1024:])
-names=('phone-largest-history-alert','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
+names=('phone-largest-history-alert-top','phone-largest-history-alert-end','phone-largest-history-alert','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
   for child in value.values():yield from records(child)
  elif isinstance(value,list):
   for child in value:yield from records(child)
-for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('WatchLargestUIResults.xcresult','watch-largest'),('WatchTraitStressUIResults.xcresult','watch-trait-stress'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('TVLargestUIResults.xcresult','apple-tv-largest'),('TVTraitStressUIResults.xcresult','apple-tv-trait-stress'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('VisionLargestUIResults.xcresult','vision-largest'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
+for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('WatchLargestUIResults.xcresult','watch-largest'),('WatchTraitStressUIResults.xcresult','watch-trait-stress'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('TVLargestUIResults.xcresult','apple-tv-largest'),('TVTraitStressUIResults.xcresult','apple-tv-trait-stress'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('VisionLargestUIResults.xcresult','vision-largest'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PhoneUIResults-files.xcresult','pro-max-files'),('CompactPhoneUIResults-files.xcresult','SE3-files'),('PadUIResults-files.xcresult','ipad-pro-13-files'),('MiniUIResults-files.xcresult','ipad-mini-files'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
  if not pathlib.Path(result,'Info.plist').is_file():
   summary['results'][label]={'not_produced':True};continue
  report=subprocess.run(['xcrun','xcresulttool','get','test-results','summary','--path',result],capture_output=True,text=True)
@@ -47,6 +63,16 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
  subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
  for entry in records(json.loads((folder/'manifest.json').read_text())):
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
+  if 'phone-largest-alert-hierarchy' in text:
+   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
+   data=path.read_bytes();assert len(data)<=64*1024
+   (out/(label+'-native-alert-hierarchy.txt')).write_bytes(data);continue
+  if 'phone-largest-alert-evidence-requirement' in text:
+   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
+   data=path.read_bytes();assert len(data)<=32
+   mode=data.decode('utf-8').strip();required_alert_endpoints(mode)
+   summary['alert_evidence_requirements'].append({'result_label':label,'mode':mode})
+   (out/(label+'-native-alert-evidence-mode.txt')).write_bytes(data);continue
   if not name or 'accessibility' in text:continue
   # Keep the complete largest-size case result, with representative actual
   # result/focus/Chinese pixels inside the unchanged TV evidence allocation.
@@ -85,9 +111,11 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   if used+len(data)>limit-reserve or len(summary['screenshots'])>=28:
    summary['omitted'].append({'name':filename,'reason':'bounded evidence cap'});print('OMITTED_AT_CAP',filename,flush=True);continue
   (out/filename).write_bytes(data)
-  item={'name':filename,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()}
+  item={'name':filename,'result_label':label,'checkpoint':name,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()}
   if native_dimensions:item.update(native_pixel_dimensions=native_dimensions,source_bytes_preserved=True)
   summary['screenshots'].append(item);print(json.dumps(item),flush=True)
+expected_alert_results=[label for label in ['pro-max','SE3'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
+summary['missing_alert_endpoints']=missing_alert_endpoints(summary['alert_evidence_requirements'],summary['screenshots'],expected_alert_results)
 encoded=json.dumps(summary,indent=2)+'\n'
 assert len(encoded.encode())<=(128*1024 if scope.startswith('watchos_') else 512*1024)
 (out/'manifest.json').write_text(encoded)
@@ -96,3 +124,5 @@ mac=sum(p.stat().st_size for p in pathlib.Path('build/mac-evidence').glob('*') i
 print(json.dumps({'ios_evidence_bytes':size,'mac_evidence_bytes':mac,'combined_bytes':size+mac}),flush=True)
 assert size<=limit and size+mac<=20_000_000
 if summary['omitted']:raise SystemExit('Required named screenshots exceeded the cap; review omitted entries instead of claiming complete visual evidence')
+
+if summary['missing_alert_endpoints']:raise SystemExit('Native alert endpoint evidence incomplete: '+json.dumps(summary['missing_alert_endpoints']))

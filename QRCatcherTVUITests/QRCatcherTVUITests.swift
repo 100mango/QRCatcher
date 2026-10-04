@@ -195,6 +195,12 @@ final class QRCatcherTVUITests: XCTestCase {
             let observation = traitReadback(payload)
             XCTAssertEqual(observation.0, "accessibility5"); XCTAssertGreaterThan(observation.1, baselineMetric)
             XCTAssertGreaterThan(payload.frame.height, baselineHeight + 1)
+            // c1552a7 reported the full AX label inside one 98-point line but
+            // its actual English pixels ended in an ellipsis, hiding "123".
+            // This fixed fixture at the same native viewport must wrap, not
+            // merely grow one truncated line (baseline height was 68.5 points).
+            XCTAssertGreaterThanOrEqual(payload.frame.height, baselineHeight * 2,
+                                        "The complete largest-trait fixture must wrap beyond a single truncated line")
             XCTAssertTrue(app.frame.contains(payload.frame), "Actual largest-trait payload must be visible")
             let preview = app.images["tv.qrPreview"]
             XCTAssertTrue(preview.exists); XCTAssertTrue(app.frame.contains(preview.frame))

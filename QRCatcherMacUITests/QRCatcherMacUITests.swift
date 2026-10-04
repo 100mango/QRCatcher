@@ -227,6 +227,34 @@ final class QRCatcherMacUITests: XCTestCase {
         try screenshot("mac-reopened-history")
     }
 
+    private func recordFixedASCIIResult(_ phase: String, modalHistory: String) throws {
+        let expected = "https://example.com/qrcatcher?source=golden"
+        let footerText = "Links open only when you choose Open in Browser."
+        let payload = app.staticTexts["mac.payload"]
+        let footer = app.staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", footerText, footerText)).firstMatch
+        let status = app.staticTexts["mac.status"]
+        XCTAssertTrue(payload.exists); XCTAssertTrue(footer.exists); XCTAssertTrue(status.exists)
+        XCTAssertEqual((payload.value as? String) ?? payload.label, expected)
+        XCTAssertEqual((footer.value as? String) ?? footer.label, footerText)
+        XCTAssertEqual((status.value as? String) ?? status.label, "Result copied")
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected)
+        XCTAssertEqual(app.sheets.count, 0); XCTAssertEqual(app.dialogs.count, 0)
+        let window = app.windows["main"]
+        XCTAssertTrue(window.frame.contains(payload.frame))
+        XCTAssertTrue(window.frame.contains(footer.frame))
+        func bounds(_ frame: CGRect) -> [String: Double] {
+            ["x": Double(frame.minX), "y": Double(frame.minY), "width": Double(frame.width), "height": Double(frame.height)]
+        }
+        let record: [String: Any] = ["case": name, "phase": phase, "modal_history": modalHistory,
+            "payload": expected, "footer": footerText, "status": "Result copied", "window": bounds(window.frame),
+            "payload_frame": bounds(payload.frame), "footer_frame": bounds(footer.frame),
+            "payload_hittable": payload.isHittable, "footer_hittable": footer.isHittable,
+            "payload_subtree": String(payload.debugDescription.prefix(12000)),
+            "footer_subtree": String(footer.debugDescription.prefix(12000))]
+        let data = try JSONSerialization.data(withJSONObject: record, options: .sortedKeys)
+        print("MAC_FIXED_STATE_AUDIT_CONTROL", String(decoding: data, as: UTF8.self))
+    }
+
     func testPasteActualQRImageAndCancelExport() throws {
         let image = try XCTUnwrap(NSImage(contentsOf: root.appendingPathComponent("Tests/Fixtures/ascii.png")))
         NSPasteboard.general.clearContents()
@@ -235,11 +263,15 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["mac.openWebsite"].exists)
         XCTAssertEqual(app.state, .runningForeground)
+        app.buttons["mac.copy"].click()
+        try recordFixedASCIIResult("full-before-export", modalHistory: "no file panel opened in this process")
+        try screenshot("mac-before-export")
         app.buttons["mac.exportQR"].click()
         app.dialogs.buttons["CancelButton"].firstMatch.click()
         XCTAssertTrue(app.buttons["mac.copy"].exists)
         app.buttons["mac.copy"].click()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
+        try recordFixedASCIIResult("full-after-export-cancel", modalHistory: "one real QR export panel opened and canceled")
         try screenshot("mac-pasted-url")
     }
 
@@ -405,6 +437,9 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["mac.payload"].waitForExistence(timeout: 15))
         let window = app.windows["main"]
         let before = window.frame
+        app.buttons["mac.copy"].click()
+        try recordFixedASCIIResult("full-before-resize", modalHistory: "no file panel opened in this process")
+        try screenshot("mac-before-resize")
         let right = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
         right.click(forDuration: 0.3, thenDragTo: right.withOffset(CGVector(dx: -264, dy: 0)))
         let bottom = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(CGVector(dx: 0, dy: -1))
@@ -426,6 +461,7 @@ final class QRCatcherMacUITests: XCTestCase {
         }
         app.buttons["mac.copy"].click()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
+        try recordFixedASCIIResult("narrow-after-resize", modalHistory: "no file panel opened in this process")
         try screenshot("mac-minimum-window")
     }
 
@@ -445,8 +481,8 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(cameraGroup.exists); XCTAssertEqual(cameraGroup.label, "Camera")
         XCTAssertTrue(cameraGroup.staticTexts["mac.cameraStatus"].exists)
         XCTAssertTrue(cameraGroup.buttons["Done"].exists)
-        XCTAssertFalse(app.popUpButtons["mac.cameraDevice"].isEnabled,
-                       "An absent camera list must not expose an actionable source selector")
+        XCTAssertFalse(app.popUpButtons["mac.cameraDevice"].exists,
+                       "An absent camera list must not offer a nonexistent default camera")
         try screenshot("mac-camera-unavailable")
         app.buttons["Done"].firstMatch.click()
         app.buttons["mac.privacy"].click()

@@ -29,7 +29,7 @@ def records(value):
  elif isinstance(value,list):
   for child in value:yield from records(child)
 screenshots=[];warnings=[]
-names=['mac-system-picker-before-selection','mac-system-picker-after-selection','mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-imported-unicode','mac-failure']
+names=['mac-system-picker-before-selection','mac-system-picker-after-selection','mac-real-photos-import','mac-sandbox-legacy-reopened','mac-chinese-policy','mac-english-policy','mac-reopened-history','mac-camera-unavailable','mac-pasted-url','mac-chinese-reopened','mac-minimum-window','mac-before-resize','mac-before-export','mac-imported-unicode','mac-failure']
 def checkpoint_name(entry):
  text=' '.join(v for v in entry.values() if isinstance(v,str))
  return next((n for n in names if n in text),None)
@@ -47,7 +47,7 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
  first_failure=next((entry for entry in entries if checkpoint_name(entry)=='mac-failure'),None)
  # Seven nearly duplicate failure frames previously consumed the image slots
  # before the real Photos picker checkpoints. Preserve the first failure and
- # then the explicit workflow priorities, within the same twelve-image cap.
+ # then the explicit workflow priorities, within the fourteen-image cap and unchanged three-megabyte allocation.
  entries.sort(key=lambda entry:-1 if entry is first_failure else names.index(checkpoint_name(entry)) if checkpoint_name(entry) in names else len(names))
  for entry in entries:
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
@@ -65,11 +65,20 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
   existing=next((item for item in screenshots if item['sha256']==digest),None)
   if existing:
    existing.setdefault('additional_checkpoint_names',[]).append(name);continue
-  if len(screenshots)>=12 or sum(p.stat().st_size for p in out.iterdir())+len(data)>limit-256*1024:
+  if len(screenshots)>=14 or sum(p.stat().st_size for p in out.iterdir())+len(data)>limit-256*1024:
    print('OMITTED_AT_BOUNDED_CAP',label,name,flush=True);continue
   filename=f'{len(screenshots)+1}-{label}-{name}.jpg';(out/filename).write_bytes(data)
   item={'name':filename,'scope':label,'bytes':len(data),'sha256':digest};screenshots.append(item);print(json.dumps(item),flush=True)
 (out/'screenshots.json').write_text(json.dumps(screenshots,indent=2)+'\n')
+# These four exact checkpoints form two fixed-state controls. Missing one must
+# stay visible as an evidence failure, including when a prerequisite stopped it.
+required_controls={'mac-before-resize','mac-minimum-window','mac-before-export','mac-pasted-url'}
+retained_controls=set()
+for item in screenshots:
+ for checkpoint in required_controls:
+  if checkpoint in item['name'] or checkpoint in item.get('additional_checkpoint_names',[]):retained_controls.add(checkpoint)
+missing_controls=sorted(required_controls-retained_controls)
+if missing_controls:raise SystemExit('Required fixed-state Mac control evidence missing: '+', '.join(missing_controls))
 size=sum(p.stat().st_size for p in out.iterdir());assert size<=limit
 print(json.dumps({'mac_evidence_bytes':size,'exported_screenshots':len(screenshots)}),flush=True)
 if any('Publishing changes from within view updates' in item.get('message','') for item in warnings):

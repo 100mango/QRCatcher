@@ -33,9 +33,9 @@ struct TVMainView: View {
                             else { Text("This result is too large to display as a QR image. Its text is still available.").frame(width: 360) }
                             VStack(alignment: .leading, spacing: 28) {
                                 #if DEBUG
-                                Text(verbatim: payload).font(.title2).modifier(TVTraitReadback()).accessibilityIdentifier("tv.payload")
+                                Text(verbatim: payload).font(.title2).lineLimit(nil).fixedSize(horizontal: false, vertical: true).modifier(TVTraitReadback()).accessibilityIdentifier("tv.payload")
                                 #else
-                                Text(verbatim: payload).font(.title2).accessibilityIdentifier("tv.payload")
+                                Text(verbatim: payload).font(.title2).lineLimit(nil).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("tv.payload")
                                 #endif
                                 if code != nil { Text("Scan this QR code with your phone. Nothing opens automatically.").foregroundStyle(.secondary) }
                                 if session.decodedResults.count > 1 {

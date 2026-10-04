@@ -198,11 +198,79 @@
     XCTAssertTrue(title.exists); XCTAssertTrue(body.exists);
     NSLog(@"PHONE_LARGEST_NATIVE_ALERT_RENDERING:%@ TITLE:%@ BODY:%@ COPY:%@ CANCEL:%@", NSStringFromCGRect(alert.frame), NSStringFromCGRect(title.frame), NSStringFromCGRect(body.frame), NSStringFromCGRect(alert.buttons[@"Copy Result"].frame), NSStringFromCGRect(alert.buttons[@"Cancel"].frame));
     XCTAssertTrue(CGRectContainsRect(self.app.frame, alert.frame));
-    for (XCUIElement *element in @[title, body, alert.buttons[@"Copy Result"], alert.buttons[@"Cancel"]]) {
-        XCTAssertTrue(CGRectContainsRect(alert.frame, element.frame), @"Largest native alert element must be fully framed: %@", element.debugDescription);
+    NSString *hierarchy = alert.debugDescription;
+    hierarchy = [hierarchy substringToIndex:MIN(hierarchy.length, 20000)];
+    NSLog(@"PHONE_LARGEST_NATIVE_ALERT_HIERARCHY:%@", hierarchy);
+    XCTAttachment *hierarchyEvidence = [XCTAttachment attachmentWithString:hierarchy];
+    hierarchyEvidence.name = @"phone-largest-alert-hierarchy"; hierarchyEvidence.lifetime = XCTAttachmentLifetimeKeepAlways; [self addAttachment:hierarchyEvidence];
+    XCUIElementQuery *textPanes = [alert.scrollViews containingType:XCUIElementTypeStaticText identifier:body.label];
+    XCUIElementQuery *actionPanes = [alert.scrollViews containingType:XCUIElementTypeButton identifier:@"Cancel"];
+    BOOL hasNativePanes = alert.scrollViews.count > 0;
+    XCUIElement *textScroll = textPanes.firstMatch, *actionScroll = actionPanes.firstMatch;
+    if (hasNativePanes) {
+        XCTAssertEqual(textPanes.count, 1, @"Unknown native text scroll structure must fail closed: %@", alert.debugDescription);
+        XCTAssertEqual(actionPanes.count, 1, @"Unknown native action scroll structure must fail closed: %@", alert.debugDescription);
+        XCTAssertTrue(CGRectContainsRect(alert.frame, textScroll.frame));
+        XCTAssertTrue(CGRectContainsRect(alert.frame, actionScroll.frame));
+        XCTAssertFalse(CGRectIsEmpty(textScroll.frame)); XCTAssertFalse(CGRectIsEmpty(actionScroll.frame));
+        XCTAssertLessThanOrEqual(CGRectGetMaxY(textScroll.frame), CGRectGetMinY(actionScroll.frame), @"Text and action viewports must be distinct and vertically ordered");
     }
-    [self logSyntheticScreenshot:@"phone-largest-history-alert"];
-    [self.app.alerts.buttons[@"Cancel"] tap];
+    // Whole-alert fallback is valid only when UIKit exposes no scroll container.
+    CGRect textViewport = hasNativePanes ? CGRectIntersection(alert.frame, textScroll.frame) : alert.frame;
+    CGRect actionViewport = hasNativePanes ? CGRectIntersection(alert.frame, actionScroll.frame) : alert.frame;
+    XCUIElement *copy = alert.buttons[@"Copy Result"], *cancel = alert.buttons[@"Cancel"];
+    XCTAssertFalse(CGRectIsEmpty(textViewport)); XCTAssertFalse(CGRectIsEmpty(actionViewport));
+    XCTAssertTrue(CGRectContainsRect(textViewport, title.frame));
+    XCTAssertTrue(CGRectContainsRect(actionViewport, copy.frame));
+    XCTAssertTrue(copy.hittable);
+    NSString *expectedBody = @"Long QR text that must wrap without hiding navigation or losing access to the scan again control.";
+    XCTAssertEqualObjects(body.label, expectedBody);
+    // The compact native alert has separate text and action scroll panes.
+    // A body's AX frame may extend behind the actions; whole-alert containment
+    // alone does not prove those pixels are readable. Preserve its intrinsic
+    // text size and require the beginning and ending within the actual pane.
+    CGFloat endpointHeight = MIN(CGRectGetHeight(title.frame), CGRectGetHeight(body.frame));
+    XCTAssertGreaterThan(endpointHeight, 0);
+    CGRect beginning = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMinY(body.frame), CGRectGetWidth(body.frame), endpointHeight);
+    XCTAssertTrue(CGRectContainsRect(textViewport, beginning));
+    BOOL needsScrolling = !CGRectContainsRect(textViewport, body.frame) || !CGRectContainsRect(actionViewport, cancel.frame);
+    XCTAttachment *requirement = [XCTAttachment attachmentWithString:(needsScrolling ? @"scrolled" : @"unscrolled")];
+    requirement.name = @"phone-largest-alert-evidence-requirement"; requirement.lifetime = XCTAttachmentLifetimeKeepAlways; [self addAttachment:requirement];
+    if (needsScrolling) {
+        XCTAssertTrue(hasNativePanes, @"Clipped native content without native scroll panes is not qualified");
+        [self logSyntheticScreenshot:@"phone-largest-history-alert-top"];
+        for (NSUInteger attempt = 0; attempt < 8; attempt++) {
+            textViewport = hasNativePanes ? CGRectIntersection(alert.frame, textScroll.frame) : alert.frame;
+            CGRect ending = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMaxY(body.frame) - endpointHeight, CGRectGetWidth(body.frame), endpointHeight);
+            if (body.hittable && CGRectContainsRect(textViewport, ending)) break;
+            XCTAssertTrue(textScroll.exists, @"Clipped native text has no scrollable viewport");
+            [textScroll swipeUp];
+        }
+        CGRect ending = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMaxY(body.frame) - endpointHeight, CGRectGetWidth(body.frame), endpointHeight);
+        textViewport = hasNativePanes ? CGRectIntersection(alert.frame, textScroll.frame) : alert.frame;
+        XCTAssertTrue(body.hittable && CGRectContainsRect(textViewport, ending), @"The complete native alert ending must be scroll-reachable: %@", body.debugDescription);
+        for (NSUInteger attempt = 0; attempt < 8; attempt++) {
+            actionViewport = hasNativePanes ? CGRectIntersection(alert.frame, actionScroll.frame) : alert.frame;
+            if (cancel.hittable && CGRectContainsRect(actionViewport, cancel.frame)) break;
+            XCTAssertTrue(actionScroll.exists, @"Clipped native action has no scrollable viewport");
+            [actionScroll swipeUp];
+        }
+        actionViewport = hasNativePanes ? CGRectIntersection(alert.frame, actionScroll.frame) : alert.frame;
+        XCTAssertTrue(cancel.hittable && CGRectContainsRect(actionViewport, cancel.frame), @"The whole Cancel control must be scroll-reachable: %@", cancel.debugDescription);
+        XCTAssertEqualObjects(body.label, expectedBody);
+        ending = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMaxY(body.frame) - endpointHeight, CGRectGetWidth(body.frame), endpointHeight);
+        textViewport = hasNativePanes ? CGRectIntersection(alert.frame, textScroll.frame) : alert.frame;
+        XCTAssertTrue(CGRectContainsRect(textViewport, ending), @"Action scrolling must preserve the separately visible text ending");
+        NSLog(@"PHONE_LARGEST_NATIVE_ALERT_ENDPOINTS: TEXT_VIEWPORT:%@ ENDING:%@ ACTION_VIEWPORT:%@ CANCEL:%@", NSStringFromCGRect(textViewport), NSStringFromCGRect(ending), NSStringFromCGRect(actionViewport), NSStringFromCGRect(cancel.frame));
+        [self logSyntheticScreenshot:@"phone-largest-history-alert-end"];
+    } else {
+        XCTAssertTrue(CGRectContainsRect(textViewport, body.frame));
+        XCTAssertTrue(CGRectContainsRect(actionViewport, cancel.frame));
+        [self logSyntheticScreenshot:@"phone-largest-history-alert"];
+    }
+    [cancel tap];
+    XCTNSPredicateExpectation *dismissed = [[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:alert];
+    XCTAssertEqual([XCTWaiter waitForExpectations:@[dismissed] timeout:5], XCTWaiterResultCompleted);
 }
 - (void)testAccessibilityOfResultAndHistory {
     [self launch:@[@"-reset-history", @"-fixture-payload", @"Accessible QR result 你好"]];
