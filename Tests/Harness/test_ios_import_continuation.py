@@ -143,11 +143,20 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(13 if mode=='seed-failur
                 ' print(time.monotonic()-({"no-files-budget":800,"files-only-budget":600}.get(os.environ["MODE"],0)))\n'
                 'else:os.execv(' + repr(sys.executable) + ',[' + repr(sys.executable) + ']+sys.argv[1:])\n')
             interpreter.chmod(0o755)
+            # Fresh Mac VMs can have less than600s of host uptime. Give every
+            # subprocess in this disposable fixture the same positive clock
+            # origin before subtracting simulated elapsed time. Production
+            # negative-clock rejection and all elapsed-time bounds stay intact.
+            clock = work / 'clock-double'; clock.mkdir()
+            (clock / 'sitecustomize.py').write_text('import os,time\n'
+                '_real=time.monotonic\n_origin=float(os.environ["QRCATCHER_FIXTURE_CLOCK_ORIGIN"])\n'
+                'time.monotonic=lambda:_real()-_origin+10000\n')
             env = {**os.environ, 'GITHUB_SHA': SOURCE, 'GITHUB_REPOSITORY': '100mango/QRCatcher', 'GITHUB_REF': 'refs/heads/codex/apple-platforms',
                    'EVIDENCE_SCOPE': 'iphone_pro', 'SIMULATOR_ID': DEVICE, 'GITHUB_WORKSPACE': str(work), 'GITHUB_ENV': str(work / 'github-env'),
                    'QRCATCHER_OWNED_PROCESS_BARRIER': str(work / 'build/owned-process-cleanup.json'), 'MODE': mode,
                    'APP': str(app), 'DATA': str(data), 'PATH': str(work / 'bin') + ':' + os.environ['PATH'],
-                   'PYTHONOPTIMIZE': str(sys.flags.optimize)}
+                   'PYTHONOPTIMIZE': str(sys.flags.optimize), 'PYTHONPATH': str(clock),
+                   'QRCATCHER_FIXTURE_CLOCK_ORIGIN': str(time.monotonic_ns() / 1_000_000_000)}
             env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', None)
             result = subprocess.run(['bash', 'scripts/run_ios_platform_ui.sh', DEVICE, gate.RESULT, 'QRCatcherUITests'], cwd=work, env=env, capture_output=True, text=True, timeout=15)
             if not (work / 'build/ios-platform-setup.json').exists(): self.fail(result.stdout + result.stderr)
@@ -184,11 +193,22 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(13 if mode=='seed-failur
                 result, setup, calls = self.run_shell(mode)
                 self.assertEqual(result.returncode, 65, result.stdout + result.stderr)
                 self.assertEqual(setup['layout_and_real_picker_cancel_exit'], 65)
-                self.assertEqual(setup['real_files_case_exit'], files_exit)
+                self.assertEqual(setup['real_files_case_exit'], files_exit, json.dumps(setup) + result.stdout + result.stderr)
                 self.assertEqual(setup['real_photo_case_exit'], -1)
                 self.assertEqual(setup['seed_attempts'], 0)
                 self.assertFalse(setup['independent_import_continuation']['allowed'])
                 self.assertEqual(sum(name == 'xcodebuild' for name, _ in calls), count)
+
+    def test_fixture_clock_epoch_is_independent_of_small_parent_uptime(self):
+        with patch.object(time, 'monotonic', return_value=100):
+            result, setup, calls = self.run_shell('files-only-budget')
+        self.assertEqual(result.returncode, 65, result.stdout + result.stderr)
+        record = setup['independent_import_continuation']
+        self.assertGreaterEqual(record['step_started_monotonic'], 9000)
+        self.assertLess(record['step_started_monotonic'], 11000)
+        self.assertEqual(setup['real_files_case_exit'], 0)
+        self.assertEqual(setup['real_photo_case_exit'], -1)
+        self.assertEqual(sum(name == 'xcodebuild' for name, _ in calls), 2)
 
 
 if __name__ == '__main__':
