@@ -149,5 +149,68 @@ class PhoneResultContractTests(unittest.TestCase):
             self.assertNotIn(build, project.split('"' + phase + '" = {', 1)[1].split('};', 1)[0])
 
 
+
+
+class PhoneAssertionMacroTests(unittest.TestCase):
+    """Actual C preprocessing plus source checks; not native XCTest runtime."""
+    def preprocess(self,expression):
+        import shutil,subprocess
+        cc=shutil.which('cc')
+        self.assertIsNotNone(cc,'The standard compiler preprocessor is required')
+        fixture='#define ASSERT_EXPRESSION_ONLY(expression) expression\nASSERT_EXPRESSION_ONLY('+expression+')\n'
+        return subprocess.run([cc,'-E','-P','-x','c','-'],input=fixture,capture_output=True,text=True,timeout=10)
+
+    def test_actual_preprocessor_rejects_observed_array_comma_and_accepts_same_parenthesized_expression(self):
+        original='[@[@"http", @"https"] containsObject:opened.scheme]'
+        rejected=self.preprocess(original)
+        self.assertNotEqual(rejected.returncode,0)
+        fixed=self.preprocess('('+original+')')
+        self.assertEqual(fixed.returncode,0,fixed.stderr)
+        self.assertEqual(fixed.stdout.strip(),'('+original+')')
+        self.assertNotEqual(self.preprocess('[@{@"http": @1, @"https": @2} objectForKey:opened.scheme]').returncode,0)
+
+    def test_hosted_scheme_guard_preserves_both_schemes_boolean_and_failure_outcome(self):
+        import re
+        line=next(line.strip() for line in HOSTED.splitlines() if 'containsObject:opened.scheme' in line)
+        self.assertEqual(line,'XCTAssertTrue(([@[@"http", @"https"] containsObject:opened.scheme]));')
+        expression=line[len('XCTAssertTrue('):-2]
+        result=self.preprocess(expression)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('containsObject:opened.scheme',result.stdout)
+        self.assertEqual(HOSTED.count('- (void)test'),7)
+        self.assertIn('XCTAssertEqual(opens, 1); XCTAssertNotNil(opened.host);',HOSTED)
+        self.assertIn('XCTAssertNil([self ownedView:@"history.result.open" inView:result.view]);',HOSTED)
+
+    def test_every_new_hosted_assertion_first_argument_survives_c_macro_grouping(self):
+        import re
+        count=0
+        for match in re.finditer(r'\bXCT(?:Assert\w+|Fail)\s*\(',HOSTED):
+            # The C preprocessor groups parentheses, not ObjC square brackets.
+            # Read its actual first argument and require balanced ObjC brackets.
+            depth=1;quote=None;escaped=False;square=brace=0
+            for c in HOSTED[match.end():]:
+                if quote:
+                    if escaped:escaped=False
+                    elif c=='\\':escaped=True
+                    elif c==quote:quote=None
+                    continue
+                if c in {'"',"'"}:quote=c;continue
+                if c=='(':depth+=1
+                elif c==')':
+                    depth-=1
+                    if depth==0:break
+                elif c==',' and depth==1:break
+                if c=='[':square+=1
+                elif c==']':square-=1
+                elif c=='{':brace+=1
+                elif c=='}':brace-=1
+                self.assertGreaterEqual(square,0)
+                self.assertGreaterEqual(brace,0)
+            self.assertEqual(square,0,match.group(0))
+            self.assertEqual(brace,0,match.group(0));self.assertIsNone(quote)
+            count+=1
+        self.assertGreater(count,40)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -104,7 +104,7 @@
         XCTAssertEqual(opens, 0); XCTAssertEqual(result.dismissalCount, 1);
         [self finishRecordedDismissal:result];
         XCTAssertEqual(opens, 1); XCTAssertNotNil(opened.host);
-        XCTAssertTrue([@[@"http", @"https"] containsObject:opened.scheme]);
+        XCTAssertTrue(([@[@"http", @"https"] containsObject:opened.scheme]));
     }
     for (NSString *payload in @[@"javascript:alert(1)", @"file:///secret", @"tel:123", @"https://user:pass@example.com", @"ordinary text 你好"]) {
         QRRecordedPhoneResult *result = [[QRRecordedPhoneResult alloc] initWithPayload:payload openWebsiteHandler:^(NSURL *URL) { XCTFail(@"Unsafe/text payload cannot open"); }];
