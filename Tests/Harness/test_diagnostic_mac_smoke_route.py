@@ -485,7 +485,8 @@ class DiagnosticMacSmokeRouteTests(unittest.TestCase):
             source, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
             env = {**clean_env, **self.environment()}
             env.update(GITHUB_SHA=source, GITHUB_WORKFLOW_SHA=source,
-                       GITHUB_ENV=str(top / 'runner-environment.txt'), GITHUB_WORKSPACE=str(root))
+                       GITHUB_ENV=str(top / 'runner-environment.txt'), GITHUB_WORKSPACE=str(root),
+                       QRCATCHER_OWNED_PROCESS_BARRIER=str(root / 'build/owned-process-cleanup.json'))
             program = ("import sys\nsys.path.insert(0," + repr(str(ROOT / 'scripts')) + ")\n"
                        "import diagnostic_mac_smoke_route as route\nraise SystemExit(route.main(['validate']))\n")
             def invoke(environment):
@@ -498,6 +499,11 @@ class DiagnosticMacSmokeRouteTests(unittest.TestCase):
             self.assertEqual(value['tested_tree'], tree); self.assertLessEqual(len(data), 4096)
             self.assertEqual((top / 'runner-environment.txt').read_text(),
                              route.INITIAL_HASH_KEY + '=' + route.sha256(data) + '\n')
+            inherited_uncertain = {**env, 'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED': 'true'}
+            denied = invoke(inherited_uncertain)
+            self.assertNotEqual(denied.returncode, 0)
+            self.assertIn('blocked by cleanup uncertainty', denied.stderr)
+            self.assertEqual((root / route.RECEIPT).read_bytes(), data)
             wrong = {**env, 'GITHUB_SHA': 'a' * 40, 'GITHUB_WORKFLOW_SHA': 'a' * 40}
             self.assertNotEqual(invoke(wrong).returncode, 0)
             (root / 'untracked.py').write_text('print("dirty")\n')
@@ -505,6 +511,27 @@ class DiagnosticMacSmokeRouteTests(unittest.TestCase):
             (root / 'untracked.py').unlink()
             (root / '.gitignore').write_text('build/\n# changed tracked source\n')
             self.assertNotEqual(invoke(env).returncode, 0)
+            fixture_barrier = root / 'build/owned-process-cleanup.json'
+            fixture_barrier.write_text('{"blocked":true,"fixture":"retain until disposable teardown"}')
+            marker = fixture_barrier.read_bytes()
+            denied = invoke(env)
+            self.assertNotEqual(denied.returncode, 0)
+            self.assertIn('blocked by cleanup uncertainty', denied.stderr)
+            self.assertEqual((root / route.RECEIPT).read_bytes(), data)
+            self.assertEqual(fixture_barrier.read_bytes(), marker)
+
+
+    def test_disposable_git_fixture_owns_barrier_under_poisoned_outer_CI_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            outer = Path(temp).resolve()
+            (outer / 'build').mkdir()
+            barrier = outer / 'build/owned-process-cleanup.json'
+            barrier.write_text('{"blocked":true,"fixture":"outer CI marker must survive"}')
+            original = barrier.read_bytes()
+            with patch.dict(os.environ, {'GITHUB_WORKSPACE': str(outer),
+                            'QRCATCHER_OWNED_PROCESS_BARRIER': str(barrier)}, clear=False):
+                self.test_actual_local_git_validation_binds_head_tree_cleanliness_and_seal()
+            self.assertEqual(barrier.read_bytes(), original)
 
     def test_host_only_always_summary_and_final_source_remain_byte_identical(self):
         _, canonical_platform = route.job_parts(self.canonical)
