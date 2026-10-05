@@ -231,7 +231,7 @@ static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
     NSError *error = nil;
     NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:&error];
     if (!data || data.length > 16 * 1024) { XCTFail(@"Bounded public geometry receipt could not be serialized: %@", error); return; }
-    XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:data uniformTypeIdentifier:@"public.json"];
+    XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
     attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];
     attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:attachment];

@@ -295,5 +295,38 @@ class PhoneHostedGeometryTests(unittest.TestCase):
         exporter=(ROOT/'scripts/export_ios_platform_screenshots.py').read_text()
         self.assertEqual(hashlib.sha256(exporter.encode()).hexdigest(),'c02c8c43e029993edfb8de6f2d2138ff0709550bedf9f50df90241598faf3535')
 
+    def test_geometry_attachment_uses_documented_ObjectiveC_class_factory(self):
+        # Apple documents +attachmentWithData:uniformTypeIdentifier: for ObjC.
+        # Swift's convenience init(data:uniformTypeIdentifier:) is not an ObjC
+        # instance selector. This lexical contract is not a native SDK build.
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        expected='XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];'
+        self.assertEqual(hosted.count(expected),1)
+        self.assertNotIn('initWithData:',hosted)
+        self.assertNotIn('[XCTAttachment alloc]',hosted)
+
+    def test_geometry_attachment_wrong_selector_mutations_are_rejected(self):
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        expected='XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];'
+        def source_contract(source):
+            return source.count(expected)==1 and 'initWithData:' not in source and '[XCTAttachment alloc]' not in source
+        self.assertTrue(source_contract(hosted))
+        for replacement in [
+            'XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:data uniformTypeIdentifier:@"public.json"];',
+            'XCTAttachment *attachment = [XCTAttachment attachmentWithData:data];',
+            'XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.data"];',
+        ]:
+            with self.subTest(replacement=replacement):
+                self.assertFalse(source_contract(hosted.replace(expected,replacement)))
+
+    def test_geometry_attachment_preserves_bounded_JSON_lifetime_name_and_ownership(self):
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        helper=hosted.split('- (void)attachGeometryBeforeContainment:',1)[1].split('- (void)testLargestDynamicType',1)[0]
+        self.assertIn('NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:&error];',helper)
+        self.assertIn('if (!data || data.length > 16 * 1024)',helper)
+        self.assertIn('attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];',helper)
+        self.assertIn('attachment.lifetime = XCTAttachmentLifetimeKeepAlways;',helper)
+        self.assertEqual(helper.count('[self addAttachment:attachment];'),1)
+
 
 if __name__=='__main__':unittest.main()
