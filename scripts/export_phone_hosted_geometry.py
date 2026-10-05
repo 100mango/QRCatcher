@@ -267,7 +267,17 @@ def collect_entries(manifest):
             key, value = receipt(data)
             expected_name = PREFIX + key[0] + '-' + str(int(key[1])) + 'x' + str(int(key[2])) + '-' + key[3]
             # Xcode may suffix exported filenames, but the public human-readable attachment name is exact.
-            require(re.fullmatch(re.escape(expected_name) + r'(?:\.json|_(?:0|[1-9][0-9]*)_[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.json)?', name) is not None, 'Attachment name/geometry identity differs')
+            if re.fullmatch(re.escape(expected_name) + r'(?:\.json|_(?:0|[1-9][0-9]*)_[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.json)?', name) is None:
+                # Already-owned test/prefix and validated synthetic receipt only.
+                # This describes rejection; it does not accept a new decoration.
+                encoded_name = name.encode('utf-8')
+                raise AttachmentNameMismatch({
+                    'expected_key': list(key), 'expected_name': expected_name,
+                    'observed_name': name if len(encoded_name) <= 256 else None,
+                    'observed_name_utf8_bytes': len(encoded_name),
+                    'observed_name_sha256': route.sha256(encoded_name),
+                    'observed_name_omitted_for_bound': len(encoded_name) > 256,
+                })
             selected.append((key, data, value, filename))
         if found: geometry_owners += 1
     require(geometry_owners == 1 and len(selected) == RECEIPT_COUNT and
@@ -289,6 +299,58 @@ def retain_exact_bytes(path, data):
         temporary.unlink(missing_ok=True)
 
 
+class AttachmentNameMismatch(ValueError):
+    def __init__(self, diagnostic):
+        super().__init__('Attachment name/geometry identity differs')
+        self.diagnostic = diagnostic
+
+
+def console_observations(log):
+    """Exact44 bounded console observations, never attachment acceptance."""
+    require(len(log) <= 17 * 1024 * 1024, 'Console log exceeds unchanged invocation cap')
+    rows = []
+    for line in log.decode('utf-8').splitlines():
+        if 'HOSTED_GEOMETRY_JSON ' not in line: continue
+        match = re.search(r'(?:^|\s)HOSTED_GEOMETRY_JSON ([1-9][0-9]*)/44 (\{.*\})$', line)
+        require(match is not None, 'Malformed bounded console geometry framing')
+        sequence = int(match[1]); data = match[2].encode('utf-8')
+        require(sequence == len(rows) + 1 and sequence <= RECEIPT_COUNT, 'Duplicate/wrong console geometry sequence')
+        key, value = receipt(data)
+        rows.append((key, data, value))
+    require(len(rows) == RECEIPT_COUNT and len({row[0] for row in rows}) == RECEIPT_COUNT and
+            {row[0] for row in rows} == expected_keys(), 'Missing/wrong console geometry combinations')
+    require(sum(len(row[1]) for row in rows) <= GEOMETRY_LIMIT, 'Console geometry exceeds unchanged allocation')
+    return rows
+
+
+def retain_console_diagnostics(record, rows, context):
+    """Pure bounded reads/writes after confirmed native/collector cleanup only."""
+    require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
+    require(result_fingerprint() == context['fingerprint'], 'Hosted result changed before console retention')
+    require(route.retained_initial_record(context['identity']) == context['initial'], 'Initial console source proof changed')
+    require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
+    destination = OUT / 'console-geometry'
+    require(not destination.exists() and not destination.is_symlink(), 'Console diagnostic folder is stale')
+    destination.mkdir()
+    diagnostic = {'state': 'INCOMPLETE UNQUALIFIED CONSOLE OBSERVATIONS', 'acceptance': False,
+                  'attachment_name_binding_performed': False, 'observations_qualify_pass': False,
+                  'source_sha': context['identity']['source_sha'], 'source_tree': context['initial']['tested_tree'],
+                  'run_id': context['identity']['run_id'], 'run_attempt': context['identity']['run_attempt'],
+                  'hosted_outcome': context['summary']['result'], 'hosted_operation': context['operation'],
+                  'result_fingerprint': context['fingerprint'], 'receipts': []}
+    record['console_diagnostics'] = diagnostic
+    # All44 records were validated before any copy; invalid JSON is never copied.
+    for key, data, value in sorted(rows):
+        require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
+        name = 'console-' + key[0] + '-' + str(int(key[1])) + 'x' + str(int(key[2])) + '-' + key[3] + '.json'
+        retain_exact_bytes(destination / name, data)
+        diagnostic['receipts'].append({'name': 'console-geometry/' + name, 'key': list(key),
+                                       'bytes': len(data), 'sha256': route.sha256(data),
+                                       'observations_qualify_pass': False})
+    require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
+    diagnostic['state'] = 'UNQUALIFIED CONSOLE OBSERVATIONS'
+
+
 def main():
     root = Path.cwd()
     require(not OUT.exists() and not OUT.is_symlink(), 'Hosted diagnostic output must be new')
@@ -296,6 +358,7 @@ def main():
     record = {'version': 1, 'diagnostic_only': True, 'release_qualification': False,
               'phases': {name: 'NOT RUN' for name in NOT_RUN}, 'geometry_observations_qualify_pass': False,
               'hosted_result': str(RESULT), 'required_test': TEST, 'receipts': []}
+    console_rows = None; console_context = None
     try:
         identity = route.current_identity()
         require(identity['job'] == 'platform' and identity['scope'] == 'iphone_pro', 'Wrong hosted collection job/scope')
@@ -312,12 +375,23 @@ def main():
         before = result_fingerprint()
         summary_raw, summary_operation = checked(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path', str(RESULT)], 15, 128 * 1024)
         summary = validate_summary(strict_json(summary_raw), operation, device)
+        # Independent source/command/summary/result-bound diagnostic channel.
+        # Missing console output never relaxes the original attachment gate.
+        try:
+            console_rows = console_observations(log)
+            console_context = dict(identity=identity, initial=initial, operation=operation,
+                                   summary=summary, fingerprint=before)
+        except Exception:
+            record['console_diagnostics'] = {'state': 'UNAVAILABLE OR INVALID', 'acceptance': False,
+                                           'observations_qualify_pass': False, 'receipts': []}
         require(not ATTACHMENTS.exists() and not ATTACHMENTS.is_symlink(), 'Attachment export path is stale/aliased')
         _, export_operation = checked(['xcrun', 'xcresulttool', 'export', 'attachments', '--path', str(RESULT), '--output-path', str(ATTACHMENTS)], 90, 64 * 1024)
         manifest_data = read_regular(ATTACHMENTS / 'manifest.json', 128 * 1024)
         selected = collect_entries(strict_json(manifest_data))
         require(result_fingerprint() == before, 'Hosted xcresult changed during public collection')
         require(route.retained_initial_record(identity) == initial, 'Initial source receipt changed during collection')
+        if console_rows is not None:
+            retain_console_diagnostics(record, console_rows, console_context)
         record.update(collection='COMPLETE', hosted_outcome=summary['result'], acceptance=False,
                       source_sha=identity['source_sha'], source_tree=initial['tested_tree'],
                       run_id=identity['run_id'], run_attempt=identity['run_attempt'], device=device,
@@ -339,6 +413,24 @@ def main():
         write_json(OUT / 'manifest.json', record, limit=64 * 1024)
         return 0
     except Exception as error:
+        if isinstance(error, AttachmentNameMismatch):
+            record['attachment_name_rejection'] = error.diagnostic
+            print('HOSTED_ATTACHMENT_NAME_MISMATCH ' + json.dumps(error.diagnostic, ensure_ascii=True, sort_keys=True), flush=True)
+        if console_rows is not None and 'console-geometry' not in [p.name for p in OUT.iterdir()] and not blocked():
+            try:
+                retain_console_diagnostics(record, console_rows, console_context)
+            except Exception:
+                if record.get('console_diagnostics', {}).get('receipts'):
+                    record['console_diagnostics']['state'] = 'INCOMPLETE OR UNCERTAIN'
+                else:
+                    record['console_diagnostics'] = {'state': 'REJECTED OR UNCERTAIN', 'acceptance': False,
+                                                   'observations_qualify_pass': False, 'receipts': []}
+        if console_rows is not None and blocked():
+            if record.get('console_diagnostics', {}).get('receipts'):
+                record['console_diagnostics']['state'] = 'INCOMPLETE: cleanup uncertainty'
+            else:
+                record['console_diagnostics'] = {'state': 'NOT RUN: cleanup uncertainty', 'acceptance': False,
+                                               'observations_qualify_pass': False, 'receipts': []}
         record.update(collection='REJECTED', acceptance=False, error=str(error)[:1800],
                       owned_cleanup_uncertainty_observed=blocked())
         write_json(OUT / 'manifest.json', record, limit=64 * 1024)

@@ -303,14 +303,14 @@ class PhoneHostedGeometryTests(unittest.TestCase):
         hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
         expected='XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];'
         self.assertEqual(hosted.count(expected),1)
-        self.assertNotIn('initWithData:',hosted)
+        self.assertNotIn('[XCTAttachment alloc] initWithData:',hosted)
         self.assertNotIn('[XCTAttachment alloc]',hosted)
 
     def test_geometry_attachment_wrong_selector_mutations_are_rejected(self):
         hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
         expected='XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];'
         def source_contract(source):
-            return source.count(expected)==1 and 'initWithData:' not in source and '[XCTAttachment alloc]' not in source
+            return source.count(expected)==1 and '[XCTAttachment alloc] initWithData:' not in source and '[XCTAttachment alloc]' not in source
         self.assertTrue(source_contract(hosted))
         for replacement in [
             'XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:data uniformTypeIdentifier:@"public.json"];',
@@ -397,6 +397,107 @@ _Static_assert(_Generic((_Bool)(window != NULL), _Bool:1, default:0), "explicit 
             self.assertEqual(value['error'],'Invalid observed boolean at host.window_attached: int')
             self.assertEqual(value['collection'],'REJECTED');self.assertFalse(value['acceptance'])
             self.assertEqual(value['receipts'],[]);self.assertEqual(list(collector.OUT.glob(collector.PREFIX+'*')),[])
+
+    def console_log(self, rows=None):
+        keys=sorted(collector.expected_keys())
+        lines=[f'HOSTED_GEOMETRY_JSON {index}/44 '+json.dumps(receipt(key),sort_keys=True)
+               for index,key in enumerate(keys,1)] if rows is None else rows
+        return ('\n'.join(lines)+'\nBOUNDED_COMMAND_END '+json.dumps(operation())+'\n').encode()
+
+    def test_console_writer_fixed44_and16KiB_bounds_without_payload_content(self):
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        helper=hosted.split('- (void)attachGeometryBeforeContainment:',1)[1].split('- (void)testLargestDynamicType',1)[0]
+        self.assertIn('if (self.geometryConsoleCount >= 44)',helper)
+        self.assertIn('data.length > 16 * 1024',helper)
+        self.assertIn('HOSTED_GEOMETRY_JSON %lu/44 %s\\n',helper)
+        self.assertIn('initWithData:data encoding:NSUTF8StringEncoding',helper)
+        self.assertIn('fflush(stdout)',helper)
+        self.assertNotIn('payload.UTF8String',helper);self.assertNotIn('body.text',helper)
+        self.assertEqual(hosted.count('- (void)test'),7)
+
+    def test_console_all44_precise_records_are_unqualified_and_byte_exact(self):
+        log=self.console_log();rows=collector.console_observations(log)
+        self.assertEqual(len(rows),44)
+        self.assertEqual({key for key,data,value in rows},collector.expected_keys())
+        for key,data,value in rows:
+            self.assertEqual(value['body']['bounds']['width'],319.875)
+            self.assertEqual(data,json.dumps(receipt(key),sort_keys=True).encode())
+            self.assertFalse(value['observations_qualify_pass'])
+        timestamped=b'\n'.join(b'2026-10-05T00:00:00Z '+line for line in log.splitlines())
+        self.assertEqual(collector.console_observations(timestamped),rows)
+
+    def test_console_missing_duplicate_wrong_sequence_bad_schema_and_oversize_reject(self):
+        lines=self.console_log().decode().splitlines()[:-1]
+        variants=[lines[:-1],lines+[lines[0]],['HOSTED_GEOMETRY_JSON 0/44 {}']+lines[1:],
+                  [lines[0].replace('1/44','2/44',1)]+lines[1:],
+                  [lines[0].replace('"window_attached": false','"window_attached": 0',1)]+lines[1:],
+                  [lines[0]+'x']+lines[1:],['HOSTED_GEOMETRY_JSON 1/44 {'+' '*16385+'}']+lines[1:]]
+        for variant in variants:
+            with self.subTest(first=variant[0][:80]),self.assertRaises(ValueError):
+                collector.console_observations(self.console_log(variant))
+
+    def test_name_rejection_retains44_console_records_and_exact_bounded_metadata(self):
+        with self.checkout():
+            Path('ios-unit.log').write_bytes(self.console_log())
+            def execute(command,*args,**kwargs):
+                result=self.fake_execute(command,*args,**kwargs)
+                if 'attachments' in command:
+                    path=collector.ATTACHMENTS/'manifest.json';manifest=json.loads(path.read_text())
+                    manifest[0]['attachments'][0]['suggestedHumanReadableName']+='-unknown-decoration'
+                    path.write_text(json.dumps(manifest))
+                return result
+            with patch.object(collector,'execute',side_effect=execute):self.assertEqual(collector.main(),1)
+            value=json.loads((collector.OUT/'manifest.json').read_text());diagnostic=value['console_diagnostics']
+            self.assertEqual(value['collection'],'REJECTED');self.assertFalse(value['acceptance']);self.assertEqual(value['receipts'],[])
+            self.assertEqual(len(diagnostic['receipts']),44);self.assertFalse(diagnostic['acceptance'])
+            self.assertFalse(diagnostic['attachment_name_binding_performed']);self.assertFalse(diagnostic['observations_qualify_pass'])
+            self.assertEqual(len(list((collector.OUT/'console-geometry').glob('*.json'))),44)
+            for row in diagnostic['receipts']:
+                data=(collector.OUT/row['name']).read_bytes()
+                self.assertEqual(hashlib.sha256(data).hexdigest(),row['sha256']);collector.receipt(data)
+            rejection=value['attachment_name_rejection'];name=rejection['observed_name']
+            self.assertTrue(name.endswith('-unknown-decoration'));self.assertLessEqual(len(name.encode()),256)
+            self.assertEqual(rejection['observed_name_sha256'],hashlib.sha256(name.encode()).hexdigest())
+            self.assertEqual(rejection['observed_name_utf8_bytes'],len(name.encode()))
+
+    def test_oversize_owned_name_is_hashed_without_retaining_or_accepting_it(self):
+        with self.checkout():
+            manifest=self.export();manifest[0]['attachments'][0]['suggestedHumanReadableName']+='x'*300
+            with self.assertRaises(collector.AttachmentNameMismatch) as failed:collector.collect_entries(manifest)
+            diagnostic=failed.exception.diagnostic
+            self.assertIsNone(diagnostic['observed_name']);self.assertTrue(diagnostic['observed_name_omitted_for_bound'])
+            self.assertGreater(diagnostic['observed_name_utf8_bytes'],256)
+            self.assertLess(len(json.dumps(diagnostic)),1200)
+
+    def test_uncertainty_or_result_tamper_never_retains_console_geometry(self):
+        for mode in ['uncertainty','result-tamper']:
+            with self.checkout():
+                Path('ios-unit.log').write_bytes(self.console_log())
+                def execute(command,*args,**kwargs):
+                    result=self.fake_execute(command,*args,**kwargs)
+                    if 'attachments' in command:
+                        if mode=='uncertainty':os.environ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED']='true'
+                        else:(collector.RESULT/'Info.plist').write_text('tampered')
+                    return result
+                with patch.object(collector,'execute',side_effect=execute):self.assertEqual(collector.main(),1)
+                value=json.loads((collector.OUT/'manifest.json').read_text())
+                self.assertFalse(value['acceptance']);self.assertFalse((collector.OUT/'console-geometry').exists())
+
+    def test_cleanup_during_console_copy_stops_and_labels_valid_partial_evidence(self):
+        with self.checkout():
+            Path('ios-unit.log').write_bytes(self.console_log())
+            original=collector.retain_exact_bytes;calls=[]
+            def retain(path,data):
+                original(path,data);calls.append(path)
+                os.environ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED']='true'
+            with patch.object(collector,'execute',side_effect=self.fake_execute),patch.object(collector,'retain_exact_bytes',side_effect=retain):
+                self.assertEqual(collector.main(),1)
+            value=json.loads((collector.OUT/'manifest.json').read_text());diagnostic=value['console_diagnostics']
+            self.assertEqual(len(calls),1);self.assertEqual(len(diagnostic['receipts']),1)
+            self.assertEqual(diagnostic['state'],'INCOMPLETE: cleanup uncertainty')
+            self.assertFalse(diagnostic['acceptance']);self.assertFalse(value['acceptance'])
+            self.assertTrue(value['owned_cleanup_uncertainty_observed'])
+            collector.receipt(calls[0].read_bytes())
 
 
 if __name__=='__main__':unittest.main()

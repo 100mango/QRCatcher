@@ -1,5 +1,6 @@
 #import <XCTest/XCTest.h>
 #import <CoreFoundation/CoreFoundation.h>
+#include <stdio.h>
 #import "QRPhoneResultViewController.h"
 #import "QRURLViewController.h"
 #import "QRCatchViewController.h"
@@ -109,6 +110,7 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
 }
 
 @interface QRPhoneResultTests : XCTestCase
+@property (nonatomic) NSUInteger geometryConsoleCount;
 @end
 @implementation QRPhoneResultTests
 - (UIView *)ownedView:(NSString *)identifier inView:(UIView *)view {
@@ -253,6 +255,14 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
     NSDictionary *roundTrip = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
     XCTAssertTrue([roundTrip isKindOfClass:NSDictionary.class] && QRDiagnosticJSONBooleanTypesAreValid(roundTrip),
                   @"Recorder JSON boolean types must remain booleans after native serialization");
+    // Independent, unqualified diagnostics survive unsupported export names.
+    // Fixed synthetic schema only; <=44 lines, <=16KiB JSON each, no payload text.
+    if (self.geometryConsoleCount >= 44) { XCTFail(@"Geometry console count exceeds44"); return; }
+    NSString *consoleJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (!consoleJSON) { XCTFail(@"Geometry JSON is not UTF8"); return; }
+    self.geometryConsoleCount += 1;
+    fprintf(stdout, "HOSTED_GEOMETRY_JSON %lu/44 %s\n", (unsigned long)self.geometryConsoleCount, consoleJSON.UTF8String);
+    fflush(stdout);
     XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
     attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];
     attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
