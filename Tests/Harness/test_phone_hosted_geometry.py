@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -327,6 +328,75 @@ class PhoneHostedGeometryTests(unittest.TestCase):
         self.assertIn('attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];',helper)
         self.assertIn('attachment.lifetime = XCTAttachmentLifetimeKeepAlways;',helper)
         self.assertEqual(helper.count('[self addAttachment:attachment];'),1)
+
+    def test_actual_C_comparison_types_are_int_not_boolean(self):
+        # This proves the C expression type, not NSNumber/JSON behavior or an
+        # Objective-C SDK build. Native round-trip assertions cover the latter.
+        compiler=shutil.which('cc')
+        self.assertIsNotNone(compiler)
+        program='''#include <stddef.h>
+void classify(void *window, void *superview, void *parent, void *host, void *presenter) {
+_Static_assert(_Generic((window != NULL), int:1, default:0), "window comparison is int");
+_Static_assert(_Generic((superview != NULL), int:1, default:0), "superview comparison is int");
+_Static_assert(_Generic((parent == host), int:1, default:0), "parent comparison is int");
+_Static_assert(_Generic((presenter != NULL), int:1, default:0), "presenter comparison is int");
+_Static_assert(_Generic((_Bool)(window != NULL), _Bool:1, default:0), "explicit bool conversion differs");
+}
+'''
+        result=subprocess.run([compiler,'-std=c11','-Wall','-Werror','-fsyntax-only','-x','c','-'],
+                              input=program,capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def test_all_eight_recorder_booleans_use_typed_numberWithBool(self):
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        expressions=['label.adjustsFontForContentSizeCategory','window != nil','view.superview != nil',
+                     'view.hasAmbiguousLayout','view.hidden','scroll.scrollEnabled',
+                     'result.parentViewController == host','result.presentingViewController != nil']
+        self.assertEqual(hosted.count('[NSNumber numberWithBool:'),8)
+        for expression in expressions:
+            with self.subTest(expression=expression):
+                self.assertEqual(hosted.count('[NSNumber numberWithBool:('+expression+')]'),1)
+                self.assertNotIn('@('+expression+')',hosted)
+
+    def test_native_serialized_boolean_type_assertion_stays_inside_existing_recorder(self):
+        hosted=(ROOT/'QRCatcherTests/QRPhoneResultTests.m').read_text()
+        helper=hosted.split('- (void)attachGeometryBeforeContainment:',1)[1].split('- (void)testLargestDynamicType',1)[0]
+        self.assertIn('JSONObjectWithData:data options:0 error:&error',helper)
+        self.assertIn('QRDiagnosticJSONBooleanTypesAreValid(roundTrip)',helper)
+        self.assertIn('CFGetTypeID((__bridge CFTypeRef)value) != CFBooleanGetTypeID()',hosted)
+        self.assertEqual(hosted.count('- (void)test'),7)
+        self.assertLess(helper.index('QRDiagnosticJSONBooleanTypesAreValid(roundTrip)'),helper.index('[self addAttachment:attachment]'))
+
+    def test_numeric_booleans_reject_with_exact_bounded_field_path_and_type(self):
+        paths=[('parent_is_host',),('presented',),('host','window_attached'),('result','superview_present'),
+               ('body','ambiguous_layout'),('title','hidden'),('text','scroll','scroll_enabled'),
+               ('body_font','adjusts_for_category'),('buttons',0,'view','window_attached'),
+               ('buttons',0,'font','adjusts_for_category')]
+        for path in paths:
+            for wrong in [0,1,'private payload must never be printed',[],None]:
+                value=receipt(('text',320,568,'ending'));target=value
+                for part in path[:-1]:target=target[part]
+                target[path[-1]]=wrong
+                expected='.'.join(str(part) for part in path).replace('buttons.0.','buttons[0].')
+                with self.subTest(path=path,wrong_type=type(wrong).__name__),self.assertRaises(ValueError) as failed:
+                    collector.receipt(json.dumps(value).encode())
+                message=str(failed.exception)
+                self.assertEqual(message,'Invalid observed boolean at '+expected+': '+type(wrong).__name__)
+                self.assertNotIn('private payload',message);self.assertLess(len(message.encode()),128)
+
+    def test_full_rejection_retains_type_path_but_never_copies_invalid_geometry(self):
+        with self.checkout():
+            def execute(command,*args,**kwargs):
+                result=self.fake_execute(command,*args,**kwargs)
+                if 'attachments' in command:
+                    path=collector.ATTACHMENTS/'0.json';value=json.loads(path.read_text())
+                    value['host']['window_attached']=0;path.write_text(json.dumps(value))
+                return result
+            with patch.object(collector,'execute',side_effect=execute):self.assertEqual(collector.main(),1)
+            value=json.loads((collector.OUT/'manifest.json').read_text())
+            self.assertEqual(value['error'],'Invalid observed boolean at host.window_attached: int')
+            self.assertEqual(value['collection'],'REJECTED');self.assertFalse(value['acceptance'])
+            self.assertEqual(value['receipts'],[]);self.assertEqual(list(collector.OUT.glob(collector.PREFIX+'*')),[])
 
 
 if __name__=='__main__':unittest.main()

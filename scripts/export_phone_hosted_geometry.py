@@ -86,7 +86,9 @@ def insets(value):
     for item in value.values(): number(item)
 
 
-def boolean(value): require(type(value) is bool, 'Invalid observed boolean')
+def boolean(value, path):
+    # Closed schema paths and JSON built-in type names only; never raw values.
+    require(type(value) is bool, 'Invalid observed boolean at '+path+': '+type(value).__name__)
 
 
 def traits(value):
@@ -99,7 +101,7 @@ def traits(value):
         require(type(value[key]) is int and -1 <= value[key] <= 6, 'Invalid public trait enum')
 
 
-def font(value):
+def font(value, path="font"):
     if value is None: return
     fields(value, ['font_name', 'point_size', 'line_height', 'ascender', 'descender', 'leading',
                    'number_of_lines', 'line_break_mode', 'adjusts_for_category'])
@@ -107,17 +109,17 @@ def font(value):
     for key in ['point_size', 'line_height', 'ascender', 'descender', 'leading']: number(value[key])
     for key in ['number_of_lines', 'line_break_mode']:
         require(type(value[key]) is int and 0 <= value[key] <= 100, 'Invalid label enum/count')
-    boolean(value['adjusts_for_category'])
+    boolean(value['adjusts_for_category'], path+'.adjusts_for_category')
 
 
-def view(value, scroll=False):
+def view(value, scroll=False, path="view"):
     if value is None: return
     keys = ['frame', 'bounds', 'in_root', 'safe_area_insets', 'traits', 'window_attached',
             'superview_present', 'ambiguous_layout', 'hidden', 'in_window', 'window_bounds']
     fields(value, keys + (['scroll'] if scroll else []))
     for key in ['frame', 'bounds', 'in_root']: rect(value[key])
     insets(value['safe_area_insets']); traits(value['traits'])
-    for key in ['window_attached', 'superview_present', 'ambiguous_layout', 'hidden']: boolean(value[key])
+    for key in ['window_attached', 'superview_present', 'ambiguous_layout', 'hidden']: boolean(value[key], path+'.'+key)
     for key in ['in_window', 'window_bounds']:
         require((value[key] is not None) == value['window_attached'], 'Window geometry/attachment differs')
         if value[key] is not None: rect(value[key])
@@ -129,7 +131,7 @@ def view(value, scroll=False):
         for key in ['content_inset', 'adjusted_content_inset', 'indicator_inset']: insets(item[key])
         require(type(item['inset_adjustment_behavior']) is int and 0 <= item['inset_adjustment_behavior'] <= 3,
                 'Invalid scroll adjustment enum')
-        number(item['zoom_scale'], True); boolean(item['scroll_enabled'])
+        number(item['zoom_scale'], True); boolean(item['scroll_enabled'], path+'.scroll.scroll_enabled')
 
 
 def receipt(data):
@@ -152,16 +154,16 @@ def receipt(data):
     require(dimensions in SIZES, 'Wrong fixture viewport')
     require(value['stage'] in ['panes', 'beginning', 'ending'] + ACTIONS[kind], 'Unknown pre-assertion stage')
     rect(value['target']); size(value['full_text_size_that_fits']); size(value['current_action_title_size_that_fits'])
-    for key in ['host', 'result', 'body', 'title']: view(value[key])
-    for key in ['text', 'actions']: view(value[key], True)
+    for key in ['host', 'result', 'body', 'title']: view(value[key], path=key)
+    for key in ['text', 'actions']: view(value[key], True, path=key)
     for key in ['host_traits', 'result_traits']: traits(value[key])
-    for key in ['parent_is_host', 'presented']: boolean(value[key])
-    for key in ['body_font', 'title_font']: font(value[key])
+    for key in ['parent_is_host', 'presented']: boolean(value[key], key)
+    for key in ['body_font', 'title_font']: font(value[key], path=key)
     require(type(value['buttons']) is list and len(value['buttons']) == len(ACTIONS[kind]), 'Wrong action inventory')
-    for item, identifier in zip(value['buttons'], ACTIONS[kind]):
+    for index, (item, identifier) in enumerate(zip(value['buttons'], ACTIONS[kind])):
         fields(item, ['identifier', 'view', 'in_actions', 'title_label', 'font'])
         require(item['identifier'] == identifier, 'Wrong action identifier/order')
-        view(item['view']); view(item['title_label']); font(item['font'])
+        view(item['view'], path=f'buttons[{index}].view'); view(item['title_label'], path=f'buttons[{index}].title_label'); font(item['font'], path=f'buttons[{index}].font')
         if item['in_actions'] is not None: rect(item['in_actions'])
     return (kind, *dimensions, value['stage']), value
 

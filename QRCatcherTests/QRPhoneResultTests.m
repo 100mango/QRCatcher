@@ -1,4 +1,5 @@
 #import <XCTest/XCTest.h>
+#import <CoreFoundation/CoreFoundation.h>
 #import "QRPhoneResultViewController.h"
 #import "QRURLViewController.h"
 #import "QRCatchViewController.h"
@@ -65,7 +66,7 @@ static NSDictionary *QRDiagnosticFont(UILabel *label) {
     return @{ @"font_name": font.fontName ?: @"", @"point_size": @(font.pointSize),
               @"line_height": @(font.lineHeight), @"ascender": @(font.ascender), @"descender": @(font.descender),
               @"leading": @(font.leading), @"number_of_lines": @(label.numberOfLines),
-              @"line_break_mode": @(label.lineBreakMode), @"adjusts_for_category": @(label.adjustsFontForContentSizeCategory) };
+              @"line_break_mode": @(label.lineBreakMode), @"adjusts_for_category": [NSNumber numberWithBool:(label.adjustsFontForContentSizeCategory)] };
 }
 static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
     if (!view) return (id)NSNull.null;
@@ -73,8 +74,8 @@ static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
     NSMutableDictionary *record = [@{ @"frame": QRDiagnosticRect(view.frame), @"bounds": QRDiagnosticRect(view.bounds),
         @"in_root": QRDiagnosticRect([view convertRect:view.bounds toView:root]),
         @"safe_area_insets": QRDiagnosticInsets(view.safeAreaInsets), @"traits": QRDiagnosticTraits(view.traitCollection),
-        @"window_attached": @(window != nil), @"superview_present": @(view.superview != nil),
-        @"ambiguous_layout": @(view.hasAmbiguousLayout), @"hidden": @(view.hidden) } mutableCopy];
+        @"window_attached": [NSNumber numberWithBool:(window != nil)], @"superview_present": [NSNumber numberWithBool:(view.superview != nil)],
+        @"ambiguous_layout": [NSNumber numberWithBool:(view.hasAmbiguousLayout)], @"hidden": [NSNumber numberWithBool:(view.hidden)] } mutableCopy];
     record[@"in_window"] = window ? QRDiagnosticRect([view convertRect:view.bounds toView:window]) : (id)NSNull.null;
     record[@"window_bounds"] = window ? QRDiagnosticRect(window.bounds) : (id)NSNull.null;
     if ([view isKindOfClass:UIScrollView.class]) {
@@ -84,9 +85,27 @@ static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
             @"adjusted_content_inset": QRDiagnosticInsets(scroll.adjustedContentInset),
             @"indicator_inset": QRDiagnosticInsets(scroll.scrollIndicatorInsets),
             @"inset_adjustment_behavior": @(scroll.contentInsetAdjustmentBehavior),
-            @"zoom_scale": @(scroll.zoomScale), @"scroll_enabled": @(scroll.scrollEnabled) };
+            @"zoom_scale": @(scroll.zoomScale), @"scroll_enabled": [NSNumber numberWithBool:(scroll.scrollEnabled)] };
     }
     return record;
+}
+
+// The JSON protocol requires booleans, not numerically equal 0/1 integers.
+// Bounded recorder-owned JSON only; no payload content is inspected or emitted.
+static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
+    if ([object isKindOfClass:NSDictionary.class]) {
+        NSSet *keys = [NSSet setWithArray:@[@"observations_qualify_pass", @"parent_is_host", @"presented",
+            @"window_attached", @"superview_present", @"ambiguous_layout", @"hidden", @"scroll_enabled", @"adjusts_for_category"]];
+        for (NSString *key in (NSDictionary *)object) {
+            id value = ((NSDictionary *)object)[key];
+            if ([keys containsObject:key] && (![value isKindOfClass:NSNumber.class] ||
+                CFGetTypeID((__bridge CFTypeRef)value) != CFBooleanGetTypeID())) return NO;
+            if (!QRDiagnosticJSONBooleanTypesAreValid(value)) return NO;
+        }
+    } else if ([object isKindOfClass:NSArray.class]) {
+        for (id value in (NSArray *)object) if (!QRDiagnosticJSONBooleanTypesAreValid(value)) return NO;
+    }
+    return YES;
 }
 
 @interface QRPhoneResultTests : XCTestCase
@@ -224,13 +243,16 @@ static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
         @"full_text_size_that_fits": QRDiagnosticSize(fullText), @"current_action_title_size_that_fits": QRDiagnosticSize(fullTitle),
         @"host": QRDiagnosticView(host.view, result.view), @"result": QRDiagnosticView(result.view, result.view),
         @"host_traits": QRDiagnosticTraits(host.traitCollection), @"result_traits": QRDiagnosticTraits(result.traitCollection),
-        @"parent_is_host": @(result.parentViewController == host), @"presented": @(result.presentingViewController != nil),
+        @"parent_is_host": [NSNumber numberWithBool:(result.parentViewController == host)], @"presented": [NSNumber numberWithBool:(result.presentingViewController != nil)],
         @"text": QRDiagnosticView(text, result.view), @"actions": QRDiagnosticView(actions, result.view),
         @"body": QRDiagnosticView(body, result.view), @"title": QRDiagnosticView(title, result.view),
         @"body_font": QRDiagnosticFont(body), @"title_font": QRDiagnosticFont(title), @"buttons": buttons };
     NSError *error = nil;
     NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:&error];
     if (!data || data.length > 16 * 1024) { XCTFail(@"Bounded public geometry receipt could not be serialized: %@", error); return; }
+    NSDictionary *roundTrip = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    XCTAssertTrue([roundTrip isKindOfClass:NSDictionary.class] && QRDiagnosticJSONBooleanTypesAreValid(roundTrip),
+                  @"Recorder JSON boolean types must remain booleans after native serialization");
     XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
     attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];
     attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
