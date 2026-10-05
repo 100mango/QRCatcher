@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -45,6 +47,87 @@ class SettingsBuildProvenanceTests(unittest.TestCase):
         self.completed();value=build.verify('watch',self.root)
         self.assertTrue(value['same_job_fresh_build_verified']);self.assertFalse(value['binary_source_binding_verified'])
         self.assertEqual(len(value['products']),3)
+
+    def test_fresh_tv_checkout_initializes_only_owned_build_directory(self):
+        (self.root/'build').rmdir()
+        os.environ['EVIDENCE_SCOPE']='tvos'
+        for name in [self.names[1].replace('Watch','TV'),self.names[2].replace('Watch','TV')]:
+            path=self.root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('synthetic TV source fixture')
+        build.begin('tv')
+        value=build.read_state('tv',self.root)
+        self.assertEqual(value['platform'],'tv');self.assertEqual(value['state'],'before_fresh_build')
+        self.assertTrue(value['derived_data_was_absent']);self.assertFalse(value['binary_source_binding_verified'])
+        self.assertEqual(sorted(path.name for path in (self.root/'build').iterdir()),['settings-build-tv.json'])
+        self.assertEqual((self.root/'build').stat().st_mode & 0o777,0o700)
+        with self.assertRaises(ValueError):build.begin('tv')
+
+    def test_aliased_build_directory_never_receives_provenance(self):
+        (self.root/'build').rmdir();other=self.root/'elsewhere';other.mkdir()
+        (other/'keep').write_text('unchanged');(self.root/'build').symlink_to(other,target_is_directory=True)
+        with self.assertRaises(ValueError):build.begin('watch')
+        self.assertEqual([path.name for path in other.iterdir()],['keep'])
+        self.assertEqual((other/'keep').read_text(),'unchanged')
+
+    def test_dangling_build_alias_stops_before_creation(self):
+        (self.root/'build').rmdir();other=self.root/'missing';(self.root/'build').symlink_to(other,target_is_directory=True)
+        with self.assertRaises(ValueError):build.begin('watch')
+        self.assertFalse(other.exists())
+
+    def test_non_directory_build_path_is_not_overwritten(self):
+        path=self.root/'build';path.rmdir();path.write_text('keep')
+        with self.assertRaises((OSError,ValueError)):build.begin('watch')
+        self.assertEqual(path.read_text(),'keep')
+
+    def test_identity_or_source_rejection_does_not_create_build_directory(self):
+        (self.root/'build').rmdir()
+        with patch.dict(os.environ,{'GITHUB_REPOSITORY':'other/repo'}),self.assertRaises(ValueError):build.begin('watch')
+        self.assertFalse((self.root/'build').exists())
+        with patch.object(build,'source_clean',side_effect=ValueError('not current source')),self.assertRaises(ValueError):build.begin('watch')
+        self.assertFalse((self.root/'build').exists())
+
+    def test_actual_tv_workflow_build_block_on_fresh_checkout(self):
+        # Execute the actual unchanged workflow shell with the real provenance,
+        # barrier and bounded-owner scripts. Only git/compiler commands are
+        # doubles; the resulting product bytes never qualify native compilation.
+        (self.root/'build').rmdir();os.environ['EVIDENCE_SCOPE']='tvos'
+        for name in [self.names[1].replace('Watch','TV'),self.names[2].replace('Watch','TV')]:
+            path=self.root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('synthetic TV source fixture')
+        scripts=self.root/'scripts';scripts.mkdir()
+        for name in ['settings_build_provenance.py','atomic_json.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','run_bounded.py']:
+            shutil.copy2(ROOT/'scripts'/name,scripts/name)
+        binary=self.root/'bin';binary.mkdir()
+        def command(name,body):
+            path=binary/name;path.write_text('#!'+sys.executable+'\n'+body);path.chmod(0o755)
+        command('git',"import sys\nif sys.argv[1:]==['rev-parse','HEAD']:print('a'*40)\nelif sys.argv[1:]!=['diff','--quiet','HEAD','--']:raise SystemExit(9)\n")
+        command('xcodebuild',"""import json,plistlib,sys
+from pathlib import Path
+if sys.argv[1:]!=['build-for-testing','-project','QRCatcher.xcodeproj','-scheme','QRCatcherTV','-configuration','Debug','-derivedDataPath','build/TVTests','-destination','generic/platform=tvOS Simulator','ARCHS=arm64','CODE_SIGNING_ALLOWED=NO']:raise SystemExit('wrong actual compiler routing')
+receipt=json.loads(Path('build/settings-build-tv.json').read_text())
+if receipt['state']!='before_fresh_build' or Path('build/TVTests').exists():raise SystemExit('compiler ran before fresh provenance')
+Path('compiler-called').write_text('one')
+base=Path('build/TVTests/Build/Products');bundle=base/'Debug-appletvsimulator/QRCatcherTVUITests-Runner.app/PlugIns/QRCatcherTVUITests.xctest';bundle.mkdir(parents=True)
+(bundle/'Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable':'QRCatcherTVUITests'}))
+(bundle/'QRCatcherTVUITests').write_bytes(b'synthetic compiler output, never Apple runtime proof')
+(base/'fixture.xctestrun').write_bytes(plistlib.dumps({'synthetic':True}))
+app=base/'Debug-appletvsimulator/QRCatcherTV.app';app.mkdir()
+(app/'PrivacyInfo.xcprivacy').write_bytes(plistlib.dumps({'NSPrivacyAccessedAPITypes':[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}]}))
+""")
+        workflow=(ROOT/'.github/workflows/apple-platforms.yml').read_text()
+        block=next(block for block in workflow.split('    - name: ')[1:] if 'settings_build_provenance.py begin tv' in block)
+        shell='\n'.join(line[8:] for line in block.split('      run: |\n',1)[1].splitlines())+'\n'
+        env=dict(os.environ,PATH=str(binary)+os.pathsep+os.environ.get('PATH','/usr/bin:/bin'),
+                 QRCATCHER_OWNED_PROCESS_BARRIER=str(self.root/'build/owned-process-cleanup.json'))
+        result=subprocess.run(['/bin/bash','-e','-c',shell],cwd=self.root,env=env,capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('VERIFIED_TV_BUNDLED_REQUIRED_REASON',result.stdout)
+        self.assertEqual((self.root/'compiler-called').read_text(),'one')
+        receipt=build.verify('tv',self.root)
+        self.assertEqual(receipt['state'],'fresh_build_completed')
+        self.assertFalse(receipt['binary_source_binding_verified'])
+        # A repeat invocation is rejected before compiler entry, not adopted.
+        (self.root/'compiler-called').unlink()
+        repeat=subprocess.run(['/bin/bash','-e','-c',shell],cwd=self.root,env=env,capture_output=True,text=True,timeout=20)
+        self.assertNotEqual(repeat.returncode,0);self.assertFalse((self.root/'compiler-called').exists())
 
     def test_existing_derived_directory_cannot_be_reused_or_removed(self):
         path=self.root/'build/WatchTests';path.mkdir()

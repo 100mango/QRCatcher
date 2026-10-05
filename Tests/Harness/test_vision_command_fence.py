@@ -1,7 +1,9 @@
 """Owned shell/bootstrap/FD regressions only; no simulator or outside paths."""
+import importlib
 import json
 import os
 import signal
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -19,7 +21,9 @@ import vision_command_fence as fence
 from watch_process import execute
 
 FILES = ['run_vision_fenced_command.sh', 'run_vision_fenced_command.py', 'vision_command_fence.py',
-         'owned_process_barrier.py', 'atomic_json.py', 'watch_process.py', 'owned_process_group.py', 'run_bounded.py']
+         'owned_process_barrier.py', 'atomic_json.py', 'watch_process.py', 'owned_process_group.py', 'run_bounded.py',
+         'fixture_query_guard.py', 'stage_owned_import_fixture.py', 'launch_optional_simulator.py',
+         'run_vision_ui_cases.py', 'run_native_size_case.py', 'simulator_content_size.py', 'vision_case_contract.py']
 DEVICE = '11111111-2222-4333-8444-555555555555'
 
 
@@ -31,6 +35,7 @@ class VisionFenceTests(unittest.TestCase):
         for name in FILES: shutil.copyfile(ROOT / 'scripts' / name, self.root / 'scripts' / name)
         self.env = {**os.environ, 'GITHUB_WORKSPACE': str(self.root), 'GITHUB_ENV': str(self.root / 'github-env'),
                     'GITHUB_REPOSITORY': '100mango/QRCatcher', 'GITHUB_SHA': 'a' * 40,
+                    'PYTHONOPTIMIZE': str(sys.flags.optimize),
                     'VISION_SIMULATOR_ID': DEVICE, 'EVIDENCE_SCOPE': 'visionos_files',
                     'QRCATCHER_OWNED_PROCESS_BARRIER': str(self.root / 'build/owned-process-cleanup.json'),
                     'PATH': str(self.root / 'bin') + os.pathsep + os.environ['PATH']}
@@ -42,6 +47,10 @@ class VisionFenceTests(unittest.TestCase):
                              'with Path("calls.jsonl").open("a") as output: output.write(json.dumps(sys.argv[1:])+"\\n")\n'
                              'raise SystemExit(0)\n')
         self.stub.chmod(0o755)
+        for name in ['xcodebuild', 'open']:
+            target = self.root / 'bin' / name; shutil.copyfile(self.stub, target); target.chmod(0o755)
+        (self.root / 'scripts/capture_vision_checkpoints.py').write_text(
+            'from pathlib import Path\nPath("capture-must-not-start").touch()\n')
 
     def shell(self, action='install'):
         return subprocess.run(['bash', '-c', '. scripts/run_vision_fenced_command.sh ' + action],
@@ -56,10 +65,119 @@ class VisionFenceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
         self.assertEqual(len(self.calls()), before)
         self.assertNotIn('VISION_FENCE_PYTHON_ENTRY', result.stdout)
-        result = subprocess.run([sys.executable, 'scripts/run_bounded.py', '2', 'xcrun', 'simctl', 'shutdown', DEVICE],
-                                cwd=self.root, env=self.env, capture_output=True, text=True, timeout=5)
+        # Each entrypoint runs in a fresh process. Timeout cases never import
+        # GITHUB_ENV: the durable latch alone must deny all device work.
+        commands = [
+            [sys.executable, 'scripts/run_bounded.py', '2', 'xcrun', 'simctl', 'shutdown', DEVICE],
+            [sys.executable, 'scripts/run_bounded.py', '2', 'xcrun', 'simctl', 'get_app_container', DEVICE, '100mango.QRCatcher', 'app'],
+            [sys.executable, 'scripts/run_bounded.py', '2', 'xcodebuild', 'test-without-building'],
+            [sys.executable, 'scripts/stage_owned_import_fixture.py', DEVICE],
+            [sys.executable, 'scripts/run_vision_ui_cases.py', DEVICE, 'visionos_files'],
+            [sys.executable, 'scripts/launch_optional_simulator.py', DEVICE],
+        ]
+        for command in commands:
+            with self.subTest(later=command):
+                result = subprocess.run(command, cwd=self.root, env=self.env,
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
+                self.assertEqual(len(self.calls()), before)
+                self.assertFalse((self.root / 'capture-must-not-start').exists())
+
+    def assert_timeout_retained(self, result, command_exit=124, state='completed'):
         self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
-        self.assertEqual(len(self.calls()), before)
+        self.assertTrue(self.latch.is_file()); self.assertEqual(len(self.calls()), 1)
+        self.assertNotIn('VISION_FENCE_CLEARED_CONFIRMED', result.stdout)
+        self.assertIn('VISION_FENCE_DEVICE_UNCERTAINTY_RETAINED', result.stdout)
+        receipt = json.loads((self.root / 'build/vision-runtime/fenced-install.json').read_text())
+        self.assertEqual(receipt['command_exit'], command_exit)
+        self.assertEqual(receipt['operation']['exit'], command_exit)
+        self.assertEqual(receipt['operation']['state'], state)
+        self.assertTrue(receipt['cleanup_confirmed']); self.assertTrue(receipt['operation']['cleanup_confirmed'])
+        self.assertFalse(receipt['device_command_completion_confirmed'])
+        self.assertEqual(receipt['operation']['timeout_seconds'], 90)
+        self.assertEqual(json.loads(self.latch.read_text())['state'], 'claimed')
+        self.assert_later_blocked()
+        return receipt
+
+    def test_child_124_with_confirmed_host_cleanup_never_clears_device_uncertainty(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)', 'raise SystemExit(124)'))
+        self.assert_timeout_retained(self.shell())
+
+    def test_output_limit_exit_is_not_device_completion(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)', 'raise SystemExit(125)'))
+        self.assert_timeout_retained(self.shell(), command_exit=125)
+
+    def test_owned_timeout_with_confirmed_host_cleanup_never_clears_device_uncertainty(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)',
+                             'import time\nPath("timeout-child-started").touch()\ntime.sleep(10)'))
+        source = self.root / 'scripts/watch_process.py'
+        # Advance only this fixture's command clock after its real owned child
+        # starts. Production still executes exactly one command at its 90 cap.
+        source.write_text(source.read_text() + '\nimport types\nfrom pathlib import Path\n'
+            '_real_time = time\ndef command_clock():\n'
+            ' return _real_time.monotonic() + (91 if Path("timeout-child-started").exists() else 0)\n'
+            'time = types.SimpleNamespace(monotonic=command_clock)\n')
+        receipt = self.assert_timeout_retained(self.shell(), state='timed_out')
+        self.assertGreater(receipt['operation']['elapsed_seconds'], 90)
+
+    def test_late_completed_zero_beyond_original_cap_keeps_uncertainty(self):
+        source = self.root / 'scripts/watch_process.py'
+        source.write_text(source.read_text() + '\n_original_execute = execute\n'
+            'def execute(*args, **kwargs):\n code, tail, operation = _original_execute(*args, **kwargs)\n'
+            ' operation["elapsed_seconds"] = 93.20\n return code, tail, operation\n')
+        self.assert_timeout_retained(self.shell(), command_exit=0)
+
+    def test_workflow_marker_write_failure_does_not_erase_timeout_latch(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)', 'raise SystemExit(124)'))
+        (self.root / 'github-env').mkdir()
+        result = self.shell()
+        self.assertIn('VISION_FENCE_ENV_PROPAGATION_FAILED_LATCH_RETAINED', result.stdout)
+        self.assert_timeout_retained(result)
+
+    def test_claim_marker_write_failure_prevents_even_the_first_device_command(self):
+        source = self.root / 'scripts/vision_command_fence.py'
+        source.write_text(source.read_text() + '\ndef failed_write(*args):\n raise OSError("injected claim write failure")\nos.write = failed_write\n')
+        result = self.shell()
+        self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
+        self.assertTrue(self.latch.is_file()); self.assertEqual(self.calls(), [])
+        self.assertNotIn('BOUNDED_COMMAND_START', result.stdout)
+        self.assert_later_blocked()
+
+    def test_receipt_write_failure_after_timeout_retains_original_failure_and_latch(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)', 'raise SystemExit(124)'))
+        # Only the offline receipt destination fails; dispatch and cleanup run.
+        (self.root / 'build/vision-runtime').rmdir()
+        (self.root / 'build/vision-runtime').write_text('injected unavailable receipt directory')
+        result = self.shell()
+        self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
+        operation = json.loads(result.stdout.split('BOUNDED_COMMAND_END ', 1)[1].splitlines()[0])
+        self.assertEqual(operation['exit'], 124); self.assertTrue(operation['cleanup_confirmed'])
+        self.assertTrue(self.latch.is_file()); self.assertEqual(len(self.calls()), 1)
+        self.assertNotIn('VISION_FENCE_CLEARED_CONFIRMED', result.stdout)
+        self.assert_later_blocked()
+
+    def test_same_parent_controller_reload_cannot_reclaim_consumed_nonce(self):
+        self.stub.write_text(self.stub.read_text().replace('raise SystemExit(0)', 'raise SystemExit(124)'))
+        # Both controllers receive the exact nonce and original parent PID.
+        # The second must reject the consumed descriptor even without GITHUB_ENV.
+        producer = ('import json, os; from pathlib import Path; '
+                    'p = Path("build/vision-command-inflight.json"); '
+                    'p.write_text(json.dumps({"version": 1, "source": "a" * 40, '
+                    '"device": "' + DEVICE + '", "scope": "visionos_files", '
+                    '"action": "install", "owner_pid": os.getppid(), "nonce": "12-34-56"})); p.chmod(0o600)')
+        command = (shlex.quote(sys.executable) + ' -c ' + shlex.quote(producer) + '; '
+                   'python3 -u scripts/run_vision_fenced_command.py install 12-34-56; '
+                   'printf "FIRST_EXIT=%s\\n" "$?"; '
+                   'python3 -u scripts/run_vision_fenced_command.py install 12-34-56; '
+                   'status=$?; exit "$status"')
+        result = subprocess.run(['bash', '-c', command], cwd=self.root, env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
+        self.assertIn('FIRST_EXIT=126', result.stdout)
+        self.assertEqual(result.stdout.count('VISION_FENCE_CHILD_STARTED'), 1)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertIn('VISION_FENCE_CONTROLLER_UNCONFIRMED ValueError', result.stdout)
+        self.assert_later_blocked()
 
     def test_confirmed_install_and_distinct_shutdown_clear_only_their_own_latch(self):
         for action, seconds in [('install', 90), ('shutdown', 45)]:
@@ -164,6 +282,52 @@ class VisionFenceTests(unittest.TestCase):
                     self.assertTrue(self.latch.exists())
                 finally: claim.close()
         finally: os.chdir(previous)
+
+    def test_timeout_is_sticky_before_propagation_and_after_module_reload(self):
+        self.descriptor(); previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            with patch.dict(os.environ, self.env, clear=True):
+                claim = fence.VisionCommandFence('install', '12-34-56')
+                try:
+                    claim.activate()
+                    operation = {'command': claim.command(), 'timeout_seconds': 90,
+                                 'state': 'timed_out', 'exit': 124, 'elapsed_seconds': 93.2,
+                                 'cleanup_confirmed': True}
+                    self.assertFalse(claim.observe(operation, 124))
+                    self.assertTrue(barrier.blocked(claim.command()))
+                    late = {**operation, 'state': 'completed', 'exit': 0, 'elapsed_seconds': 1}
+                    self.assertFalse(claim.observe(late, 0))
+                    with self.assertRaises(ValueError): claim.clear_confirmed(late)
+                    self.assertTrue(self.latch.is_file())
+                    # Module reload loses every Python singleton. Existing
+                    # claimed bytes still forbid reloading the original grant.
+                    importlib.reload(fence); importlib.reload(barrier)
+                    self.assertTrue(barrier.blocked(claim.command()))
+                    with self.assertRaises(ValueError): fence.VisionCommandFence('install', '12-34-56')
+                    code, _, result = execute(claim.command(), 90)
+                    self.assertEqual(code, 126); self.assertFalse(result['cleanup_confirmed'])
+                    self.assertEqual(self.calls(), [])
+                finally: claim.close()
+        finally: os.chdir(previous)
+        self.assert_later_blocked()
+
+    def test_partial_claim_write_and_fsync_failure_fail_closed_before_spawn(self):
+        original = (ROOT / 'scripts/vision_command_fence.py').read_text()
+        injections = [
+            '\n_real_write = os.write\ndef partial_write(fd, data):\n'
+            ' _real_write(fd, data[:8]); raise OSError("injected partial claim write")\nos.write = partial_write\n',
+            '\ndef failed_sync(fd):\n raise OSError("injected claim fsync failure")\nos.fsync = failed_sync\n',
+        ]
+        for injection in injections:
+            with self.subTest(injection=injection):
+                (self.root / 'scripts/vision_command_fence.py').write_text(original + injection)
+                result = self.shell()
+                self.assertEqual(result.returncode, 126, result.stdout + result.stderr)
+                self.assertTrue(self.latch.is_file()); self.assertEqual(self.calls(), [])
+                self.assertNotIn('BOUNDED_COMMAND_START', result.stdout)
+                self.assert_later_blocked()
+                self.latch.unlink()  # Isolate the next synthetic fault case.
 
     def test_wrong_nonce_parent_source_or_mode_is_not_claimed(self):
         previous = Path.cwd()

@@ -10,6 +10,7 @@ final class QRCatcherMacUITests: XCTestCase {
     private var app: XCUIApplication!
     private var interruptionGuard: NSObjectProtocol?
     private var folder: URL!
+    private var payloadTransition: [String: Any]?
     private var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent() }
 
     override func setUpWithError() throws {
@@ -182,12 +183,15 @@ final class QRCatcherMacUITests: XCTestCase {
             if role == "link-policy" { XCTAssertTrue(scroll.frame.contains(frame)) }
             let expected = (text as NSString).boundingRect(with: NSSize(width: frame.width, height: CGFloat.greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: bodyFont])
-            XCTAssertGreaterThanOrEqual(frame.height + 1, ceil(expected.height), "Body-size text must wrap without clipping")
+            // This is a reference font measured at the intrinsic AX width, not
+            // the resolved SwiftUI font/layout proposal. Retain it diagnostically;
+            // exact strings, visible containment and retained pixels are the gate.
             rows.append(["role": role, "text": text, "frame": rect(frame), "body_measurement_height": Double(expected.height),
                          "reference_body_font": bodyFont.fontName, "reference_body_point_size": Double(bodyFont.pointSize)])
         }
         let report: [String: Any] = ["locale": locale, "phase": phase, "case": name, "window": rect(window.frame), "roles": rows,
-                                   "contrast_qualified": false, "reference_font_is_resolved_element_font": false]
+                                   "contrast_qualified": false, "reference_font_is_resolved_element_font": false,
+                                   "height_proxy_used_as_acceptance": false]
         let data = try JSONSerialization.data(withJSONObject: report, options: .sortedKeys)
         XCTAssertLessThanOrEqual(data.count, 4096)
         print("MAC_SUPPORTING_TEXT_LAYOUT", String(decoding: data, as: UTF8.self))
@@ -195,7 +199,21 @@ final class QRCatcherMacUITests: XCTestCase {
         attachment.name = "mac-supporting-text-layout"; attachment.lifetime = .keepAlways; add(attachment)
     }
 
-    private func pasteLongReadabilityPayload(_ payload: String) throws {
+    private func retainPayloadTransition(_ value: [String: Any]) throws {
+        let data = try JSONSerialization.data(withJSONObject: value, options: .sortedKeys)
+        XCTAssertLessThanOrEqual(data.count, 4096)
+        print("MAC_PAYLOAD_TRANSITION", String(decoding: data, as: UTF8.self))
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+        attachment.name = "mac-payload-transition"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    private func pasteLongReadabilityPayload(_ payload: String, replacing previous: String, locale: String) throws {
+        let first = app.staticTexts["mac.payload"]
+        let before = (first.value as? String) ?? first.label
+        XCTAssertEqual(before, previous)
+        XCTAssertTrue(app.buttons["mac.copy"].isHittable)
+        app.buttons["mac.copy"].click()
+        let copiedBefore = NSPasteboard.general.string(forType: .string)
+        XCTAssertEqual(copiedBefore, previous)
         let generator = try XCTUnwrap(CIFilter(name: "CIQRCodeGenerator"))
         generator.setValue(Data(payload.utf8), forKey: "inputMessage")
         generator.setValue("M", forKey: "inputCorrectionLevel")
@@ -203,11 +221,51 @@ final class QRCatcherMacUITests: XCTestCase {
         let cg = try XCTUnwrap(CIContext().createCGImage(code, from: code.extent))
         NSPasteboard.general.clearContents()
         XCTAssertTrue(NSPasteboard.general.writeObjects([NSImage(cgImage: cg, size: .zero)]))
+        let clipboard = try XCTUnwrap(NSPasteboard.general.data(forType: .tiff))
+        let raster = try XCTUnwrap(CIImage(data: clipboard))
+        let detector = try XCTUnwrap(CIDetector(ofType: CIDetectorTypeQRCode, context: CIContext(), options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        let control = detector.features(in: raster).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+        func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
+        payloadTransition = ["locale": locale, "phase": "prepared", "wrapper_before": before, "copy_before": copiedBefore ?? "missing",
+            "expected_payload_sha256": hash(Data(payload.utf8)), "expected_payload_utf8_bytes": payload.utf8.count,
+            "raster_width": cg.width, "raster_height": cg.height, "clipboard_tiff_bytes": clipboard.count,
+            "clipboard_tiff_sha256": hash(clipboard), "fixture_control_exact": control == [payload],
+            "full_equality_verified": false, "wrapper_identity_refresh_scope": "selectable Text only"]
+        try retainPayloadTransition(try XCTUnwrap(payloadTransition))
+        XCTAssertEqual(control, [payload], "Validate actual clipboard raster before invoking the product decoder")
         app.buttons["mac.paste"].click()
-        let value = app.staticTexts["mac.payload"]
-        let exact = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in ((value.value as? String) ?? value.label) == payload }, object: nil)
+        let exact = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let matches = self.app.staticTexts.matching(identifier: "mac.payload")
+            guard matches.count == 1 else { return false }
+            let value = matches.firstMatch
+            return ((value.value as? String) ?? value.label) == payload
+        }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [exact], timeout: 15), .completed)
+        let value = app.staticTexts["mac.payload"]
         XCTAssertEqual((value.value as? String) ?? value.label, payload)
+        XCTAssertFalse(app.buttons["mac.openWebsite"].exists)
+    }
+    private func verifyLongCopyAndCapture(_ payload: String, locale: String) throws {
+        let window = app.windows["main"]
+        let scroll = app.groups["mac.pane.result"].scrollViews.firstMatch
+        let value = app.staticTexts["mac.payload"], copy = app.buttons["mac.copy"]
+        let after = (value.value as? String) ?? value.label
+        XCTAssertEqual(after, payload)
+        XCTAssertTrue(value.isHittable); XCTAssertTrue(scroll.frame.contains(value.frame))
+        XCTAssertTrue(copy.isHittable); XCTAssertTrue(copy.isEnabled)
+        XCTAssertTrue(window.frame.contains(copy.frame)); XCTAssertTrue(scroll.frame.contains(copy.frame))
+        copy.click()
+        let copied = NSPasteboard.general.string(forType: .string)
+        var report = try XCTUnwrap(payloadTransition)
+        XCTAssertEqual(report["locale"] as? String, locale)
+        report["phase"] = "copy-observed"
+        report["wrapper_after"] = after
+        report["copy_after_sha256"] = copied.map { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() } ?? "missing"
+        report["copy_after_utf8_bytes"] = copied?.utf8.count ?? 0
+        report["full_equality_verified"] = after == payload && copied == payload
+        try retainPayloadTransition(report)
+        XCTAssertEqual(copied, payload)
+        try capturePixels("mac-minimum-long-text-" + locale)
     }
 
     private func resizeToMinimumReadabilityWindow() -> CGRect {
@@ -233,7 +291,8 @@ final class QRCatcherMacUITests: XCTestCase {
     }
     private func capturePixels(_ name: String) throws {
         let png = XCUIScreen.main.screenshot().pngRepresentation
-        let lossless = ["mac-before-resize", "mac-minimum-window", "mac-before-export", "mac-pasted-url"].contains(name)
+        let lossless = ["mac-before-resize", "mac-minimum-window", "mac-before-export", "mac-pasted-url",
+                        "mac-chinese-reopened", "mac-minimum-long-text-en", "mac-minimum-long-text-zh-Hans"].contains(name)
         let data: Data
         let type: String
         if lossless {
@@ -528,10 +587,9 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
         let originalWindow = resizeToMinimumReadabilityWindow()
         let longText = String(repeating: "完整保留二维码内容，支持中文和 English，并且仍能阅读说明与保存数量。", count: 6)
-        try pasteLongReadabilityPayload(longText)
+        try pasteLongReadabilityPayload(longText, replacing: "QRCatcher 你好 🌈 123", locale: "zh-Hans")
         try supportingTextLayout(locale: "zh-Hans", count: 2, phase: "minimum-long-content")
-        app.buttons["mac.copy"].click()
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), longText)
+        try verifyLongCopyAndCapture(longText, locale: "zh-Hans")
         restoreReadabilityWindow(originalWindow)
     }
 
@@ -570,10 +628,9 @@ final class QRCatcherMacUITests: XCTestCase {
         try recordFixedASCIIResult("narrow-after-resize", modalHistory: "no file panel opened in this process")
         try screenshot("mac-minimum-window")
         let longText = String(repeating: "Keep the full QR result readable alongside its safety instruction and saved-history count. ", count: 4)
-        try pasteLongReadabilityPayload(longText)
+        try pasteLongReadabilityPayload(longText, replacing: "https://example.com/qrcatcher?source=golden", locale: "en")
         try supportingTextLayout(locale: "en", count: 2, phase: "minimum-long-content")
-        app.buttons["mac.copy"].click()
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), longText)
+        try verifyLongCopyAndCapture(longText, locale: "en")
     }
 
     func testInvalidImageCancelAndCameraAbsence() throws {

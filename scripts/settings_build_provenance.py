@@ -100,6 +100,10 @@ def begin(platform):
     require(not derived.exists() and not derived.is_symlink(), 'Derived data is not fresh; no removal or reuse allowed')
     path = state_path(platform, root)
     require(not path.exists() and not path.is_symlink(), 'Build provenance already exists')
+    # Fresh TV checkouts reach this before xcodebuild has created build/.
+    # Create only that direct checkout child; never reuse an aliased directory.
+    require(not path.parent.is_symlink(), 'Aliased build directory')
+    path.parent.mkdir(mode=0o700, exist_ok=True)
     require(path.parent.is_dir() and path.parent.resolve(strict=True) == path.parent, 'Missing owned build directory')
     write_json(path, dict(expected, state='before_fresh_build', source_files=source_files(platform, root),
                          derived_data_was_absent=True, binary_source_binding_verified=False), limit=CAP)

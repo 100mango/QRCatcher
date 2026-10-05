@@ -19,6 +19,8 @@ def main():
     if len(sys.argv) != 3:
         raise ValueError('Expected action and exact parent-shell nonce')
     action, nonce = sys.argv[1:]
+    if action not in {'install', 'shutdown'}:
+        raise ValueError('This shell-owned entry accepts only install or shutdown')
     fence = VisionCommandFence(action, nonce)
     try:
         fence.activate()
@@ -33,10 +35,12 @@ def main():
             timing['child_started'] = {'monotonic': time.monotonic(), 'unix': time.time()}
             print('VISION_FENCE_CHILD_STARTED ' + json.dumps({'action': action, 'pid': pid, 'nonce': nonce, **timing['child_started']}), flush=True)
         code, _, operation = execute(command, seconds, output_limit=16 * 1024 * 1024, tail_limit=64 * 1024, on_spawn=started)
+        completion_confirmed = fence.observe(operation, code)
         timing['command_finished'] = {'monotonic': time.monotonic(), 'unix': time.time()}
         print('BOUNDED_COMMAND_END ' + json.dumps(operation), flush=True)
         receipt = {**fence.expected, 'controller_pid': os.getpid(), 'operation': operation,
                    'command_exit': code, 'cleanup_confirmed': operation.get('cleanup_confirmed') is True,
+                   'device_command_completion_confirmed': completion_confirmed,
                    'timing_observations': timing}
         target = Path('build/vision-runtime')
         target.mkdir(exist_ok=True)
@@ -57,7 +61,8 @@ def main():
                 raise ValueError('Receipt directory changed')
         finally:
             os.close(directory)
-        if operation.get('cleanup_confirmed') is not True or blocked(command):
+        if not completion_confirmed or blocked(command):
+            print('VISION_FENCE_DEVICE_UNCERTAINTY_RETAINED ' + action, flush=True)
             return 126
         fence.clear_confirmed(operation)
         print('VISION_FENCE_CLEARED_CONFIRMED ' + action, flush=True)

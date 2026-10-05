@@ -1,5 +1,6 @@
 """One shell-created, FD-bound Vision command latch; never clear unknown work."""
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -24,7 +25,7 @@ def active_claim_is_current(command):
         return False
     try:
         _ACTIVE.current()
-        return command == _ACTIVE.command()
+        return not _ACTIVE.uncertain and command == _ACTIVE.command()
     except (OSError, ValueError):
         return False
 
@@ -32,15 +33,17 @@ def active_claim_is_current(command):
 class VisionCommandFence:
     def __init__(self, action, nonce):
         self.directory = None; self.descriptor = None
-        if action not in {'install', 'shutdown'} or not re.fullmatch(r'[0-9]{1,5}-[0-9]{1,5}-[0-9]+', nonce):
+        self.uncertain = False; self.observed = False
+        if action not in {'install', 'shutdown', 'inventory', 'boot', 'bootstatus'} or not re.fullmatch(r'[0-9]{1,5}-[0-9]{1,5}-[0-9]+', nonce):
             raise ValueError('Expected one explicit Vision operation and shell nonce')
         root = Path(os.environ['GITHUB_WORKSPACE'])
         if not root.is_absolute() or root.resolve(strict=True) != root or Path.cwd() != root:
             raise ValueError('Fence requires the canonical current workflow checkout')
         if os.environ.get('GITHUB_REPOSITORY') != '100mango/QRCatcher':
             raise ValueError('Unexpected repository')
-        source, device, scope = (os.environ[key] for key in ['GITHUB_SHA', 'VISION_SIMULATOR_ID', 'EVIDENCE_SCOPE'])
-        if not re.fullmatch('[0-9a-f]{40}', source) or str(uuid.UUID(device)).upper() != device or scope not in {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest'}:
+        source, scope = (os.environ[key] for key in ['GITHUB_SHA', 'EVIDENCE_SCOPE'])
+        device = None if action == 'inventory' else os.environ['VISION_SIMULATOR_ID']
+        if not re.fullmatch('[0-9a-f]{40}', source) or (action != 'inventory' and str(uuid.UUID(device)).upper() != device) or scope not in {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest'}:
             raise ValueError('Unexpected source/device/scope')
         self.expected = {'version': 1, 'source': source, 'device': device, 'scope': scope,
                          'action': action, 'owner_pid': os.getppid(), 'nonce': nonce}
@@ -52,7 +55,7 @@ class VisionCommandFence:
             self.directory = os.open(self.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             info = os.fstat(self.directory)
             self.parent_identity = (info.st_dev, info.st_ino)
-            self.descriptor = os.open(NAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.directory)
+            self.descriptor = os.open(NAME, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.directory)
             before = os.fstat(self.descriptor)
             if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_uid != os.getuid() or stat.S_IMODE(before.st_mode) != 0o600 or not 0 < before.st_size <= 1024:
                 raise ValueError('Fence must be an independent bounded owner-only regular file')
@@ -82,24 +85,83 @@ class VisionCommandFence:
             raise ValueError('Fence identity or bytes changed')
         return True
 
+    def seconds(self):
+        return {'install': 90, 'shutdown': 45, 'inventory': 30, 'boot': 180, 'bootstatus': 420}[self.expected['action']]
+
     def command(self):
+        if self.expected['action'] == 'inventory':
+            return ['xcrun', 'simctl', 'list', 'devices', 'available', '-j']
         command = ['xcrun', 'simctl', self.expected['action'], self.expected['device']]
         if self.expected['action'] == 'install':
             command += ['build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVision.app']
+        if self.expected['action'] == 'bootstatus': command.append('-b')
         return command
+
+    def _write_claimed(self, expected):
+        self.current()
+        # Consume the shell grant before dispatch. A fresh controller, even in
+        # the same shell with the same nonce, cannot reclaim an issued command.
+        # Partial writes remain a blocking latch; no child starts before fsync.
+        raw = (json.dumps({**expected, 'state': 'claimed',
+                           'controller_pid': self.owner_process}) + '\n').encode()
+        os.lseek(self.descriptor, 0, os.SEEK_SET)
+        written = 0
+        while written < len(raw):
+            count = os.write(self.descriptor, raw[written:])
+            if count <= 0: raise OSError('Incomplete fence claim write')
+            written += count
+        os.ftruncate(self.descriptor, len(raw))
+        os.fsync(self.descriptor)
+        claimed_signature = signature(os.fstat(self.descriptor))
+        if claimed_signature[:5] != self.initial_signature[:5]:
+            raise ValueError('Fence ownership changed during claim')
+        self.raw = raw; self.initial_signature = claimed_signature
+        self.expected = expected
+        self.current()
 
     def activate(self):
         global _ACTIVE
         if _ACTIVE is not None:
             raise ValueError('Another fence is already active')
-        self.current(); _ACTIVE = self
+        self._write_claimed(self.expected); _ACTIVE = self
+
+    def advance_probe(self, action, device):
+        # One bootstrap owner retains its latch until final readiness. There is
+        # no clear/recreate gap between inventory, accepted boot and bootstatus.
+        current = self.expected['action']
+        if (not self.observed or self.uncertain or
+                (current, action) not in {('inventory', 'boot'), ('boot', 'bootstatus')}):
+            self.uncertain = True
+            raise ValueError('Invalid or uncertain bootstrap transition')
+        self.uncertain = True
+        if str(uuid.UUID(device)).upper() != device or (current == 'boot' and device != self.expected['device']):
+            raise ValueError('Bootstrap transition changed device identity')
+        self._write_claimed({**self.expected, 'action': action, 'device': device})
+        self.observed = False; self.uncertain = False
+
+    def observe(self, operation, code):
+        # Host process-group cleanup proves no daemon/device completion. Once
+        # uncertain, late completion and subsequent observations cannot reset it.
+        was_uncertain = self.uncertain
+        self.uncertain = True; self.observed = True
+        seconds = self.seconds()
+        elapsed = operation.get('elapsed_seconds')
+        confirmed = (operation.get('cleanup_confirmed') is True and
+                     operation.get('command') == self.command() and
+                     operation.get('timeout_seconds') == seconds and
+                     type(code) is int and code >= 0 and operation.get('exit') == code and
+                     type(operation.get('exit')) is int and code not in {124, 125, 126} and
+                     operation.get('state') == 'completed' and
+                     type(elapsed) in {int, float} and math.isfinite(elapsed) and 0 <= elapsed <= seconds)
+        self.uncertain = was_uncertain or not confirmed
+        return not self.uncertain
 
     def clear_confirmed(self, operation):
-        seconds = 90 if self.expected['action'] == 'install' else 45
-        if (operation.get('cleanup_confirmed') is not True or operation.get('command') != self.command() or
-                operation.get('timeout_seconds') != seconds or type(operation.get('exit')) is not int or
-                operation.get('state') not in {'completed', 'timed_out', 'output_limit'}):
-            raise ValueError('Owned group cleanup was not confirmed')
+        if self.expected['action'] in {'inventory', 'boot'}:
+            self.uncertain = True
+            raise ValueError('Incomplete bootstrap cannot clear its owner latch')
+        if not self.observed or not self.observe(operation, operation.get('exit')):
+            raise ValueError('Device command completion is uncertain; retain latch until VM disposal')
         self.current()
         os.unlink(NAME, dir_fd=self.directory)
 

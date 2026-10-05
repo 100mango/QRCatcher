@@ -190,6 +190,7 @@ import CoreGraphics
 // Explicitly selected, read-only diagnostic. It never selects a text-size value.
 @MainActor final class QRCatcherWatchSettingsDiscovery: XCTestCase {
     private var navigationSteps: [[String: Any]] = []
+    private var scrollSteps: [[String: Any]] = []
     private var focusSteps: [[String: Any]] = []
     private var lastScreenshot: XCUIScreenshot?
     private var settings: XCUIApplication?
@@ -375,6 +376,141 @@ import CoreGraphics
          "frame": frameReceipt(row.snapshot.frame), "value_empty": true,
          "enabled": true, "selected": false, "adjustment_descendants": false]
     }
+    private struct RootMenu {
+        let container: ObservedNode
+        let rows: [ObservedNode]
+        let visibleTop: CGFloat
+    }
+    private func menuKey(_ node: ObservedNode) -> String {
+        node.snapshot.identifier + "\u{0}" + node.snapshot.label
+    }
+    private func menuSignature(_ menu: RootMenu) -> [String] {
+        menu.rows.map { menuKey($0) + String(describing: frameReceipt($0.snapshot.frame)) }
+    }
+    private func rootNavigationMenu(_ app: XCUIApplication, _ observation: NavigationObservation) throws -> RootMenu {
+        try verifyPane("Settings", app, observation)
+        // This is only the actual observed root CollectionView. Any switch,
+        // slider, picker, button, modal or unknown control stops scroll admission.
+        let allowed: [XCUIElement.ElementType] = [.application, .window, .other, .navigationBar,
+            .staticText, .image, .collectionView, .cell, .statusBar]
+        guard observation.nodes.allSatisfy({ allowed.contains($0.snapshot.elementType) }) else {
+            throw Stop.discovery("Root menu has an adjustment or unknown control")
+        }
+        let lists = observation.nodes.filter { $0.snapshot.elementType == .collectionView }
+        guard lists.count == 1, let container = lists.first, !container.inControl,
+              whollyVisible(container, observation), emptyValue(container.snapshot.value),
+              container.snapshot.isEnabled, !container.snapshot.isSelected,
+              container.snapshot.identifier.utf8.count <= 128, container.snapshot.label.utf8.count <= 128 else {
+            throw Stop.discovery("Root Settings navigation list is not unique and safe")
+        }
+        let rows = observation.nodes.filter { $0.snapshot.elementType == .cell }
+        guard !rows.isEmpty, rows.count <= 12 else { throw Stop.discovery("Unknown root menu row count") }
+        var keys = Set<String>()
+        var identifiers = Set<String>(), labels = Set<String>()
+        for node in rows {
+            let row = node.snapshot
+            let frame = row.frame, intersection = frame.intersection(container.snapshot.frame)
+            guard node.path.starts(with: container.path), !node.inControl,
+                  validFrame(frame, inside: frame), intersection.width > 0, intersection.height > 0,
+                  frame.minX >= container.snapshot.frame.minX, frame.maxX <= container.snapshot.frame.maxX,
+                  row.isEnabled, !row.isSelected, emptyValue(row.value),
+                  !row.identifier.isEmpty, row.identifier.utf8.count <= 128,
+                  !row.label.isEmpty, row.label.utf8.count <= 128,
+                  !row.identifier.contains("\u{0}"), !row.label.contains("\u{0}"),
+                  keys.insert(menuKey(node)).inserted,
+                  identifiers.insert(row.identifier).inserted, labels.insert(row.label).inserted else {
+                throw Stop.discovery("Root menu row identity, value or geometry is unsafe")
+            }
+            let descendants = observation.nodes.filter { $0.path.count > node.path.count && $0.path.starts(with: node.path) }
+            guard descendants.count <= 16, descendants.allSatisfy({
+                [.other, .staticText, .image].contains($0.snapshot.elementType) &&
+                    emptyValue($0.snapshot.value) && !$0.snapshot.isSelected
+            }) else { throw Stop.discovery("Root menu row contains an adjustment or unknown descendant") }
+        }
+        let header = try observedTitle("Settings", observation)
+        guard header.snapshot.elementType == .navigationBar else {
+            throw Stop.discovery("Root scroll needs the observed native Settings navigation bar")
+        }
+        let live = try liveElement(app, container)
+        guard live.isEnabled, !live.isSelected, emptyValue(live.value) else {
+            throw Stop.discovery("Root collection changed before scroll")
+        }
+        return RootMenu(container: container, rows: rows, visibleTop: header.snapshot.frame.maxY)
+    }
+    private func revealRootDisplayRow(_ app: XCUIApplication, _ first: NavigationObservation) throws -> NavigationObservation {
+        var observation = first
+        var seen: [[String]] = []
+        while true {
+            try checkTime()
+            let menu = try rootNavigationMenu(app, observation)
+            let candidates = menu.rows.filter { $0.snapshot.label == "Display & Brightness" }
+            guard candidates.count <= 1 else { throw Stop.discovery("Ambiguous Display & Brightness row") }
+            if let target = candidates.first {
+                if whollyVisible(target, observation) && target.snapshot.frame.minY >= menu.visibleTop {
+                    try safeRow(target, observation)
+                    return observation
+                }
+                guard target.snapshot.frame.minY >= menu.visibleTop else {
+                    throw Stop.discovery("Documented row is above the safe viewport; no reverse gesture")
+                }
+            }
+            guard scrollSteps.count < 2 else { throw Stop.discovery("Two root Settings scrolls exhausted") }
+            let signature = menuSignature(menu)
+            if seen.isEmpty { seen.append(signature) }
+            let fresh = try observeNavigation(app)
+            let current = try rootNavigationMenu(app, fresh)
+            guard menuSignature(current) == signature,
+                  current.container.snapshot.frame == menu.container.snapshot.frame,
+                  current.container.snapshot.identifier == menu.container.snapshot.identifier,
+                  current.container.snapshot.label == menu.container.snapshot.label else {
+                throw Stop.discovery("Root menu changed before scroll")
+            }
+            let element = try liveElement(app, current.container)
+            var entry: [String: Any] = ["pane": "Settings", "toward": "Display & Brightness",
+                "action": "native_collection_swipe_up_slow", "state": "scroll_attempted",
+                "container_frame": frameReceipt(current.container.snapshot.frame),
+                "container_identifier": current.container.snapshot.identifier,
+                "container_label": current.container.snapshot.label,
+                "safe_navigation_rows_only": true, "adjustment_controls_present": false]
+            scrollSteps.append(entry); report["scroll_steps"] = scrollSteps
+            try checkScreen(app); try checkTime()
+            phase("before_root_menu_scroll_" + String(scrollSteps.count))
+            // Public element gesture, never a guessed coordinate or Crown input.
+            element.swipeUp(velocity: .slow)
+            entry["state"] = "scroll_returned"
+            scrollSteps[scrollSteps.count - 1] = entry; report["scroll_steps"] = scrollSteps
+            phase("root_menu_scroll_returned_" + String(scrollSteps.count))
+            let after = try observeNavigation(app)
+            let advanced = try rootNavigationMenu(app, after)
+            guard advanced.container.snapshot.frame == current.container.snapshot.frame,
+                  advanced.container.snapshot.identifier == current.container.snapshot.identifier,
+                  advanced.container.snapshot.label == current.container.snapshot.label,
+                  !seen.contains(menuSignature(advanced)) else {
+                throw Stop.discovery("Root list identity changed or scroll made no new progress")
+            }
+            let common = current.rows.compactMap { before -> (ObservedNode, ObservedNode)? in
+                guard let next = advanced.rows.first(where: { menuKey($0) == menuKey(before) }) else { return nil }
+                return (before, next)
+            }
+            guard !common.isEmpty, common.allSatisfy({ before, next in
+                abs(before.snapshot.frame.minX - next.snapshot.frame.minX) <= 1 &&
+                    abs(before.snapshot.frame.width - next.snapshot.frame.width) <= 1 &&
+                    abs(before.snapshot.frame.height - next.snapshot.frame.height) <= 1 &&
+                    next.snapshot.frame.minY <= before.snapshot.frame.minY + 1
+            }), let anchor = common.first(where: { $0.1.snapshot.frame.minY < $0.0.snapshot.frame.minY - 1 }) else {
+                throw Stop.discovery("No independently matched upward menu progress")
+            }
+            entry["state"] = "progress_verified"
+            entry["anchor_identifier"] = anchor.0.snapshot.identifier
+            entry["anchor_label"] = anchor.0.snapshot.label
+            entry["before_frame"] = frameReceipt(anchor.0.snapshot.frame)
+            entry["after_frame"] = frameReceipt(anchor.1.snapshot.frame)
+            scrollSteps[scrollSteps.count - 1] = entry; report["scroll_steps"] = scrollSteps
+            seen.append(menuSignature(advanced))
+            observation = after
+            try captureKnownPane(app, title: "Settings")
+        }
+    }
     private func captureKnownPane(_ app: XCUIApplication, title: String) throws {
         try checkScreen(app)
         // Keep only the most recent safely observed pane; one attachment total.
@@ -395,6 +531,9 @@ import CoreGraphics
             try checkTime()
             initial = try observeNavigation(app)
             try verifyPane(pane, app, initial)
+            if pane == "Settings" && target == "Display & Brightness" {
+                initial = try revealRootDisplayRow(app, initial)
+            }
             let row = try navigationRow(target, initial)
             _ = try liveElement(app, row)
             var entry: [String: Any] = ["from": pane, "to": target,
@@ -427,6 +566,12 @@ import CoreGraphics
         let fresh = try observeNavigation(app)
         try verifyPane(pane, app, fresh)
         let row = try navigationRow(target, fresh)
+        if pane == "Settings" {
+            let menu = try rootNavigationMenu(app, fresh)
+            guard row.snapshot.frame.minY >= menu.visibleTop else {
+                throw Stop.discovery("Root navigation row is obscured by the Settings header")
+            }
+        }
         guard row.snapshot.identifier == observed.snapshot.identifier,
               row.snapshot.elementType == observed.snapshot.elementType,
               row.snapshot.frame == observed.snapshot.frame else {
@@ -456,7 +601,7 @@ import CoreGraphics
               let device = contract["device"] as? String, UUID(uuidString: device) != nil,
               let nonce = contract["nonce"] as? String, UUID(uuidString: nonce) != nil,
               contract["platform"] as? String == "watch",
-              contract["discovery_protocol"] as? String == "bounded-settings-navigation-v1",
+              contract["discovery_protocol"] as? String == "bounded-settings-watch-root-scroll-v1",
               ProcessInfo.processInfo.environment["SIMULATOR_UDID"]?.uppercased() == device,
               contract["setting_change_attempted"] as? Bool == false,
               contract["system_propagation_qualified"] as? Bool == false else {
@@ -471,8 +616,8 @@ import CoreGraphics
         report = ["source": source, "device": device, "nonce": nonce, "platform": "watch", "settings_bundle": bundle,
             "setting_change_attempted": false, "system_propagation_qualified": false,
             "original_value_restorable": false, "setting_write_authorized": false,
-            "binary_source_binding_verified": false, "discovery_protocol": "bounded-settings-navigation-v1", "screenshot_attached": false,
-            "navigation_complete": false, "navigation_steps": [], "focus_steps": []]
+            "binary_source_binding_verified": false, "discovery_protocol": "bounded-settings-watch-root-scroll-v1", "screenshot_attached": false,
+            "navigation_complete": false, "navigation_steps": [], "focus_steps": [], "scroll_steps": []]
         let app = XCUIApplication(bundleIdentifier: bundle)
         settings = app; began = ProcessInfo.processInfo.systemUptime
         phase("before_settings_launch")

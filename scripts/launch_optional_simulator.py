@@ -2,6 +2,8 @@
 """Bounded read-only app inventory; optional GUI launch never gates XCTest."""
 import json,os,plistlib,subprocess,sys
 from pathlib import Path
+from owned_process_barrier import blocked
+if blocked(): raise SystemExit(126)
 out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
 roots=[Path('/Applications'),Path('/System/Applications'),Path(os.environ['DEVELOPER_DIR'])/'Applications']
 report={'bundle_identifier':'com.apple.iphonesimulator','visited_directories':0,'candidates':[],'launched':False}

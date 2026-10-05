@@ -124,7 +124,7 @@ private struct QRResultView: View {
                         Image(nsImage: image).interpolation(.none).resizable().scaledToFit().frame(width: 200, height: 200)
                             .accessibilityLabel("Scannable QR representation of the selected result")
                     }
-                    Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload")
+                    Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload").id(payload)
                     MacResultActions(workspace: workspace, canOpen: QRPayload.safeWebURL(payload) != nil)
                     Text("Links open only when you choose Open in Browser.").font(.body).foregroundStyle(.primary)
                 } else {

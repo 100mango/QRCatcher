@@ -27,6 +27,7 @@ UI_RECEIPT_LIMIT = 24 * 1024
 CATALOG_LIMIT = 512 * 1024
 UI_OUTPUT_LIMIT = 512 * 1024
 TOKEN_PREFIX = 'QRCATCHER_SETTINGS_DISCOVERY '
+PROTOCOL = {'watch': 'bounded-settings-watch-root-scroll-v1', 'tv': 'bounded-settings-navigation-v1'}
 
 
 class DiscoveryStopped(ValueError):
@@ -55,7 +56,7 @@ def validate_identity(platform, device, environment, root):
             'runtime_prefix': 'com.apple.CoreSimulator.SimRuntime.' + runtime + '-',
             'test_label': label, 'test_class': case, 'nonce': str(uuid.uuid4()),
             'setting_change_attempted': False, 'system_propagation_qualified': False,
-            'binary_source_binding_verified': False, 'discovery_protocol': 'bounded-settings-navigation-v1'}
+            'binary_source_binding_verified': False, 'discovery_protocol': PROTOCOL[platform]}
 
 
 def select_device(raw, identity):
@@ -132,6 +133,37 @@ def validate_navigation_receipt(receipt, platform):
     route = ROUTES[platform]
     steps = receipt.get('navigation_steps')
     focus = receipt.get('focus_steps')
+    scrolls = receipt.get('scroll_steps') if platform == 'watch' else receipt.get('scroll_steps', [])
+    require(isinstance(scrolls, list) and len(scrolls) <= (2 if platform == 'watch' else 0), 'Unbounded or unsupported root scrolling')
+    for index, step in enumerate(scrolls):
+        require(isinstance(step, dict) and step.get('pane') == 'Settings' and step.get('toward') == 'Display & Brightness' and
+                step.get('action') == 'native_collection_swipe_up_slow', 'Scroll is outside the observed root navigation list')
+        require(step.get('state') in ['scroll_attempted', 'scroll_returned', 'progress_verified'], 'Unknown root scroll state')
+        require(step.get('safe_navigation_rows_only') is True and step.get('adjustment_controls_present') is False,
+                'Root scroll lacks safe navigation-only admission')
+        require(valid_rectangle(step.get('container_frame')) and
+                all(isinstance(step.get(k), str) and len(step[k].encode()) <= 128 for k in ['container_identifier', 'container_label']),
+                'Invalid root list identity or geometry')
+        require(index == len(scrolls) - 1 or step['state'] == 'progress_verified', 'Second gesture followed unverified first scroll')
+        if index:
+            require(all(step[key] == scrolls[index-1][key] for key in ['container_frame', 'container_identifier', 'container_label']),
+                    'Root collection identity changed between gestures')
+        if step['state'] == 'progress_verified':
+            before, after, bounds = step.get('before_frame'), step.get('after_frame'), step['container_frame']
+            require(valid_rectangle(before) and valid_rectangle(after), 'Invalid scroll progress anchor')
+            require(all(isinstance(step.get(k), str) and 0 < len(step[k].encode()) <= 128 for k in ['anchor_identifier', 'anchor_label']),
+                    'Missing observed scroll anchor identity')
+            require(abs(before[0]-after[0]) <= 1 and abs(before[2]-after[2]) <= 1 and abs(before[3]-after[3]) <= 1 and
+                    after[1] < before[1]-1, 'No matching upward native menu progress')
+            for frame in [before, after]:
+                require(frame[0] >= bounds[0] and frame[0]+frame[2] <= bounds[0]+bounds[2], 'Scroll anchor exceeds horizontal list bounds')
+                require(min(frame[0]+frame[2], bounds[0]+bounds[2]) > max(frame[0], bounds[0]) and
+                        min(frame[1]+frame[3], bounds[1]+bounds[3]) > max(frame[1], bounds[1]), 'Scroll anchor was outside observed list')
+            if index and step['anchor_identifier'] == scrolls[index-1].get('anchor_identifier'):
+                require(step['anchor_label'] == scrolls[index-1]['anchor_label'] and before == scrolls[index-1]['after_frame'],
+                        'Repeated anchor lost scroll continuity')
+    if scrolls and scrolls[-1]['state'] != 'progress_verified':
+        require(not steps and receipt.get('navigation_complete') is False, 'Navigation continued after unverified scroll')
     require(type(receipt.get('navigation_complete')) is bool, 'Unknown navigation completion')
     require(isinstance(steps, list) and len(steps) <= len(route) - 1, 'Unbounded navigation steps')
     require(isinstance(focus, list) and len(focus) <= 8 and (platform == 'tv' or not focus), 'Unbounded/unsupported focus movement')
@@ -166,7 +198,7 @@ def validate_receipt(receipt, identity, settings):
     require(receipt.get('setting_change_attempted') is False, 'Discovery attempted a setting change')
     require(receipt.get('system_propagation_qualified') is False, 'Discovery cannot qualify propagation')
     require(receipt.get('original_value_restorable') is False and receipt.get('setting_write_authorized') is False, 'Discovery cannot authorize restoration or setting writes')
-    require(receipt.get('binary_source_binding_verified') is False and receipt.get('discovery_protocol') == 'bounded-settings-navigation-v1', 'Unknown provenance/protocol claim')
+    require(receipt.get('binary_source_binding_verified') is False and receipt.get('discovery_protocol') == PROTOCOL[identity['platform']], 'Unknown provenance/protocol claim')
     require(receipt.get('status') in ['settings_screen_observed', 'observation_stopped'], 'Unknown UI discovery result')
     if receipt.get('status') == 'settings_screen_observed':
         require(isinstance(receipt.get('hierarchy'), str) and 0 < len(receipt['hierarchy'].encode()) <= 4096, 'Observed screen lacks bounded native hierarchy')

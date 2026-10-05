@@ -34,7 +34,9 @@ STATUS=$?
 set -e
 printf 'VISION_FENCE_AFTER_PYTHON action=%s exit=%s\n' "$ACTION" "$STATUS"
 if [[ "$STATUS" == 126 || -e "$LATCH" || -L "$LATCH" ]]; then
-    printf 'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED=true\n' >> "$GITHUB_ENV"
+    if ! printf 'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED=true\n' >> "$GITHUB_ENV"; then
+        printf 'VISION_FENCE_ENV_PROPAGATION_FAILED_LATCH_RETAINED\n'
+    fi
     printf 'VISION_FENCE_UNRESOLVED_RETAINED\n'
     exit 126
 fi

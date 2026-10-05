@@ -6,20 +6,51 @@ static BOOL QRPadFiniteNonemptyRect(CGRect rect) {
     return isfinite(rect.origin.x) && isfinite(rect.origin.y) && isfinite(rect.size.width) && isfinite(rect.size.height) &&
         rect.size.width > 0 && rect.size.height > 0;
 }
+// Observe the existing short-circuit reads exactly once. Missing later reads
+// remain unknown; this diagnostic never supplies readiness or hittability.
+static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
+                                 NSTimeInterval origin, BOOL (^read)(NSMutableDictionary *)) {
+    if (!attempt) return read(nil);
+    NSMutableDictionary *term = [@{@"state": @"entered", @"started": @(NSProcessInfo.processInfo.systemUptime - origin)} mutableCopy];
+    attempt[@"terms"][name] = term; attempt[@"active_term"] = name;
+    BOOL result = read(term);
+    term[@"state"] = @"completed"; term[@"result"] = @(result);
+    term[@"finished"] = @(NSProcessInfo.processInfo.systemUptime - origin);
+    attempt[@"active_term"] = NSNull.null;
+    return result;
+}
 @interface QRCatcherPadUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
+@property (nonatomic, strong) NSMutableDictionary *shareReadinessTrace;
+@property (nonatomic) BOOL shareTraceRetained;
 @end
 @implementation QRCatcherPadUITests
 - (void)setUp {
     [super setUp]; self.continueAfterFailure = NO;
+    self.shareReadinessTrace = nil; self.shareTraceRetained = NO;
     self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
     self.app = [XCUIApplication new];
 }
 - (void)tearDown {
+    [self retainShareReadinessTrace];
     if (self.testRun.failureCount > 0) { NSLog(@"IPAD_FAILURE_UI:%@", self.app.debugDescription); [self capture:@"ipad-failure"]; }
     [self.app terminate]; XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown];
     [self removeUIInterruptionMonitor:self.interruptionGuard];
+}
+- (void)retainShareReadinessTrace {
+    if (!self.shareReadinessTrace || self.shareTraceRetained) return;
+    self.shareTraceRetained = YES;
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:self.shareReadinessTrace options:NSJSONWritingSortedKeys error:&error];
+    if (!data || data.length > 4096) {
+        NSLog(@"IPAD_SHARE_TRACE_INCOMPLETE encoding_or_cap");
+        return;
+    }
+    NSLog(@"IPAD_SHARE_READINESS_TRACE:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+    XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
+    attachment.name = @"ipad-share-readiness-trace"; attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
 }
 - (void)launchWithArguments:(NSArray *)extra {
     self.app.launchArguments = [@[@"-ui-testing", @"-reset-history", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US", @"-fixture-payload", @"Native iPad QR result 你好"] arrayByAddingObjectsFromArray:extra];
@@ -63,14 +94,56 @@ static BOOL QRPadFiniteNonemptyRect(CGRect rect) {
         containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",
             (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];
     XCUIElement *copy = copyCells.firstMatch;
+    NSArray *termOrder = @[@"popover_count", @"popover_exists", @"activity_exists", @"caption_exists", @"caption_matches",
+                           @"copy_count", @"copy_exists", @"copy_enabled", @"copy_hittable"];
+    NSMutableArray *attempts = [NSMutableArray array];
+    NSMutableDictionary *trace = [@{@"version": @1, @"timeout_seconds": @10, @"observations_qualify_pass": @NO,
+        @"attempt_count": @0, @"retained_attempt_limit": @2, @"term_order": termOrder, @"attempts": attempts,
+        @"waiter_result": NSNull.null, @"wait_elapsed": NSNull.null} mutableCopy];
+    self.shareReadinessTrace = trace;
+    __block NSTimeInterval readinessStarted = 0;
+    __block BOOL observeReadiness = YES;
     NSPredicate *shareReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
-        return popovers.count == 1 && popover.exists && activity.exists && caption.exists &&
-            [caption.label isEqualToString:@"Native iPad QR result 你好"] && copyCells.count == 1 && copy.exists && copy.enabled && copy.hittable;
+        NSMutableDictionary *attempt = nil;
+        if (observeReadiness) {
+            NSUInteger index = [trace[@"attempt_count"] unsignedIntegerValue] + 1;
+            trace[@"attempt_count"] = @(index);
+            NSMutableDictionary *terms = [NSMutableDictionary dictionary];
+            for (NSString *name in termOrder) terms[name] = @{@"state": @"not_evaluated"};
+            attempt = [@{@"index": @(index), @"terms": terms, @"active_term": NSNull.null,
+                         @"predicate_returned": @NO, @"ready": NSNull.null} mutableCopy];
+            [attempts addObject:attempt]; if (attempts.count > 2) [attempts removeObjectAtIndex:0];
+        }
+        BOOL readyNow =
+            QRPadObserveShareTerm(attempt, @"popover_count", readinessStarted, ^BOOL(NSMutableDictionary *term) {
+                NSUInteger count = popovers.count; term[@"observed_count"] = @(count); return count == 1;
+            }) &&
+            QRPadObserveShareTerm(attempt, @"popover_exists", readinessStarted, ^BOOL(NSMutableDictionary *term) { return popover.exists; }) &&
+            QRPadObserveShareTerm(attempt, @"activity_exists", readinessStarted, ^BOOL(NSMutableDictionary *term) { return activity.exists; }) &&
+            QRPadObserveShareTerm(attempt, @"caption_exists", readinessStarted, ^BOOL(NSMutableDictionary *term) { return caption.exists; }) &&
+            QRPadObserveShareTerm(attempt, @"caption_matches", readinessStarted, ^BOOL(NSMutableDictionary *term) {
+                NSString *value = caption.label;
+                term[@"caption_utf8_bytes"] = value ? @([value lengthOfBytesUsingEncoding:NSUTF8StringEncoding]) : NSNull.null;
+                return [value isEqualToString:@"Native iPad QR result 你好"];
+            }) &&
+            QRPadObserveShareTerm(attempt, @"copy_count", readinessStarted, ^BOOL(NSMutableDictionary *term) {
+                NSUInteger count = copyCells.count; term[@"observed_count"] = @(count); return count == 1;
+            }) &&
+            QRPadObserveShareTerm(attempt, @"copy_exists", readinessStarted, ^BOOL(NSMutableDictionary *term) { return copy.exists; }) &&
+            QRPadObserveShareTerm(attempt, @"copy_enabled", readinessStarted, ^BOOL(NSMutableDictionary *term) { return copy.enabled; }) &&
+            QRPadObserveShareTerm(attempt, @"copy_hittable", readinessStarted, ^BOOL(NSMutableDictionary *term) { return copy.hittable; });
+        attempt[@"predicate_returned"] = @YES; attempt[@"ready"] = @(readyNow);
+        return readyNow;
     }];
-    NSTimeInterval readinessStarted = NSProcessInfo.processInfo.systemUptime;
+    // Start at the original point; the native waiter still owns the same10s.
+    readinessStarted = NSProcessInfo.processInfo.systemUptime;
     XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc] initWithPredicate:shareReady object:nil];
     XCTWaiterResult readiness = [XCTWaiter waitForExpectations:@[ready] timeout:10];
-    NSLog(@"IPAD_NATIVE_SHARE_READINESS outcome=%ld elapsed=%.3f", (long)readiness, NSProcessInfo.processInfo.systemUptime - readinessStarted);
+    NSTimeInterval readinessElapsed = NSProcessInfo.processInfo.systemUptime - readinessStarted;
+    trace[@"waiter_result"] = @((long)readiness); trace[@"wait_elapsed"] = @(readinessElapsed);
+    observeReadiness = NO;
+    NSLog(@"IPAD_NATIVE_SHARE_READINESS outcome=%ld elapsed=%.3f", (long)readiness, readinessElapsed);
+    [self retainShareReadinessTrace];
     XCTAssertEqual(readiness, XCTWaiterResultCompleted, @"Expected native share popover, matching payload caption and hittable Copy cell");
     if (readiness != XCTWaiterResultCompleted) return;
     BOOL currentReady = [shareReady evaluateWithObject:nil];

@@ -73,7 +73,9 @@ class SettingsDiscoveryFenceTests(unittest.TestCase):
         self.env['EVIDENCE_SCOPE']='tvos'
         p=self.shell('tv'); self.assertEqual(p.returncode,2,p.stdout+p.stderr)
         r=json.loads((self.root/'build/settings-discovery-tv-fence.json').read_text())
-        self.assertEqual(r['parent_deadline_monotonic']-float(r['parent_started_monotonic']),1080)
+        # Subtracting two finite monotonic doubles can leave sub-microsecond
+        # rounding residue; the production 1,080-second budget is unchanged.
+        self.assertAlmostEqual(r['parent_deadline_monotonic']-float(r['parent_started_monotonic']),1080,places=6)
 
     def test_insufficient_original_parent_budget_never_spawns(self):
         p=self.shell(origin=time.monotonic()-1200)

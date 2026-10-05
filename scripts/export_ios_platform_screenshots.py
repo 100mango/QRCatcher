@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded synthetic phone/iPad evidence. Never uploads full xcresult archives."""
-import hashlib,json,os,pathlib,struct,subprocess,time
+import hashlib,json,math,os,pathlib,re,struct,subprocess,time
 from export_settings_discovery import export_settings
 export_started=time.monotonic()
 def required_alert_endpoints(mode):
@@ -33,10 +33,55 @@ def missing_import_audit_pairs(requirements,screenshots,attachments,expected_res
  for label in sorted(set(expected_results)-seen):missing.append({'result_label':label,'missing':['audit-pair requirement and paired evidence']})
  return missing
 
+def validate_ipad_share_trace(data):
+ if len(data)>4096:raise ValueError('iPad share trace exceeds4KiB')
+ value=json.loads(data)
+ order=['popover_count','popover_exists','activity_exists','caption_exists','caption_matches','copy_count','copy_exists','copy_enabled','copy_hittable']
+ if not isinstance(value,dict) or type(value.get('version')) is not int or value.get('version')!=1 or value.get('timeout_seconds')!=10 or value.get('observations_qualify_pass') is not False or value.get('term_order')!=order or value.get('retained_attempt_limit')!=2:raise ValueError('Unknown iPad share diagnostic protocol')
+ attempts=value.get('attempts');count=value.get('attempt_count')
+ if not isinstance(attempts,list) or len(attempts)>2 or type(count) is not int or count<len(attempts):raise ValueError('Unbounded iPad share attempts')
+ def finite(number):return type(number) in {int,float} and math.isfinite(number) and number>=0
+ if value.get('waiter_result') is not None and (type(value['waiter_result']) is not int or value['waiter_result'] not in {1,2,3,4,5}):raise ValueError('Unknown native waiter result')
+ if value.get('wait_elapsed') is not None and not finite(value['wait_elapsed']):raise ValueError('Invalid waiter duration')
+ previous=0
+ for attempt in attempts:
+  index=attempt.get('index');terms=attempt.get('terms')
+  if type(index) is not int or not previous<index<=count or not isinstance(terms,dict) or set(terms)!=set(order):raise ValueError('Invalid iPad share attempt identity')
+  previous=index;stopped=False;all_true=True;completed_false=False;entered=None;last_finished=0
+  for name in order:
+   term=terms[name]
+   if not isinstance(term,dict):raise ValueError('Invalid condition record')
+   state=term.get('state')
+   if state=='not_evaluated':
+    if set(term)!={'state'}:raise ValueError('Unevaluated condition cannot claim a value')
+    stopped=True;all_true=False;continue
+   if stopped or state not in {'entered','completed'} or not finite(term.get('started')) or term['started']<last_finished:raise ValueError('Invalid short-circuit term order/timing')
+   if state=='entered':
+    if 'result' in term or 'finished' in term:raise ValueError('In-flight condition cannot claim completion')
+    entered=name;stopped=True;all_true=False;continue
+   result=term.get('result')
+   if type(result) is not bool or not finite(term.get('finished')) or term['finished']<term['started']:raise ValueError('Missing actual condition result/timing')
+   last_finished=term['finished']
+   if name in {'popover_count','copy_count'}:
+    actual=term.get('observed_count')
+    if type(actual) is not int or actual<0 or result!=(actual==1):raise ValueError('Uniqueness result differs from observed count')
+   if name=='caption_matches':
+    size=term.get('caption_utf8_bytes')
+    if size is not None and (type(size) is not int or size<0):raise ValueError('Invalid observed caption length')
+   if not result:stopped=True;all_true=False;completed_false=True
+  if attempt.get('active_term')!=entered:raise ValueError('Unknown active condition')
+  returned=attempt.get('predicate_returned');ready=attempt.get('ready')
+  if type(returned) is not bool or (returned and (type(ready) is not bool or ready!=all_true or (not ready and not completed_false) or entered is not None)) or (not returned and ready is not None):raise ValueError('Unobserved predicate cannot claim readiness')
+ return value
+
+def is_ipad_share_trace(entry):
+ pattern=r'ipad-share-readiness-trace(?:_(?:0|[1-9][0-9]*)_[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.json)?'
+ return any(isinstance(value,str) and re.fullmatch(pattern,value) for value in entry.values())
+
 scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
-summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'alert_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[]}
+summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'alert_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[],'ipad_share_traces':[]}
 barrier=pathlib.Path('build/owned-process-cleanup.json')
 if barrier.exists():
  assert not barrier.is_symlink() and barrier.stat().st_size<=2048
@@ -83,6 +128,16 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
  subprocess.run(['xcrun','xcresulttool','export','attachments','--path',result,'--output-path',str(folder)],check=True)
  for entry in records(json.loads((folder/'manifest.json').read_text())):
   text=' '.join(v for v in entry.values() if isinstance(v,str));name=next((n for n in names if n in text),None)
+  if is_ipad_share_trace(entry):
+   allowed={'ipad_pro':{'ipad-pro-13-layout','ipad-pro-13'},'ipad_mini':{'ipad-mini-layout','ipad-mini'}}
+   if label not in allowed.get(scope,set()) or summary['ipad_share_traces']:raise ValueError('Wrong or duplicate iPad share diagnostic result')
+   raw=folder/entry['exportedFileName'];path=raw.resolve()
+   if path!=raw.absolute() or not path.is_relative_to(folder.resolve()) or not path.is_file() or path.stat().st_nlink!=1 or path.stat().st_size>4096:raise ValueError('Invalid iPad share diagnostic file')
+   with path.open('rb') as stream:data=stream.read(4097)
+   trace=validate_ipad_share_trace(data)
+   filename=label+'-share-readiness-trace.json';(out/filename).write_bytes(data)
+   summary['ipad_share_traces'].append({'result_label':label,'name':filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'observations_qualify_pass':False})
+   continue
   audit_name=next((value for value in ['image-import-audit-pair-required','image-import-alert-audit-tree','image-import-history-audit-tree','image-import-audit-pair-receipts'] if value in text),None)
   if audit_name:
    path=(folder/entry['exportedFileName']).resolve()

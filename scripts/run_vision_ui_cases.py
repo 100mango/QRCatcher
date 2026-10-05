@@ -4,13 +4,14 @@ import json, os, subprocess, sys
 from pathlib import Path
 from watch_process import execute
 from atomic_json import write_json
-from owned_process_barrier import mark_unconfirmed
+from owned_process_barrier import blocked, mark_unconfirmed
 from run_native_size_case import run_case
 from owned_process_group import stop_group
 from vision_case_contract import select_case, case_identity
 
 
 def main():
+    if blocked(): raise SystemExit(126)
     if len(sys.argv) != 3:
         raise ValueError('Expected exact device UUID and one Vision case scope')
     udid, scope = sys.argv[1:]

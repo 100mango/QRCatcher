@@ -152,7 +152,7 @@ class SettingsDiscoveryFence:
                 runtime_prefix='com.apple.CoreSimulator.SimRuntime.' + runtime + '-', test_label=label,
                 test_class='QRCatcher' + label + 'SettingsDiscovery', nonce=token.get('nonce'),
                 setting_change_attempted=False, system_propagation_qualified=False, binary_source_binding_verified=False,
-                discovery_protocol='bounded-settings-navigation-v1', settings_bundle=token.get('settings_bundle'))
+                discovery_protocol='bounded-settings-watch-root-scroll-v1' if self.platform == 'watch' else 'bounded-settings-navigation-v1', settings_bundle=token.get('settings_bundle'))
             if (token != expected_token or any(token.get(key) is not False for key in
                     ['setting_change_attempted', 'system_propagation_qualified', 'binary_source_binding_verified']) or
                     not isinstance(token.get('nonce'), str) or str(uuid.UUID(token['nonce'])) != token['nonce'] or

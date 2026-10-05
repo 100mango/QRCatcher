@@ -21,7 +21,7 @@ def navigation_fixture(platform='watch'):
                 navigation_steps=[dict(**{'from': a, 'to': b}, control=row(b), pane_frame=[0, 0, 220, 250],
                                        state='destination_verified',
                                        action='exact_element_tap' if platform == 'watch' else 'focused_remote_select')
-                                  for a, b in zip(route, route[1:])], focus_steps=[])
+                                  for a, b in zip(route, route[1:])], focus_steps=[], **({'scroll_steps': []} if platform == 'watch' else {}))
 
 
 class NavigationReceiptTests(unittest.TestCase):
@@ -104,9 +104,13 @@ class NavigationSourceTests(unittest.TestCase):
     def test_no_setting_write_coordinate_reveal_or_deadline_extension(self):
         for label in ['Watch','TV']:
             s=self.source(label)
+            inspected=s
+            if label=='Watch':
+                self.assertEqual(s.count('element.swipeUp(velocity: .slow)'),1)
+                inspected=s.replace('element.swipeUp(velocity: .slow)','')
             for forbidden in ['adjust(toNormalizedSliderPosition','rotateDigitalCrown','coordinate(','.swipe',
                               'press(.left)','press(.right)','forDuration:','AppleLanguages','accessibility5']:
-                self.assertNotIn(forbidden,s)
+                self.assertNotIn(forbidden,inspected)
             for guard in ['< 45','nodes.count < 256','path.count <= 20','descendants.count <= 16',
                           'bounds.contains(frame)','values.allSatisfy','emptyValue(row.value)',
                           'row.isEnabled, !row.isSelected','matches.count == 1','query.count == 1',
@@ -164,7 +168,8 @@ class NavigationSourceTests(unittest.TestCase):
 
     def test_protocol_is_explicit_and_old_contract_is_not_accepted(self):
         for label in ['Watch','TV']:
-            self.assertIn('contract["discovery_protocol"] as? String == "bounded-settings-navigation-v1"',self.source(label))
+            protocol='bounded-settings-watch-root-scroll-v1' if label=='Watch' else 'bounded-settings-navigation-v1'
+            self.assertIn('contract["discovery_protocol"] as? String == "'+protocol+'"',self.source(label))
         for path in ['scripts/settings_discovery_fence.py','scripts/discover_native_settings.py']:
             s=(ROOT/path).read_text();self.assertIn('bounded-settings-navigation-v1',s);self.assertNotIn('initial-screen-only-v1',s)
 
