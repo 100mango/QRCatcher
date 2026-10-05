@@ -38,6 +38,57 @@
 }
 @end
 
+// Diagnostic observations only: public UIKit reads, no layout/lifecycle changes.
+// At most 44 immediate pre-assertion receipts, each <=16KiB; no payload text.
+static NSDictionary *QRDiagnosticRect(CGRect rect) {
+    return @{ @"x": @(rect.origin.x), @"y": @(rect.origin.y),
+              @"width": @(rect.size.width), @"height": @(rect.size.height),
+              @"min_x": @(CGRectGetMinX(rect)), @"min_y": @(CGRectGetMinY(rect)),
+              @"max_x": @(CGRectGetMaxX(rect)), @"max_y": @(CGRectGetMaxY(rect)) };
+}
+static NSDictionary *QRDiagnosticSize(CGSize size) {
+    return @{ @"width": @(size.width), @"height": @(size.height) };
+}
+static NSDictionary *QRDiagnosticPoint(CGPoint point) { return @{ @"x": @(point.x), @"y": @(point.y) }; }
+static NSDictionary *QRDiagnosticInsets(UIEdgeInsets insets) {
+    return @{ @"top": @(insets.top), @"left": @(insets.left), @"bottom": @(insets.bottom), @"right": @(insets.right) };
+}
+static NSDictionary *QRDiagnosticTraits(UITraitCollection *traits) {
+    return @{ @"content_size_category": traits.preferredContentSizeCategory ?: @"unspecified",
+              @"display_scale": @(traits.displayScale), @"horizontal_size_class": @(traits.horizontalSizeClass),
+              @"vertical_size_class": @(traits.verticalSizeClass), @"idiom": @(traits.userInterfaceIdiom),
+              @"layout_direction": @(traits.layoutDirection) };
+}
+static NSDictionary *QRDiagnosticFont(UILabel *label) {
+    if (!label) return (id)NSNull.null;
+    UIFont *font = label.font;
+    return @{ @"font_name": font.fontName ?: @"", @"point_size": @(font.pointSize),
+              @"line_height": @(font.lineHeight), @"ascender": @(font.ascender), @"descender": @(font.descender),
+              @"leading": @(font.leading), @"number_of_lines": @(label.numberOfLines),
+              @"line_break_mode": @(label.lineBreakMode), @"adjusts_for_category": @(label.adjustsFontForContentSizeCategory) };
+}
+static NSDictionary *QRDiagnosticView(UIView *view, UIView *root) {
+    if (!view) return (id)NSNull.null;
+    UIWindow *window = view.window;
+    NSMutableDictionary *record = [@{ @"frame": QRDiagnosticRect(view.frame), @"bounds": QRDiagnosticRect(view.bounds),
+        @"in_root": QRDiagnosticRect([view convertRect:view.bounds toView:root]),
+        @"safe_area_insets": QRDiagnosticInsets(view.safeAreaInsets), @"traits": QRDiagnosticTraits(view.traitCollection),
+        @"window_attached": @(window != nil), @"superview_present": @(view.superview != nil),
+        @"ambiguous_layout": @(view.hasAmbiguousLayout), @"hidden": @(view.hidden) } mutableCopy];
+    record[@"in_window"] = window ? QRDiagnosticRect([view convertRect:view.bounds toView:window]) : (id)NSNull.null;
+    record[@"window_bounds"] = window ? QRDiagnosticRect(window.bounds) : (id)NSNull.null;
+    if ([view isKindOfClass:UIScrollView.class]) {
+        UIScrollView *scroll = (UIScrollView *)view;
+        record[@"scroll"] = @{ @"content_size": QRDiagnosticSize(scroll.contentSize),
+            @"content_offset": QRDiagnosticPoint(scroll.contentOffset), @"content_inset": QRDiagnosticInsets(scroll.contentInset),
+            @"adjusted_content_inset": QRDiagnosticInsets(scroll.adjustedContentInset),
+            @"indicator_inset": QRDiagnosticInsets(scroll.scrollIndicatorInsets),
+            @"inset_adjustment_behavior": @(scroll.contentInsetAdjustmentBehavior),
+            @"zoom_scale": @(scroll.zoomScale), @"scroll_enabled": @(scroll.scrollEnabled) };
+    }
+    return record;
+}
+
 @interface QRPhoneResultTests : XCTestCase
 @end
 @implementation QRPhoneResultTests
@@ -157,6 +208,34 @@
         XCTAssertNil(history.recordedPresentation); XCTAssertEqualObjects([self savedRows:store], before);
     } @finally { AppDelegate.appDelegate.historyStore = oldStore; }
 }
+- (void)attachGeometryBeforeContainment:(NSString *)stage payloadKind:(NSString *)kind payload:(NSString *)payload viewport:(CGSize)viewport host:(UIViewController *)host result:(QRPhoneResultViewController *)result text:(UIScrollView *)text actions:(UIScrollView *)actions body:(UILabel *)body title:(UILabel *)title target:(CGRect)target fullText:(CGSize)fullText fullTitle:(CGSize)fullTitle {
+    NSMutableArray *buttons = [NSMutableArray new];
+    NSArray *identifiers = [kind isEqualToString:@"website"] ? @[@"history.result.open", @"history.result.copy", @"history.result.cancel"] : @[@"history.result.copy", @"history.result.cancel"];
+    for (NSString *identifier in identifiers) {
+        UIButton *button = (UIButton *)[self ownedView:identifier inView:result.view];
+        [buttons addObject:@{ @"identifier": identifier, @"view": QRDiagnosticView(button, result.view),
+            @"in_actions": button ? QRDiagnosticRect([button convertRect:button.bounds toView:actions]) : (id)NSNull.null,
+            @"title_label": QRDiagnosticView(button.titleLabel, result.view), @"font": QRDiagnosticFont(button.titleLabel) }];
+    }
+    NSDictionary *record = @{ @"version": @1, @"observations_qualify_pass": @NO,
+        @"fixture": @"unattached-child-public-geometry-v1", @"payload_kind": kind,
+        @"payload_utf16_length": @(payload.length), @"payload_utf8_bytes": @([payload lengthOfBytesUsingEncoding:NSUTF8StringEncoding]),
+        @"viewport": QRDiagnosticSize(viewport), @"stage": stage, @"target": QRDiagnosticRect(target),
+        @"full_text_size_that_fits": QRDiagnosticSize(fullText), @"current_action_title_size_that_fits": QRDiagnosticSize(fullTitle),
+        @"host": QRDiagnosticView(host.view, result.view), @"result": QRDiagnosticView(result.view, result.view),
+        @"host_traits": QRDiagnosticTraits(host.traitCollection), @"result_traits": QRDiagnosticTraits(result.traitCollection),
+        @"parent_is_host": @(result.parentViewController == host), @"presented": @(result.presentingViewController != nil),
+        @"text": QRDiagnosticView(text, result.view), @"actions": QRDiagnosticView(actions, result.view),
+        @"body": QRDiagnosticView(body, result.view), @"title": QRDiagnosticView(title, result.view),
+        @"body_font": QRDiagnosticFont(body), @"title_font": QRDiagnosticFont(title), @"buttons": buttons };
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:&error];
+    if (!data || data.length > 16 * 1024) { XCTFail(@"Bounded public geometry receipt could not be serialized: %@", error); return; }
+    XCTAttachment *attachment = [[XCTAttachment alloc] initWithData:data uniformTypeIdentifier:@"public.json"];
+    attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];
+    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
+}
 - (void)testLargestDynamicTypeFullTextAndActionsInBoundedPublicScrollPanes {
     NSMutableString *payload = [NSMutableString stringWithString:@"BEGIN 👩🏽‍💻 e\u0301 你好\n"];
     for (NSUInteger index = 0; index < 80; index++) [payload appendString:@"Long readable Arabic العربية Hebrew עברית 🌈\n"];
@@ -182,6 +261,7 @@
             XCTAssertEqualObjects(body.text, completePayload); XCTAssertGreaterThan(body.font.pointSize, 17);
             XCTAssertTrue(title.adjustsFontForContentSizeCategory); XCTAssertTrue(body.adjustsFontForContentSizeCategory);
             XCTAssertGreaterThan(text.bounds.size.height, 0); XCTAssertGreaterThan(actions.bounds.size.height, 0);
+            [self attachGeometryBeforeContainment:@"panes" payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:result.view.bounds fullText:CGSizeZero fullTitle:CGSizeZero];
             XCTAssertTrue(CGRectContainsRect(result.view.bounds, text.frame)); XCTAssertTrue(CGRectContainsRect(result.view.bounds, actions.frame));
             XCTAssertLessThanOrEqual(CGRectGetMaxY(text.frame), CGRectGetMinY(actions.frame));
             CGSize fullText = [body sizeThatFits:CGSizeMake(body.bounds.size.width, CGFLOAT_MAX)];
@@ -190,9 +270,11 @@
             CGFloat endpointHeight = body.font.lineHeight;
             CGRect beginning = CGRectMake(fullBody.origin.x, fullBody.origin.y, fullBody.size.width, endpointHeight);
             [text scrollRectToVisible:beginning animated:NO];
+            [self attachGeometryBeforeContainment:@"beginning" payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:beginning fullText:fullText fullTitle:CGSizeZero];
             XCTAssertTrue(CGRectContainsRect(text.bounds, beginning));
             CGRect ending = CGRectMake(fullBody.origin.x, CGRectGetMaxY(fullBody)-endpointHeight, fullBody.size.width, endpointHeight);
             [text scrollRectToVisible:ending animated:NO];
+            [self attachGeometryBeforeContainment:@"ending" payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:ending fullText:fullText fullTitle:CGSizeZero];
             XCTAssertTrue(CGRectContainsRect(text.bounds, ending));
             CGPoint readableEnding = text.contentOffset;
             NSArray *identifiers = completePayload == website ? @[@"history.result.open", @"history.result.copy", @"history.result.cancel"] : @[@"history.result.copy", @"history.result.cancel"];
@@ -204,6 +286,7 @@
                 CGRect rect = [button convertRect:button.bounds toView:actions];
                 XCTAssertGreaterThanOrEqual(rect.size.height, 44);
                 [actions scrollRectToVisible:rect animated:NO];
+                [self attachGeometryBeforeContainment:identifier payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:rect fullText:fullText fullTitle:fullTitle];
                 XCTAssertTrue(CGRectContainsRect(actions.bounds, rect));
                 XCTAssertTrue(CGPointEqualToPoint(text.contentOffset, readableEnding));
             }
