@@ -265,7 +265,9 @@ jobs:
       run: |
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
+        python3 scripts/settings_build_provenance.py begin tv
         python3 -u scripts/run_bounded.py 435 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherTV -configuration Debug -derivedDataPath build/TVTests -destination 'generic/platform=tvOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee tv-test-build.log
+        python3 scripts/settings_build_provenance.py finish tv
         python3 - <<'PYCODE'
         import plistlib
         from pathlib import Path
@@ -277,6 +279,7 @@ jobs:
       if: ${{ ((matrix.scope == 'tvos') && (!cancelled() && steps.tv_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 18
       run: |
+        export QRCATCHER_RUNTIME_PARENT_START="$(python3 -c 'import time; print(format(time.monotonic(), ".6f"))')"
         python3 scripts/owned_process_barrier.py --check
         bash scripts/run_tv_platform_tests.sh
     - name: Stop TV simulator before phone and iPad tests
@@ -292,11 +295,14 @@ jobs:
       run: |
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
+        if [[ "$EVIDENCE_SCOPE" == watchos ]]; then python3 scripts/settings_build_provenance.py begin watch; fi
         python3 -u scripts/run_bounded.py 435 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcherWatch -configuration Debug -derivedDataPath build/WatchTests -destination 'generic/platform=watchOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee watch-test-build.log
+        if [[ "$EVIDENCE_SCOPE" == watchos ]]; then python3 scripts/settings_build_provenance.py finish watch; fi
     - name: Execute actual Watch local decode history and native UI
       if: ${{ (startsWith(matrix.scope, 'watchos') && (!cancelled() && steps.watch_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 22
       run: |
+        export QRCATCHER_RUNTIME_PARENT_START="$(python3 -c 'import time; print(format(time.monotonic(), ".6f"))')"
         python3 scripts/owned_process_barrier.py --check
         python3 -u scripts/run_watch_platform_tests.py
     - name: Stop Watch simulator before phone and iPad matrix

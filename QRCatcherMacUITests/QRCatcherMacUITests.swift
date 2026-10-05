@@ -146,6 +146,91 @@ final class QRCatcherMacUITests: XCTestCase {
         app.buttons["mac.import"].click()
         fileDialog(path: root.appendingPathComponent("Tests/Fixtures/\(name).png").path, button: "Read QR Code")
     }
+    private func supportingTextLayout(locale: String, count: Int, phase: String) throws {
+        let chinese = locale == "zh-Hans"
+        let policy = chinese ? "只有点击「在浏览器中打开」才会打开链接。" : "Links open only when you choose Open in Browser."
+        let saved = chinese ? "本机已保存 \(count) 条记录" : "\(count) saved on this Mac"
+        let window = app.windows["main"]
+        if phase == "minimum-long-content" {
+            XCTAssertEqual(window.frame.width, 760, accuracy: 2)
+            XCTAssertLessThanOrEqual(window.frame.width, 800)
+            XCTAssertLessThanOrEqual(window.frame.height, 580)
+        }
+        let detail = app.groups["mac.pane.result"], history = app.groups["mac.pane.history"]
+        let scroll = detail.scrollViews.firstMatch
+        let query = detail.staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", policy, policy))
+        XCTAssertEqual(query.count, 1)
+        let footer = query.firstMatch
+        // Native scrolling is bounded and only reveals the existing result pane.
+        // It does not activate a control or invent a hit point.
+        for _ in 0..<3 where !footer.isHittable || !scroll.frame.contains(footer.frame) {
+            scroll.scroll(byDeltaX: 0, deltaY: -400)
+        }
+        let bodyFont = NSFont.preferredFont(forTextStyle: .body)
+        var rows: [[String: Any]] = []
+        func rect(_ value: CGRect) -> [Double] { [Double(value.minX), Double(value.minY), Double(value.width), Double(value.height)] }
+        for (role, pane, text) in [("link-policy", detail, policy), ("saved-count", history, saved)] {
+            let matches = pane.staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", text, text))
+            XCTAssertEqual(matches.count, 1, "Exact supporting text must remain independently accessible")
+            let element = matches.firstMatch
+            XCTAssertTrue(element.exists); XCTAssertTrue(element.isHittable)
+            XCTAssertEqual((element.value as? String) ?? element.label, text)
+            let frame = element.frame
+            XCTAssertTrue([frame.minX, frame.minY, frame.width, frame.height].allSatisfy { $0.isFinite })
+            XCTAssertGreaterThan(frame.width, 0); XCTAssertGreaterThan(frame.height, 0)
+            XCTAssertTrue(window.frame.contains(frame)); XCTAssertTrue(pane.frame.contains(frame))
+            if role == "link-policy" { XCTAssertTrue(scroll.frame.contains(frame)) }
+            let expected = (text as NSString).boundingRect(with: NSSize(width: frame.width, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: bodyFont])
+            XCTAssertGreaterThanOrEqual(frame.height + 1, ceil(expected.height), "Body-size text must wrap without clipping")
+            rows.append(["role": role, "text": text, "frame": rect(frame), "body_measurement_height": Double(expected.height),
+                         "reference_body_font": bodyFont.fontName, "reference_body_point_size": Double(bodyFont.pointSize)])
+        }
+        let report: [String: Any] = ["locale": locale, "phase": phase, "case": name, "window": rect(window.frame), "roles": rows,
+                                   "contrast_qualified": false, "reference_font_is_resolved_element_font": false]
+        let data = try JSONSerialization.data(withJSONObject: report, options: .sortedKeys)
+        XCTAssertLessThanOrEqual(data.count, 4096)
+        print("MAC_SUPPORTING_TEXT_LAYOUT", String(decoding: data, as: UTF8.self))
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+        attachment.name = "mac-supporting-text-layout"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func pasteLongReadabilityPayload(_ payload: String) throws {
+        let generator = try XCTUnwrap(CIFilter(name: "CIQRCodeGenerator"))
+        generator.setValue(Data(payload.utf8), forKey: "inputMessage")
+        generator.setValue("M", forKey: "inputCorrectionLevel")
+        let code = try XCTUnwrap(generator.outputImage).transformed(by: CGAffineTransform(scaleX: 6, y: 6))
+        let cg = try XCTUnwrap(CIContext().createCGImage(code, from: code.extent))
+        NSPasteboard.general.clearContents()
+        XCTAssertTrue(NSPasteboard.general.writeObjects([NSImage(cgImage: cg, size: .zero)]))
+        app.buttons["mac.paste"].click()
+        let value = app.staticTexts["mac.payload"]
+        let exact = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in ((value.value as? String) ?? value.label) == payload }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [exact], timeout: 15), .completed)
+        XCTAssertEqual((value.value as? String) ?? value.label, payload)
+    }
+
+    private func resizeToMinimumReadabilityWindow() -> CGRect {
+        let window = app.windows["main"]
+        let original = window.frame
+        let right = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
+        right.click(forDuration: 0.3, thenDragTo: right.withOffset(CGVector(dx: min(0, 760 - window.frame.width), dy: 0)))
+        let bottom = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(CGVector(dx: 0, dy: -1))
+        bottom.click(forDuration: 0.3, thenDragTo: bottom.withOffset(CGVector(dx: 0, dy: min(0, 520 - window.frame.height))))
+        XCTAssertLessThanOrEqual(window.frame.width, 800)
+        XCTAssertLessThanOrEqual(window.frame.height, 580)
+        return original
+    }
+
+    private func restoreReadabilityWindow(_ original: CGRect) {
+        let window = app.windows["main"]
+        let right = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
+        right.click(forDuration: 0.3, thenDragTo: right.withOffset(CGVector(dx: original.width - window.frame.width, dy: 0)))
+        let bottom = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1)).withOffset(CGVector(dx: 0, dy: -1))
+        bottom.click(forDuration: 0.3, thenDragTo: bottom.withOffset(CGVector(dx: 0, dy: original.height - window.frame.height)))
+        XCTAssertEqual(window.frame.width, original.width, accuracy: 2)
+        XCTAssertEqual(window.frame.height, original.height, accuracy: 2)
+    }
     private func capturePixels(_ name: String) throws {
         let png = XCUIScreen.main.screenshot().pngRepresentation
         let lossless = ["mac-before-resize", "mac-minimum-window", "mac-before-export", "mac-pasted-url"].contains(name)
@@ -425,6 +510,7 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.click()
         XCTAssertTrue(app.buttons["mac.copy"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["mac.copy"].label, "复制")
+        try supportingTextLayout(locale: "zh-Hans", count: 1, phase: "full")
         try screenshot("mac-chinese-reopened")
         app.buttons["mac.privacy"].click()
         let body = app.staticTexts["privacy.offlineBody"]
@@ -438,6 +524,15 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertTrue(text.contains("系统 iCloud 同步"))
         try screenshot("mac-chinese-policy")
         app.buttons["完成"].firstMatch.click()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in self.app.sheets.count == 0 && self.app.dialogs.count == 0 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
+        let originalWindow = resizeToMinimumReadabilityWindow()
+        let longText = String(repeating: "完整保留二维码内容，支持中文和 English，并且仍能阅读说明与保存数量。", count: 6)
+        try pasteLongReadabilityPayload(longText)
+        try supportingTextLayout(locale: "zh-Hans", count: 2, phase: "minimum-long-content")
+        app.buttons["mac.copy"].click()
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), longText)
+        restoreReadabilityWindow(originalWindow)
     }
 
     func testNativeWindowResizeKeepsFullActionTitles() throws {
@@ -449,6 +544,7 @@ final class QRCatcherMacUITests: XCTestCase {
         let before = window.frame
         app.buttons["mac.copy"].click()
         try recordFixedASCIIResult("full-before-resize", modalHistory: "no file panel opened in this process")
+        try supportingTextLayout(locale: "en", count: 1, phase: "full")
         try screenshot("mac-before-resize")
         let right = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
         right.click(forDuration: 0.3, thenDragTo: right.withOffset(CGVector(dx: -264, dy: 0)))
@@ -473,6 +569,11 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "https://example.com/qrcatcher?source=golden")
         try recordFixedASCIIResult("narrow-after-resize", modalHistory: "no file panel opened in this process")
         try screenshot("mac-minimum-window")
+        let longText = String(repeating: "Keep the full QR result readable alongside its safety instruction and saved-history count. ", count: 4)
+        try pasteLongReadabilityPayload(longText)
+        try supportingTextLayout(locale: "en", count: 2, phase: "minimum-long-content")
+        app.buttons["mac.copy"].click()
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), longText)
     }
 
     func testInvalidImageCancelAndCameraAbsence() throws {

@@ -200,6 +200,12 @@ def export(scope):
         try: retain(pending, cap=1024)
         except (OSError, ValueError) as error: summary['errors'].append(str(error))
 
+    fixture_pending = Path('build/fixture-query-inflight.json')
+    if fixture_pending.exists() or fixture_pending.is_symlink():
+        summary['errors'].append('Fixture container query completion remains unconfirmed')
+        try: retain(fixture_pending, cap=2048)
+        except (OSError, ValueError) as error: summary['errors'].append(str(error))
+
     # Retain each row's own compact diagnostics once. No raw xcresult or broad
     # runtime directory copying; known result/frame identities are checked below.
     diagnostic_json = ['runtime.json', 'optional-simulator.json', 'ui-cases.json', 'runner-bindings.json',

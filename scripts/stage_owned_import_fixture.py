@@ -4,10 +4,16 @@ Never write Photos databases, another app container, personal files or Release.
 """
 import hashlib,json,plistlib,subprocess,sys,uuid
 from pathlib import Path
+from fixture_query_guard import query_guard
 udid=str(uuid.UUID(sys.argv[1])).upper()
 app_id='100mango.QRCatcher'
 def container(kind):
-    path=Path(subprocess.check_output(['xcrun','simctl','get_app_container',udid,app_id,kind],text=True,timeout=30).strip())
+    command=['xcrun','simctl','get_app_container',udid,app_id,kind]
+    # Preserve the existing limit and inherited process group. The pending
+    # marker survives a kill by the enclosing owner or the standalone step.
+    with query_guard(command):
+        output=subprocess.check_output(command,text=True,timeout=30)
+    path=Path(output.strip())
     assert path.is_dir() and not path.is_symlink()
     return path
 info=plistlib.loads((container('app')/'Info.plist').read_bytes())

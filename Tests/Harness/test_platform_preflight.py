@@ -14,7 +14,12 @@ class PlatformPreflightTests(unittest.TestCase):
         for name,block in named.items():
             if 'run_bounded.py' in block or 'run_watch_platform_tests.py' in block or 'run_vision_ui_cases.py' in block or 'run_tv_platform_tests.sh' in block or 'run_ios_platform_ui.sh' in block:
                 self.assertIn("env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true'",block)
-                self.assertEqual(block.split('      run: |\n',1)[1].splitlines()[0].strip(),'python3 scripts/owned_process_barrier.py --check')
+                lines=block.split('      run: |\n',1)[1].splitlines()
+                if lines[0].strip().startswith('export QRCATCHER_RUNTIME_PARENT_START='):
+                    # Only the exact read-only initial clock sample may precede the guard.
+                    self.assertEqual(lines[0].strip(),"export QRCATCHER_RUNTIME_PARENT_START=\"$(python3 -c 'import time; print(format(time.monotonic(), \".6f\"))')\"")
+                    self.assertEqual(lines[1].strip(),'python3 scripts/owned_process_barrier.py --check')
+                else:self.assertEqual(lines[0].strip(),'python3 scripts/owned_process_barrier.py --check')
         for platform,name in [('VISION','Stop the Vision simulator before other platform tests'),('TV','Stop TV simulator before phone and iPad tests'),('WATCH','Stop Watch simulator before phone and iPad matrix')]:
             self.assertIn("env."+platform+"_SIZE_CLEANUP_UNCONFIRMED != 'true'",named[name])
         text=(ROOT/'scripts/run_tv_platform_tests.sh').read_text()

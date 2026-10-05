@@ -3,6 +3,7 @@ import json,os,sys
 from pathlib import Path
 from atomic_json import write_json
 
+SETTINGS_DISCOVERY_FENCE_VERSION = 1
 KEY='QRCATCHER_OWNED_CLEANUP_UNCONFIRMED'
 PATH_KEY='QRCATCHER_OWNED_PROCESS_BARRIER'
 
@@ -20,6 +21,14 @@ def blocked(command=None):
     try:
         path=barrier_path()
         if path is not None and (path.exists() or path.is_symlink()):return True
+        root=Path(os.environ.get('GITHUB_WORKSPACE',Path.cwd())).resolve()
+        fixture_pending=root/'build'/'fixture-query-inflight.json'
+        if fixture_pending.exists() or fixture_pending.is_symlink():return True
+        discovery=sys.modules.get('settings_discovery_fence')
+        discovery_active=discovery is not None and discovery.active_claim_exists()
+        discovery_pending=root/'build'/'settings-discovery-inflight.json'
+        if discovery_active and not discovery.active_claim_is_current(command):return True
+        if not discovery_active and (discovery_pending.exists() or discovery_pending.is_symlink()):return True
         # A claimed latch disappearing is uncertainty, never permission. The
         # controller's held identity must be consulted before path existence.
         controller=sys.modules.get('vision_command_fence')

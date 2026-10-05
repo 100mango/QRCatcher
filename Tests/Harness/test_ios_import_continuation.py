@@ -95,7 +95,7 @@ class ContinuationShellTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary).resolve(); (work / 'scripts').mkdir(); (work / 'bin').mkdir()
             for name in ['run_ios_platform_ui.sh', 'run_bounded.py', 'watch_process.py', 'owned_process_group.py', 'owned_process_barrier.py',
-                         'atomic_json.py', 'stage_owned_import_fixture.py', 'ios_import_continuation.py']:
+                         'atomic_json.py', 'stage_owned_import_fixture.py', 'fixture_query_guard.py', 'ios_import_continuation.py']:
                 shutil.copyfile(ROOT / 'scripts' / name, work / 'scripts' / name)
             products = work / 'build/iOS/Build/Products/Debug-iphonesimulator'
             app = products / 'QRCatcher.app'; runner = products / 'QRCatcherUITests-Runner.app'; app.mkdir(parents=True); runner.mkdir()

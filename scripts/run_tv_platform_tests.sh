@@ -9,6 +9,7 @@ assert rows,'No installed available tvOS 27 simulator was discovered'
 print(next((d for d in rows if '4K' in d['name']),rows[0])['udid'])
 PY
 )
+export TV_SIMULATOR_ID="$DEVICE"
 echo "TV_SIMULATOR_ID=$DEVICE" >> "$GITHUB_ENV"
 python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$DEVICE"
 python3 -u scripts/run_bounded.py 300 xcrun simctl bootstatus "$DEVICE" -b
@@ -57,6 +58,22 @@ set +e
 "${BASE[@]}" -only-testing:QRCatcherTVUITests/QRCatcherTVUITests/testExplicitlyRevokedPhotosRecovery -resultBundlePath TVRevokedUIResults.xcresult | tee tv-revoked-test.log
 REVOKED_EXIT=${PIPESTATUS[0]}
 set -e
+# Observe Settings only after all ordinary flows, on this still-owned device.
+# This read-only diagnostic never substitutes for the failed real OS-size gate.
+python3 scripts/owned_process_barrier.py --check
+if [ "$SIZE_PROBE_EXIT" -eq 2 ] && python3 scripts/settings_build_provenance.py unsupported tv "$DEVICE"; then
+  set +e
+  bash scripts/run_settings_discovery_fenced.sh tv "$DEVICE" "$QRCATCHER_RUNTIME_PARENT_START"
+  DISCOVERY_EXIT=$?
+  set -e
+  if [ "$DISCOVERY_EXIT" -ne 2 ]; then
+    printf 'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED=true\n' >> "$GITHUB_ENV"
+    # Do not start another interpreter after an unresolved controller exit.
+    (umask 077; set -o noclobber; printf '{"blocked":true,"operation":{"state":"settings_discovery_parent_unresolved","exit":126,"cleanup_confirmed":false}}\n' > build/owned-process-cleanup.json) 2>/dev/null || true
+    exit 126
+  fi
+  python3 scripts/owned_process_barrier.py --check
+fi
 if [ "$ORIGINAL_EXIT" -ne 0 ]; then exit "$ORIGINAL_EXIT"; fi
 if [ "$REVOKED_EXIT" -ne 0 ]; then exit "$REVOKED_EXIT"; fi
 exit "$SIZE_PROBE_EXIT"

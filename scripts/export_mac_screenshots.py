@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 """Bounded native XCTest evidence. No app binaries or full xcresult upload."""
 import hashlib,json,os,pathlib,struct,subprocess
+def validate_supporting_layout_receipt(data):
+ if len(data)>4096:raise ValueError('Supporting text receipt exceeds 4 KiB')
+ value=json.loads(data)
+ if value.get('locale') not in {'en','zh-Hans'} or value.get('phase') not in {'full','minimum-long-content'}:raise ValueError('Unknown supporting text checkpoint')
+ if value.get('contrast_qualified') is not False or value.get('reference_font_is_resolved_element_font') is not False:raise ValueError('Unsupported native contrast/font claim')
+ rows=value.get('roles')
+ if not isinstance(rows,list) or [row.get('role') for row in rows]!=['link-policy','saved-count']:raise ValueError('Missing supporting text roles')
+ expected_policy={'en':'Links open only when you choose Open in Browser.','zh-Hans':'只有点击「在浏览器中打开」才会打开链接。'}[value['locale']]
+ count=1 if value['phase']=='full' else 2
+ expected_count=f'{count} saved on this Mac' if value['locale']=='en' else f'本机已保存 {count} 条记录'
+ if [row.get('text') for row in rows]!=[expected_policy,expected_count]:raise ValueError('Changed or truncated supporting strings')
+ return value
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes']['macos']
 out=pathlib.Path('build/mac-evidence');out.mkdir(parents=True,exist_ok=True)
 barrier=pathlib.Path('build/owned-process-cleanup.json')
@@ -57,6 +69,12 @@ for result,label in [('MacSandboxResults.xcresult','sandbox'),('MacTestResults.x
    data=path.read_bytes();assert len(data)<=64*1024
    count=len(list(out.glob('*-audit-*.txt')))
    (out/f'{label}-audit-{count+1}.txt').write_bytes(data);continue
+  if 'mac-supporting-text-layout' in text:
+   data=path.read_bytes();receipt=validate_supporting_layout_receipt(data)
+   filename=f'{label}-supporting-text-{receipt["locale"]}-{receipt["phase"]}.json'
+   if len(list(out.glob('*-supporting-text-*.json')))>=4:raise ValueError('Supporting text evidence exceeds four bounded receipts')
+   if (out/filename).exists():raise ValueError('Duplicate supporting text checkpoint')
+   (out/filename).write_bytes(data);continue
   if not name:continue
   if name=='mac-failure':
    if first_failure_retained:continue

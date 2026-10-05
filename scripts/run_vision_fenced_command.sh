@@ -12,7 +12,7 @@ case "${EVIDENCE_SCOPE:-}" in visionos_photos|visionos_files|visionos_chinese|vi
 [[ "${PWD:-}" == "${GITHUB_WORKSPACE:-}" && "$PWD" == "$(builtin pwd -P)" ]]
 [[ -d build && ! -L build ]]
 LATCH='build/vision-command-inflight.json'
-if [[ "${QRCATCHER_OWNED_CLEANUP_UNCONFIRMED:-}" == true || -e build/owned-process-cleanup.json || -L build/owned-process-cleanup.json || -e "$LATCH" || -L "$LATCH" ]]; then
+if [[ "${QRCATCHER_OWNED_CLEANUP_UNCONFIRMED:-}" == true || -e build/owned-process-cleanup.json || -L build/owned-process-cleanup.json || -e "$LATCH" || -L "$LATCH" || -e build/fixture-query-inflight.json || -L build/fixture-query-inflight.json || -e build/settings-discovery-inflight.json || -L build/settings-discovery-inflight.json ]]; then
     printf 'VISION_FENCE_BLOCKED_EXISTING_UNCERTAINTY\n'
     exit 126
 fi

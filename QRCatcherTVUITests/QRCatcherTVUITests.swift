@@ -307,3 +307,369 @@ final class QRCatcherTVUITests: XCTestCase {
     // Do not query AX or record a throwable assertion before this stop.
     abort()
 }
+
+// Explicitly selected, read-only diagnostic. It never selects a text-size value.
+@MainActor final class QRCatcherTVSettingsDiscovery: XCTestCase {
+    private var navigationSteps: [[String: Any]] = []
+    private var focusSteps: [[String: Any]] = []
+    private var lastScreenshot: XCUIScreenshot?
+    private var settings: XCUIApplication?
+    private var interruptionGuard: NSObjectProtocol?
+    private var report: [String: Any] = [:]
+    private var began = ProcessInfo.processInfo.systemUptime
+    private enum Stop: Error { case discovery(String) }
+
+    override func tearDownWithError() throws {
+        defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
+        settings?.terminate()
+    }
+
+    private func checkTime() throws {
+        guard (ProcessInfo.processInfo.systemUptime - began) < 45 else { throw Stop.discovery("Read-only observation deadline") }
+    }
+    private func checkScreen(_ app: XCUIApplication) throws {
+        try checkTime()
+        guard app.state == .runningForeground else { throw Stop.discovery("Settings is not the foreground application") }
+        if app.alerts.count != 0 { QRStopForUnexpectedInterruption(app.alerts.firstMatch) }
+    }
+    private func phase(_ name: String) {
+        let value: [String: Any] = ["phase": name, "source": report["source"] ?? "missing", "device": report["device"] ?? "missing",
+            "nonce": report["nonce"] ?? "missing", "elapsed_seconds": ProcessInfo.processInfo.systemUptime - began,
+            "setting_change_attempted": false]
+        if let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+           let text = String(data: data, encoding: .utf8) { print("QRCATCHER_SETTINGS_DISCOVERY_PHASE " + text); fflush(stdout) }
+    }
+    private func readControls(_ app: XCUIApplication) throws -> [[String: Any]] {
+        var controls: [[String: Any]] = []
+        for type in [XCUIElement.ElementType.slider, .button, .staticText] {
+            try checkTime()
+            let elements = app.descendants(matching: type)
+            for index in 0..<min(elements.count, type == .slider ? 8 : 12) {
+                try checkTime()
+                let element = elements.element(boundBy: index)
+                controls.append(["type": type.rawValue, "identifier": String(element.identifier.prefix(64)),
+                    "label": String(element.label.prefix(128)), "value": String(String(describing: element.value ?? "").prefix(128)),
+                    "enabled": element.isEnabled, "selected": element.isSelected])
+            }
+        }
+        return controls
+    }
+    // Route labels come from Apple's public guides, not a presumed Settings AX schema.
+    // Every role, value, geometry and title is observed afresh; unknown structure stops.
+    private struct ObservedNode {
+        let snapshot: XCUIElementSnapshot
+        let path: [Int]
+        let inControl: Bool
+    }
+    private struct NavigationObservation {
+        let appFrame: CGRect
+        let nodes: [ObservedNode]
+    }
+    private func validFrame(_ frame: CGRect, inside bounds: CGRect) -> Bool {
+        let values = [frame.minX, frame.minY, frame.maxX, frame.maxY,
+                      bounds.minX, bounds.minY, bounds.maxX, bounds.maxY]
+        return values.allSatisfy { $0.isFinite } && frame.width > 0 && frame.height > 0 &&
+            bounds.width > 0 && bounds.height > 0 && bounds.contains(frame)
+    }
+    private func frameReceipt(_ frame: CGRect) -> [Double] {
+        [Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)]
+    }
+    private func emptyValue(_ value: Any?) -> Bool {
+        guard let value else { return true }
+        guard let text = value as? String else { return false }
+        return text.isEmpty
+    }
+    private func isContainer(_ type: XCUIElement.ElementType) -> Bool {
+        [.application, .window, .other, .scrollView, .table, .collectionView].contains(type)
+    }
+    private func observeNavigation(_ app: XCUIApplication) throws -> NavigationObservation {
+        try checkScreen(app)
+        let root = try app.snapshot()
+        guard validFrame(root.frame, inside: root.frame) else { throw Stop.discovery("Invalid Settings frame") }
+        var nodes: [ObservedNode] = []
+        func visit(_ node: XCUIElementSnapshot, _ path: [Int], _ inControl: Bool) throws {
+            try checkTime()
+            guard nodes.count < 256, path.count <= 20 else { throw Stop.discovery("Settings tree exceeds navigation bound") }
+            if [.alert, .sheet, .dialog].contains(node.elementType) {
+                throw Stop.discovery("Unexpected modal structure; no UI action")
+            }
+            nodes.append(ObservedNode(snapshot: node, path: path, inControl: inControl))
+            let blocksTitle = inControl || (!isContainer(node.elementType) && node.elementType != .navigationBar)
+            for (index, child) in node.children.enumerated() {
+                try visit(child, path + [index], blocksTitle)
+            }
+        }
+        try visit(root, [], false)
+        try checkScreen(app)
+        return NavigationObservation(appFrame: root.frame, nodes: nodes)
+    }
+    private func whollyVisible(_ node: ObservedNode, _ observation: NavigationObservation) -> Bool {
+        let frame = node.snapshot.frame
+        guard validFrame(frame, inside: observation.appFrame) else { return false }
+        // Hittability only proves a hit point. Require the entire element to fit
+        // every observed ancestor viewport, including nested clipping containers.
+        let viewports = observation.nodes.filter {
+            $0.path.count < node.path.count && node.path.starts(with: $0.path) &&
+                [.scrollView, .table, .collectionView].contains($0.snapshot.elementType)
+        }
+        guard viewports.count <= 20 else { return false }
+        return viewports.allSatisfy { validFrame(frame, inside: $0.snapshot.frame) }
+    }
+    private func titleCandidates(_ title: String, _ observation: NavigationObservation) -> [ObservedNode] {
+        // Preserve absent versus ambiguous/present. Do not discard a competing
+        // title just because it is duplicated, clipped or otherwise unverifiable.
+        // Prefer a semantic navigation bar; otherwise accept only standalone text
+        // outside every control. A row's static label cannot verify a pane.
+        let bars = observation.nodes.filter { $0.snapshot.elementType == .navigationBar && $0.snapshot.label == title }
+        return bars.isEmpty ? observation.nodes.filter {
+            $0.snapshot.elementType == .staticText && $0.snapshot.label == title && !$0.inControl
+        } : bars
+    }
+    private func observedTitle(_ title: String, _ observation: NavigationObservation) throws -> ObservedNode {
+        let matches = titleCandidates(title, observation)
+        guard matches.count == 1, let match = matches.first,
+              whollyVisible(match, observation) else {
+            throw Stop.discovery("Missing, ambiguous or clipped pane title: " + title)
+        }
+        return match
+    }
+    private func liveElement(_ app: XCUIApplication, _ node: ObservedNode) throws -> XCUIElement {
+        let captured = node.snapshot
+        let query = app.descendants(matching: captured.elementType).matching(NSPredicate(format: "label == %@", captured.label))
+        guard query.count == 1 else { throw Stop.discovery("Live control/title identity is ambiguous") }
+        let element = query.element(boundBy: 0)
+        guard element.exists, element.identifier == captured.identifier, element.label == captured.label,
+              element.elementType == captured.elementType, element.frame == captured.frame, element.isHittable else {
+            throw Stop.discovery("Control/title changed or is not hittable")
+        }
+        return element
+    }
+    private func verifyPane(_ title: String, _ app: XCUIApplication,
+                            _ observation: NavigationObservation) throws {
+        let heading = try observedTitle(title, observation)
+        _ = try liveElement(app, heading)
+        // No other documented route title may be exposed as a current pane title.
+        for other in routeTitles where other != title {
+            if !titleCandidates(other, observation).isEmpty {
+                throw Stop.discovery("Multiple route pane titles are exposed")
+            }
+        }
+        try checkScreen(app)
+    }
+    private func safeRow(_ node: ObservedNode, _ observation: NavigationObservation) throws {
+        let row = node.snapshot
+        guard [.button, .cell].contains(row.elementType), !node.inControl,
+              row.isEnabled, !row.isSelected, emptyValue(row.value), !row.label.isEmpty,
+              row.label.utf8.count <= 128, row.identifier.utf8.count <= 128,
+              whollyVisible(node, observation) else {
+            throw Stop.discovery("Navigation row is disabled, selected, valued, nested, unknown or offscreen")
+        }
+        // A button/cell that contains any interactive/unknown child is not admitted.
+        // Static labels and images are allowed only with no value or selected state.
+        let descendants = observation.nodes.filter { $0.path.count > node.path.count && $0.path.starts(with: node.path) }
+        guard descendants.count <= 16, descendants.allSatisfy({
+            [.other, .staticText, .image].contains($0.snapshot.elementType) &&
+                emptyValue($0.snapshot.value) && !$0.snapshot.isSelected
+        }) else { throw Stop.discovery("Navigation row contains adjustment, value or unknown descendants") }
+        // Reject overlapping controls, including a separate slider/switch sibling.
+        for other in observation.nodes where other.path != node.path && !other.path.starts(with: node.path) {
+            let type = other.snapshot.elementType
+            if !isContainer(type) && ![.navigationBar, .staticText, .image].contains(type) &&
+                other.snapshot.frame.intersects(row.frame) {
+                throw Stop.discovery("Another control overlaps navigation geometry")
+            }
+        }
+    }
+    private func navigationRow(_ title: String, _ observation: NavigationObservation) throws -> ObservedNode {
+        let matches = observation.nodes.filter {
+            [.button, .cell].contains($0.snapshot.elementType) && $0.snapshot.label == title
+        }
+        guard matches.count == 1, let row = matches.first else {
+            throw Stop.discovery("Documented navigation row is missing or ambiguous: " + title)
+        }
+        try safeRow(row, observation)
+        return row
+    }
+    private func rowReceipt(_ row: ObservedNode) -> [String: Any] {
+        ["role": row.snapshot.elementType == .button ? "button" : "cell",
+         "label": row.snapshot.label, "identifier": row.snapshot.identifier,
+         "frame": frameReceipt(row.snapshot.frame), "value_empty": true,
+         "enabled": true, "selected": false, "adjustment_descendants": false]
+    }
+    private func captureKnownPane(_ app: XCUIApplication, title: String) throws {
+        try checkScreen(app)
+        // Keep only the most recent safely observed pane; one attachment total.
+        lastScreenshot = XCUIScreen.main.screenshot()
+        report["screenshot_pane"] = title
+        try checkTime()
+        report["hierarchy"] = String(decoding: app.debugDescription.utf8.prefix(4096), as: UTF8.self)
+        report["controls"] = try readControls(app)
+        report["last_observed_pane"] = title
+        try checkTime()
+    }
+    private func navigateDocumentedRoute(_ app: XCUIApplication) throws {
+        var pane = routeTitles[0]
+        var initial = try observeNavigation(app)
+        try verifyPane(pane, app, initial)
+        try captureKnownPane(app, title: pane)
+        for target in routeTitles.dropFirst() {
+            try checkTime()
+            initial = try observeNavigation(app)
+            try verifyPane(pane, app, initial)
+            let row = try navigationRow(target, initial)
+            _ = try liveElement(app, row)
+            var entry: [String: Any] = ["from": pane, "to": target,
+                "control": rowReceipt(row), "pane_frame": frameReceipt(initial.appFrame),
+                "state": "observed", "action": navigationAction]
+            navigationSteps.append(entry)
+            report["navigation_steps"] = navigationSteps
+            try activateNavigationRow(app, from: pane, to: target, observed: row)
+            entry = navigationSteps[navigationSteps.count - 1]
+            entry["state"] = "activation_returned"
+            navigationSteps[navigationSteps.count - 1] = entry
+            report["navigation_steps"] = navigationSteps
+            // No retries or guessed recovery. The old title must disappear and the
+            // destination must be a unique current title outside all controls.
+            let destination = try observeNavigation(app)
+            try verifyPane(target, app, destination)
+            entry["state"] = "destination_verified"
+            navigationSteps[navigationSteps.count - 1] = entry
+            report["navigation_steps"] = navigationSteps
+            pane = target
+            phase("destination_verified_" + String(navigationSteps.count))
+            try captureKnownPane(app, title: pane)
+        }
+        report["navigation_complete"] = true
+    }
+    private let routeTitles = ["Settings", "Accessibility", "Display", "Text Size"]
+    private let navigationAction = "focused_remote_select"
+    private var focusMoves = 0
+    private func activateNavigationRow(_ app: XCUIApplication, from pane: String,
+                                       to target: String, observed: ObservedNode) throws {
+        var seen: Set<String> = []
+        var lastDistance: CGFloat?
+        while true {
+            try checkTime()
+            let fresh = try observeNavigation(app)
+            try verifyPane(pane, app, fresh)
+            let row = try navigationRow(target, fresh)
+            guard row.snapshot.identifier == observed.snapshot.identifier,
+                  row.snapshot.elementType == observed.snapshot.elementType else {
+                throw Stop.discovery("Navigation target identity changed")
+            }
+            let element = try liveElement(app, row)
+            let focused = fresh.nodes.filter { $0.snapshot.hasFocus }
+            guard focused.count == 1, let current = focused.first else {
+                throw Stop.discovery("Focus is absent or ambiguous")
+            }
+            try safeRow(current, fresh)
+            let currentElement = try liveElement(app, current)
+            guard currentElement.hasFocus, currentElement.isEnabled,
+                  !currentElement.isSelected, emptyValue(currentElement.value) else {
+                throw Stop.discovery("Focus changed or became a value control")
+            }
+            if current.path == row.path {
+                guard element.hasFocus, element.isEnabled, !element.isSelected, emptyValue(element.value) else {
+                    throw Stop.discovery("Exact navigation target lost focus")
+                }
+                try checkScreen(app)
+                try checkTime()
+                guard element.hasFocus else { throw Stop.discovery("Focus changed immediately before Select") }
+                navigationSteps[navigationSteps.count - 1]["control"] = rowReceipt(row)
+                navigationSteps[navigationSteps.count - 1]["state"] = "activation_attempted"
+                report["navigation_steps"] = navigationSteps
+                phase("before_navigation_action_" + String(navigationSteps.count))
+                XCUIRemote.shared.press(.select)
+                return
+            }
+            guard focusMoves < 8 else { throw Stop.discovery("Total vertical focus movement bound reached") }
+            let currentFrame = current.snapshot.frame, targetFrame = row.snapshot.frame
+            let sameColumn = currentFrame.minX < targetFrame.midX && currentFrame.maxX > targetFrame.midX &&
+                targetFrame.minX < currentFrame.midX && targetFrame.maxX > currentFrame.midX
+            let downward = currentFrame.maxY <= targetFrame.minY
+            let upward = targetFrame.maxY <= currentFrame.minY
+            let distance = abs(currentFrame.midY - targetFrame.midY)
+            let identity = String(current.snapshot.elementType.rawValue) + "|" + current.snapshot.identifier + "|" + current.snapshot.label
+            guard sameColumn, downward || upward, seen.insert(identity).inserted,
+                  lastDistance == nil || distance < lastDistance! else {
+                throw Stop.discovery("Focus is not a progressing unambiguous vertical path")
+            }
+            lastDistance = distance
+            try checkScreen(app)
+            try checkTime()
+            guard currentElement.hasFocus else { throw Stop.discovery("Focus changed immediately before direction press") }
+            focusMoves += 1
+            focusSteps.append(["from": rowReceipt(current), "toward": target,
+                               "pane": pane, "pane_frame": frameReceipt(fresh.appFrame),
+                               "direction": downward ? "down" : "up",
+                               "state": "movement_attempted"])
+            report["focus_steps"] = focusSteps
+            phase("before_vertical_focus_" + String(focusMoves))
+            // Public momentary vertical focus input only. Re-observe actual focus
+            // before any further input; never Left/Right or repeat on uncertainty.
+            if downward { XCUIRemote.shared.press(.down) }
+            else { XCUIRemote.shared.press(.up) }
+        }
+    }
+    func testReadOnlyTextSizeSettingsDiscovery() throws {
+        continueAfterFailure = false
+        guard let raw = ProcessInfo.processInfo.environment["QRCATCHER_SETTINGS_DISCOVERY"],
+              raw.utf8.count <= 4096, let data = raw.data(using: .utf8),
+              let contract = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw XCTSkip("Read-only Settings discovery requires an explicit runner contract")
+        }
+        guard let bundle = contract["settings_bundle"] as? String, bundle.hasPrefix("com.apple."),
+              let source = contract["source"] as? String, source.range(of: "^[0-9a-f]{40}$", options: .regularExpression) != nil,
+              let device = contract["device"] as? String, UUID(uuidString: device) != nil,
+              let nonce = contract["nonce"] as? String, UUID(uuidString: nonce) != nil,
+              contract["platform"] as? String == "tv",
+              contract["discovery_protocol"] as? String == "bounded-settings-navigation-v1",
+              ProcessInfo.processInfo.environment["SIMULATOR_UDID"]?.uppercased() == device,
+              contract["setting_change_attempted"] as? Bool == false,
+              contract["system_propagation_qualified"] as? Bool == false else {
+            throw Stop.discovery("Source/device/Settings discovery contract failed before launch")
+        }
+        guard !ProcessInfo.processInfo.environment.keys.contains(where: { $0.contains("LAYOUT_STRESS") || $0.contains("LAYOUT_PROBE") }) else {
+            throw Stop.discovery("Trait override/probe is forbidden")
+        }
+        interruptionGuard = addUIInterruptionMonitor(withDescription: "Stop before every unexpected Settings interruption") { alert in
+            QRStopForUnexpectedInterruption(alert)
+        }
+        report = ["source": source, "device": device, "nonce": nonce, "platform": "tv", "settings_bundle": bundle,
+            "setting_change_attempted": false, "system_propagation_qualified": false,
+            "original_value_restorable": false, "setting_write_authorized": false,
+            "binary_source_binding_verified": false, "discovery_protocol": "bounded-settings-navigation-v1", "screenshot_attached": false,
+            "navigation_complete": false, "navigation_steps": [], "focus_steps": []]
+        let app = XCUIApplication(bundleIdentifier: bundle)
+        settings = app; began = ProcessInfo.processInfo.systemUptime
+        phase("before_settings_launch")
+        do {
+            app.launch()
+            phase("settings_launch_returned")
+            try navigateDocumentedRoute(app)
+            report["status"] = "settings_screen_observed"
+        } catch {
+            report["status"] = "observation_stopped"
+            report["reason"] = String(String(describing: error).prefix(512))
+        }
+        // Only verified navigation may have occurred; no size value was selected.
+        // Attach only the last previously captured safe pane. No AX work on stop.
+        if let lastScreenshot {
+            let attachment = XCTAttachment(screenshot: lastScreenshot)
+            attachment.name = "tv-settings-discovery"; attachment.lifetime = .keepAlways; add(attachment)
+            report["screenshot_attached"] = true
+        }
+        // A captured value is a candidate for later review, not restoration proof.
+        // No further AX/screenshot query after a stopped phase. Emit known facts.
+        var encoded = try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])
+        if encoded.count > 24 * 1024 {
+            report.removeValue(forKey: "controls"); report.removeValue(forKey: "hierarchy")
+            report["status"] = "observation_stopped"; report["reason"] = "Observation exceeds bounded receipt cap"
+            encoded = try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])
+        }
+        guard encoded.count <= 24 * 1024, let line = String(data: encoded, encoding: .utf8) else {
+            throw Stop.discovery("Read-only Settings receipt exceeded cap")
+        }
+        print("QRCATCHER_SETTINGS_DISCOVERY " + line); fflush(stdout)
+    }
+}

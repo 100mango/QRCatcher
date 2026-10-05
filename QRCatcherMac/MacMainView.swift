@@ -31,7 +31,7 @@ struct MacMainView: View {
                 Group {
                     if history.error != nil { Text("History unavailable") }
                     else { Text("\(history.items.count) saved on this Mac") }
-                }.font(.caption).foregroundStyle(.primary).padding()
+                }.font(.body).foregroundStyle(.primary).padding()
             }
             .background(MacPaneAccessibility(label: QRL("Saved QR history"), identifier: "mac.pane.history"))
             .navigationTitle("History")
@@ -126,7 +126,7 @@ private struct QRResultView: View {
                     }
                     Text(payload).font(.title3).textSelection(.enabled).frame(maxWidth: 600).accessibilityIdentifier("mac.payload")
                     MacResultActions(workspace: workspace, canOpen: QRPayload.safeWebURL(payload) != nil)
-                    Text("Links open only when you choose Open in Browser.").font(.caption).foregroundStyle(.primary)
+                    Text("Links open only when you choose Open in Browser.").font(.body).foregroundStyle(.primary)
                 } else {
                     Text("Use an image from Files, Photos or your clipboard. You can also drop an image here, or use an available camera.")
                         .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 400)

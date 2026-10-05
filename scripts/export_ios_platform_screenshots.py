@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Bounded synthetic phone/iPad evidence. Never uploads full xcresult archives."""
-import hashlib,json,os,pathlib,struct,subprocess
+import hashlib,json,os,pathlib,struct,subprocess,time
+from export_settings_discovery import export_settings
+export_started=time.monotonic()
 def required_alert_endpoints(mode):
  if mode=='scrolled':return {'phone-largest-history-alert-top','phone-largest-history-alert-end'}
  if mode=='unscrolled':return {'phone-largest-history-alert'}
@@ -39,6 +41,10 @@ barrier=pathlib.Path('build/owned-process-cleanup.json')
 if barrier.exists():
  assert not barrier.is_symlink() and barrier.stat().st_size<=2048
  (out/barrier.name).write_bytes(barrier.read_bytes())
+pending_fixture=pathlib.Path('build/fixture-query-inflight.json')
+if pending_fixture.exists() or pending_fixture.is_symlink():
+ if pending_fixture.is_symlink() or not pending_fixture.is_file() or pending_fixture.stat().st_size>2048:raise ValueError('Invalid pending fixture-query evidence')
+ (out/pending_fixture.name).write_bytes(pending_fixture.read_bytes())
 fixture=pathlib.Path('build/import-fixture/fixture.json')
 if fixture.is_file():
  data=fixture.read_bytes();assert len(data)<4096;(out/'owned-import-fixture.json').write_bytes(data)
@@ -151,6 +157,9 @@ expected_alert_results=[label for label in ['pro-max','SE3'] if not summary['res
 summary['missing_alert_endpoints']=missing_alert_endpoints(summary['alert_evidence_requirements'],summary['screenshots'],expected_alert_results)
 expected_import_pairs=[label for label in ['pro-max-imports','pro-max-files','SE3-imports','SE3-files'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
 summary['missing_import_audit_pairs']=missing_import_audit_pairs(summary['import_audit_pair_requirements'],summary['screenshots'],summary['import_audit_attachments'],expected_import_pairs)
+ordinary_summary_bytes=len((json.dumps(summary,indent=2)+'\n').encode())
+ordinary_used=sum(p.stat().st_size for p in out.iterdir())
+summary['settings_discovery']=export_settings(scope,out,limit-ordinary_used-ordinary_summary_bytes-8192,export_started)
 encoded=json.dumps(summary,indent=2)+'\n'
 assert len(encoded.encode())<=(128*1024 if scope.startswith('watchos_') else 512*1024)
 (out/'manifest.json').write_text(encoded)
