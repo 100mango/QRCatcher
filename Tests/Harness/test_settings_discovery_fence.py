@@ -41,11 +41,31 @@ class SettingsDiscoveryFenceTests(unittest.TestCase):
                         PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], PYTHONDONTWRITEBYTECODE='1')
         self.env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', None)
         self.env.pop('PYTHONPATH', None)
+        self.env['PYTHONOPTIMIZE'] = str(sys.flags.optimize)
         (self.root/'scripts/discover_native_settings.py').write_text(FIXTURE)
         self.stub = self.root/'bin/git'
         self.stub.write_text('#!'+sys.executable+'\nfrom pathlib import Path\nPath("called").write_text("yes")\nprint("'+'a'*40+'")\n')
         self.stub.chmod(0o755)
         self.latch = self.root/'build/settings-discovery-inflight.json'
+
+    def normalize_clock(self, reference=10000.0):
+        # A fresh Mac VM can have less than 1,200 seconds of uptime. Give
+        # this disposable fixture and every Python child the same positive
+        # reference point before simulating elapsed parent-step time. The
+        # production clock validation and all elapsed-time budgets stay intact.
+        self.clock_anchor_ns = time.monotonic_ns()
+        self.clock_reference = reference
+        clock = self.root / 'clock-double'; clock.mkdir()
+        (clock / 'sitecustomize.py').write_text('import os,time\n'
+            '_anchor=int(os.environ["QRCATCHER_TEST_SETTINGS_CLOCK_ANCHOR_NS"])\n'
+            '_reference=float(os.environ["QRCATCHER_TEST_SETTINGS_CLOCK_REFERENCE"])\n'
+            'time.monotonic=lambda:(time.monotonic_ns()-_anchor)/1000000000+_reference\n')
+        self.env.update(PYTHONPATH=str(clock),
+                        QRCATCHER_TEST_SETTINGS_CLOCK_ANCHOR_NS=str(self.clock_anchor_ns),
+                        QRCATCHER_TEST_SETTINGS_CLOCK_REFERENCE=str(self.clock_reference))
+
+    def clock_now(self):
+        return (time.monotonic_ns() - self.clock_anchor_ns) / 1000000000 + self.clock_reference
 
     def argv(self, platform='watch', origin=None):
         start = time.monotonic() if origin is None else origin
@@ -78,13 +98,54 @@ class SettingsDiscoveryFenceTests(unittest.TestCase):
         self.assertAlmostEqual(r['parent_deadline_monotonic']-float(r['parent_started_monotonic']),1080,places=6)
 
     def test_insufficient_original_parent_budget_never_spawns(self):
-        p=self.shell(origin=time.monotonic()-1200)
+        self.normalize_clock()
+        original = self.clock_now() - 1200
+        p=self.shell(origin=original)
         self.assertEqual(p.returncode,2,p.stdout+p.stderr)
         self.assertFalse((self.root/'called').exists()); self.assertFalse(self.latch.exists())
         r=json.loads((self.root/'build/settings-discovery-watch-fence.json').read_text())
         self.assertEqual(r['operations'],[])
         self.assertEqual(r['reason'],'insufficient_existing_parent_step_budget')
         self.assertEqual(r['required_admission_seconds'],210)
+        self.assertEqual(r['parent_started_monotonic'], format(original, '.6f'))
+        self.assertEqual(r['parent_deadline_monotonic'], float(format(original, '.6f')) + 1320)
+        self.assertGreater(r['remaining_parent_seconds'], 100)
+        self.assertLess(r['remaining_parent_seconds'], 121)
+
+    def test_fixture_clock_is_shared_and_keeps_real_elapsed_time(self):
+        self.normalize_clock()
+        before = self.clock_now()
+        p = subprocess.run([sys.executable, '-c', 'import time;print(time.monotonic());time.sleep(.02);print(time.monotonic())'],
+                           cwd=self.root, env=self.env, capture_output=True, text=True, timeout=4)
+        self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
+        first, last = map(float, p.stdout.splitlines())
+        self.assertLessEqual(before, first); self.assertLessEqual(last, self.clock_now())
+        self.assertGreaterEqual(last-first, .02)
+        self.assertGreaterEqual(first, 10000); self.assertLess(first, 10004)
+
+    def test_zero_original_clock_never_spawns_and_retains_latch(self):
+        # Zero is shell-syntax-valid, but still invalid in the real controller.
+        p=self.shell(origin=0)
+        self.assertEqual(p.returncode,126,p.stdout+p.stderr)
+        self.assertTrue(self.latch.exists()); self.assertFalse((self.root/'called').exists())
+        self.blocked_later()
+
+    def test_low_epoch_backdating_is_invalid_and_cannot_clear_latch(self):
+        # Reproduce a fresh-host epoch in the disposable clock. Explicitly
+        # continuing past the failed shell conditional models old Bash's
+        # errexit handling; the unchanged Python controller must fail closed.
+        self.normalize_clock(reference=100.0)
+        path = self.root/'scripts/run_settings_discovery_fenced.sh'
+        source = path.read_text()
+        check = '[[ "$PARENT_START" =~ ^[0-9]{1,12}([.][0-9]{1,9})?$ ]]'
+        self.assertEqual(source.count(check), 1)
+        path.write_text(source.replace(check, check + ' || :'))
+        p=self.shell(origin=self.clock_now()-1200)
+        self.assertEqual(p.returncode,126,p.stdout+p.stderr)
+        self.assertIn('SETTINGS_FENCE_CONTROLLER_UNCONFIRMED ValueError',p.stdout)
+        self.assertTrue(self.latch.exists()); self.assertFalse((self.root/'called').exists())
+        self.assertFalse((self.root/'build/settings-discovery-watch-fence.json').exists())
+        self.blocked_later()
 
     def test_future_clock_never_spawns_and_is_not_reset(self):
         p=self.shell(origin=time.monotonic()+50)
