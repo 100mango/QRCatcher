@@ -11,6 +11,9 @@ final class QRCatcherMacUITests: XCTestCase {
     private var interruptionGuard: NSObjectProtocol?
     private var folder: URL!
     private var payloadTransition: [String: Any]?
+    #if DEBUG
+    private var publicMetadataSession: PublicMetadataSession?
+    #endif
     private var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent() }
 
     override func setUpWithError() throws {
@@ -36,6 +39,9 @@ final class QRCatcherMacUITests: XCTestCase {
             XCTAssertEqual(control["file_mode"] as? Int, 0o600)
             app.launchEnvironment["QRCATCHER_SANDBOX_BOUNDARY"] = try XCTUnwrap(control["folder"] as? String)
         } else { app.launchEnvironment["QRCATCHER_TEST_STORE"] = folder.appendingPathComponent("coredata.sqlite").path }
+        #if DEBUG
+        preparePublicMetadataSessionIfRequested()
+        #endif
         dismissObservedRealityWidgetsCrash()
         app.launch(); verifyRunningApplication()
         XCTAssertTrue(app.buttons["mac.import"].waitForExistence(timeout: 20))
@@ -44,6 +50,9 @@ final class QRCatcherMacUITests: XCTestCase {
         defer { if let interruptionGuard { removeUIInterruptionMonitor(interruptionGuard) } }
 
         if (testRun?.failureCount ?? 0) > 0 { print(app.debugDescription); try? screenshot("mac-failure") }
+        #if DEBUG
+        publicMetadataSession?.board.clearContents(); publicMetadataSession?.board.releaseGlobally(); publicMetadataSession = nil
+        #endif
         app?.terminate(); if let folder { try? FileManager.default.removeItem(at: folder) }
     }
 
@@ -391,6 +400,181 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual(window.frame.width, original.width, accuracy: 2)
         XCTAssertEqual(window.frame.height, original.height, accuracy: 2)
     }
+    #if DEBUG
+    private struct PublicMetadataSession {
+        let token: String
+        let testCase: String
+        let checkpoints: [String]
+        let board: NSPasteboard
+        var sequence = 0
+    }
+    private func preparePublicMetadataSessionIfRequested() {
+        guard ProcessInfo.processInfo.environment["QRCATCHER_MAC_PUBLIC_METADATA_DIAGNOSTIC"] == "1", isSandboxedProduct else { return }
+        let selections = ["testNativeWindowResizeKeepsFullActionTitles": ["mac-before-resize", "mac-minimum-window"],
+                          "testChineseCriticalFlow": ["mac-chinese-reopened", "mac-chinese-policy"]]
+        let parts = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "_" }).map(String.init)
+        let matches = selections.keys.filter { parts.contains($0) }
+        guard matches.count == 1, let selected = matches.first, let checkpoints = selections[selected] else { return }
+        let token = UUID().uuidString
+        let board = NSPasteboard(name: NSPasteboard.Name(rawValue: "QRCatcher.MacPublicMetadata." + token))
+        board.clearContents()
+        publicMetadataSession = PublicMetadataSession(token: token, testCase: selected, checkpoints: checkpoints, board: board)
+        app.launchEnvironment["QRCATCHER_MAC_PUBLIC_METADATA_TOKEN"] = token
+        app.launchEnvironment["QRCATCHER_MAC_PUBLIC_METADATA_CASE"] = selected
+    }
+    private func collectPublicMetadataIfSelected(_ checkpoint: String) {
+        guard var session = publicMetadataSession, let index = session.checkpoints.firstIndex(of: checkpoint),
+              session.sequence < 6, index == session.sequence else { return }
+        session.sequence += 1; publicMetadataSession = session
+        let requestID = UUID().uuidString, before = ProcessInfo.processInfo.systemUptime
+        let request: [String: Any] = ["schema": 1, "token": session.token, "case": session.testCase,
+                                     "checkpoint": checkpoint, "sequence": session.sequence, "requestID": requestID, "uptime": before]
+        var result: [String: Any] = ["schema": 1, "token": session.token, "case": session.testCase, "checkpoint": checkpoint,
+                                    "sequence": session.sequence, "requestID": requestID, "auditQualified": false,
+                                    "contrastQualified": false, "sameState": "UNKNOWN", "reason": "missing-or-invalid-receipt"]
+        let generalBefore = NSPasteboard.general.changeCount // Scalar only; never transport clipboard contents.
+        let board = session.board
+        board.clearContents()
+        let requestType = NSPasteboard.PasteboardType(rawValue: "org.qrcatcher.mac-public-metadata.request")
+        let receiptType = NSPasteboard.PasteboardType(rawValue: "org.qrcatcher.mac-public-metadata.receipt")
+        if let data = try? JSONSerialization.data(withJSONObject: request, options: .sortedKeys), data.count <= 1024,
+           board.setData(data, forType: requestType) {
+            let requestChange = board.changeCount
+            // No polling, sleeps, new timeout or second event. This call remains
+            // inside the selected case's unchanged existing XCTest allowance.
+            app.typeKey("9", modifierFlags: [.command, .option, .control, .shift])
+            let now = ProcessInfo.processInfo.systemUptime
+            if board.changeCount > requestChange, let data = board.data(forType: receiptType), data.count <= 32768,
+               let native = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               safePublicMetadataReceipt(native), native["token"] as? String == session.token,
+               native["case"] as? String == session.testCase, native["checkpoint"] as? String == checkpoint,
+               native["sequence"] as? Int == session.sequence, native["requestID"] as? String == requestID,
+               let observed = native["uptime"] as? Double, observed.isFinite, observed >= before, observed <= now, now - before <= 5 {
+                result["native"] = native
+                let paired = pairedPublicMetadata(checkpoint: checkpoint, chinese: session.testCase == "testChineseCriticalFlow")
+                result["paired"] = paired
+                let generalUnchanged = NSPasteboard.general.changeCount == generalBefore
+                result["generalChangeCountUnchanged"] = generalUnchanged
+                if generalUnchanged, publicMetadataStateMatches(native, paired: paired, checkpoint: checkpoint) {
+                    result["sameState"] = "OBSERVED"; result["reason"] = "bounded-public-pair"
+                } else { result["reason"] = "state-or-geometry-mismatch" }
+            }
+        }
+        // The native receipt is never a pass/exemption, including when paired.
+        var encoded = try? JSONSerialization.data(withJSONObject: result, options: .sortedKeys)
+        if (encoded?.count ?? 32769) > 32768 {
+            result.removeValue(forKey: "native"); result.removeValue(forKey: "paired")
+            result["sameState"] = "UNKNOWN"; result["reason"] = "oversized-paired-receipt"
+            encoded = try? JSONSerialization.data(withJSONObject: result, options: .sortedKeys)
+        }
+        if let data = encoded, data.count <= 32768 {
+            let evidence = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+            evidence.name = "mac-public-metadata-" + checkpoint; evidence.lifetime = .keepAlways; add(evidence)
+            print("MAC_PUBLIC_METADATA_RESULT", checkpoint, result["sameState"] ?? "UNKNOWN", result["reason"] ?? "unknown")
+        }
+        board.clearContents()
+    }
+    private func pairedPublicMetadata(checkpoint: String, chinese: Bool) -> [String: Any] {
+        let main = app.windows.matching(identifier: "main")
+        let targets: [(String, XCUIElementQuery)] = [
+            (chinese ? "fixed-unicode-payload" : "fixed-url-payload", app.groups["mac.pane.result"].staticTexts.matching(identifier: "mac.payload")),
+            ("fixed-status", app.groups["mac.pane.result"].staticTexts.matching(identifier: "mac.status")),
+            ("fixed-link-policy", app.groups["mac.pane.result"].staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", chinese ? "只有点击「在浏览器中打开」才会打开链接。" : "Links open only when you choose Open in Browser.", chinese ? "只有点击「在浏览器中打开」才会打开链接。" : "Links open only when you choose Open in Browser."))),
+            ("fixed-saved-count", app.groups["mac.pane.history"].staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", chinese ? "本机已保存 1 条记录" : "1 saved on this Mac", chinese ? "本机已保存 1 条记录" : "1 saved on this Mac")))
+        ] + (checkpoint == "mac-chinese-policy" ? [("fixed-privacy-policy", app.sheets.groups["mac.sheet.privacy"].staticTexts.matching(identifier: "privacy.offlineBody"))] : [])
+        let rows: [[String: Any]] = targets.map { kind, query in
+            var row: [String: Any] = ["kind": kind, "matches": query.count]
+            if query.count == 1 {
+                let element = query.firstMatch
+                let text = (element.value as? String) ?? element.label
+                if text.utf16.count <= 4096 {
+                    row["valueUTF16Length"] = text.utf16.count
+                    row["valueSHA256"] = SHA256.hash(data: Data(text.utf8)).map { String(format: "%02x", $0) }.joined()
+                    row["frame"] = metadataFrame(element.frame)
+                }
+            }
+            return row
+        }
+        return ["windows": app.windows.count, "mainWindowMatches": main.count, "windowFrame": main.count == 1 ? metadataFrame(main.firstMatch.frame) : [],
+                "sheets": app.sheets.count, "dialogs": app.dialogs.count, "foreground": app.state == .runningForeground,
+                "coordinateSpace": "XCTest-screen-top-left", "screens": NSScreen.screens.count,
+                "screenFrame": NSScreen.screens.count == 1 ? metadataFrame(NSScreen.screens[0].frame) : [], "targets": rows]
+    }
+    private func metadataFrame(_ frame: CGRect) -> [Double] { [Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)] }
+    private func publicMetadataStateMatches(_ native: [String: Any], paired: [String: Any], checkpoint: String) -> Bool {
+        guard native["state"] as? String == "OBSERVED", native["active"] as? Bool == true,
+              paired["coordinateSpace"] as? String == "XCTest-screen-top-left", native["coordinateSpace"] as? String == "AppKit-screen-bottom-left",
+              paired["screens"] as? Int == 1, native["screens"] as? Int == 1,
+              paired["windows"] as? Int == 1, paired["mainWindowMatches"] as? Int == 1,
+              paired["dialogs"] as? Int == 0, paired["foreground"] as? Bool == true,
+              paired["sheets"] as? Int == (checkpoint == "mac-chinese-policy" ? 1 : 0),
+              let window = native["window"] as? [String: Any], let windowNumber = window["number"] as? Int, windowNumber >= 0,
+              let keyWindow = native["keyWindow"] as? Int,
+              let expectedKeyWindow = (checkpoint == "mac-chinese-policy" ? (native["attachedSheet"] as? [String: Any]) : window)?["number"] as? Int,
+              native["mainWindow"] as? Int == windowNumber, keyWindow == expectedKeyWindow,
+              let nativeFrame = window["frame"] as? [Double],
+              let uiFrame = paired["windowFrame"] as? [Double], let screen = paired["screenFrame"] as? [Double],
+              nativeFrame.count == 4, uiFrame.count == 4, screen.count == 4, native["screenFrame"] as? [Double] == screen,
+              metadataFramesMatch(nativeFrame, ui: uiFrame, screen: screen),
+              let observations = native["targets"] as? [[String: Any]], let controls = paired["targets"] as? [[String: Any]],
+              observations.count == controls.count else { return false }
+        for (observation, control) in zip(observations, controls) {
+            guard observation["state"] as? String == "OBSERVED", observation["kind"] as? String == control["kind"] as? String,
+                  control["matches"] as? Int == 1, let wrapper = observation["wrapper"] as? [String: Any],
+                  let frame = wrapper["frame"] as? [Double], let ui = control["frame"] as? [Double],
+                  metadataFramesMatch(frame, ui: ui, screen: screen),
+                  observation["expectedUTF16Length"] as? Int == control["valueUTF16Length"] as? Int,
+                  observation["expectedSHA256"] as? String == control["valueSHA256"] as? String else { return false }
+        }
+        return true
+    }
+    private func metadataFramesMatch(_ native: [Double], ui: [Double], screen: [Double]) -> Bool {
+        guard native.count == 4, ui.count == 4, screen.count == 4, (native + ui + screen).allSatisfy({ $0.isFinite }), screen[0] == 0, screen[1] == 0 else { return false }
+        let converted = [ui[0], screen[3] - ui[1] - ui[3], ui[2], ui[3]]
+        return zip(native, converted).allSatisfy { abs($0 - $1) <= 2 }
+    }
+    private func strictMetadataBool(_ value: Any?, equals expected: Bool? = nil) -> Bool {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return false }
+        return expected.map { number.boolValue == $0 } ?? true
+    }
+    private func safePublicMetadataReceipt(_ value: [String: Any]) -> Bool {
+        let required: Set<String> = ["schema", "token", "case", "checkpoint", "sequence", "requestID", "uptime", "auditQualified", "contrastQualified", "state", "issues", "visitedNodes", "coordinateSpace", "active", "keyWindow", "mainWindow", "window", "attachedSheet", "orderedWindows", "targets", "screens", "screenFrame"]
+        guard Set(value.keys) == required, value["schema"] as? Int == 1,
+              strictMetadataBool(value["auditQualified"], equals: false), strictMetadataBool(value["contrastQualified"], equals: false),
+              strictMetadataBool(value["active"]),
+              ["OBSERVED", "UNKNOWN"].contains(value["state"] as? String ?? ""), value["coordinateSpace"] as? String == "AppKit-screen-bottom-left",
+              let visited = value["visitedNodes"] as? Int, (0...256).contains(visited),
+              let targets = value["targets"] as? [[String: Any]], targets.count <= 8,
+              let ordered = value["orderedWindows"] as? [Int], ordered.count <= 8,
+              let issues = value["issues"] as? [String], issues.count <= 12,
+              issues.allSatisfy({ ["depth-limit", "cycle", "node-limit", "unsupported-public-node", "outside-root-or-unknown-owner", "missing-content", "missing-attached-sheet", "unexpected-sheet-state", "window-order-limit", "invalid-window-frame", "screen-identity-unknown"].contains($0) }) else { return false }
+        // Closed JSON keys and bounded types. Portable review checks are kept
+        // separate from native evidence; neither is an audit acceptance gate.
+        let allowed: Set<String> = required.union(["number", "frame", "visible", "key", "main", "sheetParent", "kind", "identifier", "pane", "expectedUTF16Length", "expectedSHA256", "reason", "matchCount", "wrapper", "queried", "queryKind", "role", "root", "path", "enabled", "valueUTF16Length", "valueSHA256", "requestedRange", "returnedUTF16Length", "returnedSHA256", "runs", "range", "attributes", "accessibilityFont", "font", "accessibilityForegroundColor", "foregroundColor", "accessibilityBackgroundColor", "backgroundColor", "type", "name", "pointSize", "traits", "family", "visibleName", "components"])
+        func bounded(_ object: Any, depth: Int) -> Bool {
+            guard depth <= 16 else { return false }
+            if let dictionary = object as? [String: Any] {
+                guard dictionary.count <= 32, Set(dictionary.keys).isSubset(of: allowed) else { return false }
+                for (key, value) in dictionary {
+                    if ["auditQualified", "contrastQualified", "active", "visible", "key", "main", "enabled"].contains(key), !strictMetadataBool(value) { return false }
+                    if ["schema", "sequence", "visitedNodes", "keyWindow", "mainWindow", "number", "sheetParent", "attachedSheet", "window", "expectedUTF16Length", "matchCount", "valueUTF16Length", "returnedUTF16Length", "pointSize", "traits", "uptime", "screens"].contains(key), value is NSNumber,
+                       let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() { return false }
+                    if ["frame", "range", "requestedRange", "components", "orderedWindows", "screenFrame"].contains(key), let array = value as? [Any] {
+                        if !array.allSatisfy({ item in guard let number = item as? NSNumber else { return false }; return CFGetTypeID(number) != CFBooleanGetTypeID() && number.doubleValue.isFinite }) { return false }
+                    }
+                    if !bounded(value, depth: depth + 1) { return false }
+                }
+                return true
+            }
+            if let array = object as? [Any] { return array.count <= 17 && array.allSatisfy { bounded($0, depth: depth + 1) } }
+            if let text = object as? String { return text.utf16.count <= 128 }
+            if let number = object as? NSNumber { return number.doubleValue.isFinite }
+            return object is NSNull
+        }
+        return bounded(value, depth: 0)
+    }
+    #endif
+
     private func capturePixels(_ name: String) throws {
         let png = XCUIScreen.main.screenshot().pngRepresentation
         let lossless = ["mac-before-resize", "mac-minimum-window", "mac-before-export", "mac-pasted-url",
@@ -411,6 +595,9 @@ final class QRCatcherMacUITests: XCTestCase {
         attachment.name = name; attachment.lifetime = XCTAttachment.Lifetime.keepAlways; add(attachment)
     }
     private func screenshot(_ name: String) throws {
+        #if DEBUG
+        collectPublicMetadataIfSelected(name)
+        #endif
         try capturePixels(name)
         if name != "mac-failure" {
             print("MAC_AUDIT_BEFORE", name, "appEnabled", app.isEnabled, "windowEnabled", app.windows.firstMatch.isEnabled,

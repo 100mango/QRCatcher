@@ -1,0 +1,647 @@
+"""Executable offline collector adversaries; synthetic bytes are not native proof."""
+import copy
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import struct
+import sys
+import tempfile
+import types
+import unittest
+import uuid
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import export_mac_public_metadata as collector
+import diagnostic_mac_public_metadata_route as real_route
+import mac_public_metadata_schema as schema
+
+spec = importlib.util.spec_from_file_location('metadata_fixture', Path(__file__).with_name('test_mac_public_metadata.py'))
+fixtures = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixtures)
+
+
+def encoded(value):
+    return json.dumps(value, ensure_ascii=False, allow_nan=False).encode()
+
+
+def summary(hosted=False):
+    count = 26 if hosted else 2
+    device = dict(architecture='arm64', deviceId='a' * 40, deviceName='My Mac', modelName='Virtual Machine',
+                  osBuildNumber='26A428', osVersion='27.0', platform='macOS')
+    return dict(totalTestCount=count, passedTests=count if hosted else 0, failedTests=0 if hosted else count,
+                skippedTests=0, expectedFailures=0, result='Passed' if hosted else 'Failed', startTime=1000.0,
+                finishTime=1100.0, runtimeWarnings=[], testFailures=[],
+                title='Test - QRCatcherMac' if hosted else 'Test - QRCatcherMacSandbox',
+                devicesAndConfigurations=[dict(device=device, passedTests=count if hosted else 0,
+                                               failedTests=0 if hosted else count, skippedTests=0, expectedFailures=0)])
+
+
+def test_tree():
+    return {'testNodes': [dict(nodeType='Test Case', name=c + '()', result='Failed',
+                              nodeIdentifier='QRCatcherMacUITests/' + c + '()',
+                              nodeIdentifierURL='test://com.apple.xcode/QRCatcher/QRCatcherMacUITests/QRCatcherMacUITests/' + c)
+                          for c in collector.CASES]}
+
+
+def paired(case, checkpoint, observed=True):
+    native = fixtures.MacPublicMetadataTests().receipt(case, checkpoint, observed=True)
+    token = ('7FAAE2C9-89A0-4FFB-946D-3F01CB62C875' if case == collector.CASES[0]
+             else 'A9EEDC77-51E8-4464-943D-3531D70B3AD3')
+    request = str(uuid.uuid5(uuid.NAMESPACE_URL, checkpoint)).upper()
+    native['token'], native['requestID'] = token, request
+    row = {key: native[key] for key in ('schema', 'token', 'case', 'checkpoint', 'sequence', 'requestID')}
+    row.update(auditQualified=False, contrastQualified=False, sameState='OBSERVED' if observed else 'UNKNOWN',
+               reason='bounded-public-pair' if observed else 'missing-or-invalid-receipt')
+    if not observed:
+        return row
+    def converted(frame):
+        return [frame[0], 768 - frame[1] - frame[3], frame[2], frame[3]]
+    rows = [dict(kind=target['kind'], matches=1, frame=converted(target['wrapper']['frame']),
+                 valueUTF16Length=target['expectedUTF16Length'], valueSHA256=target['expectedSHA256'])
+            for target in native['targets']]
+    row.update(native=native, generalChangeCountUnchanged=True,
+               paired=dict(windows=1, mainWindowMatches=1, windowFrame=converted(native['window']['frame']),
+                           sheets=1 if checkpoint == 'mac-chinese-policy' else 0, dialogs=0, foreground=True,
+                           screenFrame=[0, 0, 1024, 768], targets=rows, screens=1,
+                           coordinateSpace='XCTest-screen-top-left'))
+    return row
+
+
+def supporting(locale, phase):
+    count = 1 if phase == 'full' else 2
+    texts = (['Links open only when you choose Open in Browser.', f'{count} saved on this Mac'] if locale == 'en'
+             else ['只有点击「在浏览器中打开」才会打开链接。', f'本机已保存 {count} 条记录'])
+    case = collector.CASES[0 if locale == 'en' else 1]
+    return dict(locale=locale, phase=phase, case='-[QRCatcherMacUITests ' + case + ']', window=[0, 0, 1000, 800],
+                contrast_qualified=False, reference_font_is_resolved_element_font=False,
+                height_proxy_used_as_acceptance=False,
+                roles=[dict(role=role, text=text, frame=[20, 20, 200, 20], body_measurement_height=16,
+                            reference_body_font='.SFNS-Regular', reference_body_point_size=13)
+                       for role, text in zip(('link-policy', 'saved-count'), texts)])
+
+
+def transition(locale, phase):
+    before = 'https://example.com/qrcatcher?source=golden' if locale == 'en' else 'QRCatcher 你好 🌈 123'
+    after = ('Keep the full QR result readable alongside its safety instruction and saved-history count. ' * 4
+             if locale == 'en' else '完整保留二维码内容，支持中文和 English，并且仍能阅读说明与保存数量。' * 6)
+    digest = hashlib.sha256(after.encode()).hexdigest()
+    row = dict(locale=locale, phase=phase, wrapper_before=before, copy_before=before,
+               wrapper_identity_refresh_scope='selectable Text only', raster_width=474, raster_height=474,
+               clipboard_tiff_bytes=898970, expected_payload_utf8_bytes=len(after.encode()),
+               expected_payload_sha256=digest, clipboard_tiff_sha256='a' * 64, fixture_control_exact=True,
+               full_equality_verified=phase == 'copy-observed')
+    if phase == 'copy-observed':
+        row.update(wrapper_after=after, copy_after_sha256=digest, copy_after_utf8_bytes=len(after.encode()),
+                   rendered_text_observation=dict(wrapper_hittable=False, wrapper_enabled=False, direct_child_count=1,
+                                                  rendered_static_text_count=1, rendered_identifier='',
+                                                  rendered_frame=[20, 20, 200, 20], wrapper_interaction_required=False,
+                                                  observations_qualify_pass=False))
+    return row
+
+
+def png(name, size=0):
+    data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR' + struct.pack('>II', 1024, 768) + name.encode()
+    return data + b'x' * max(0, size - len(data))
+
+
+def attachments():
+    result = []
+    for name in collector.FRAMES:
+        result.append((dict(name=name), png(name) if name in collector.PNG_FRAMES else b'\xff\xd8' + name.encode()))
+    for case in collector.CASES:
+        for checkpoint in schema.CASES[case]:
+            result.append((dict(name='mac-public-metadata-' + checkpoint), encoded(paired(case, checkpoint))))
+    for locale in ('en', 'zh-Hans'):
+        for phase in ('full', 'minimum-long-content'):
+            result.append((dict(name='mac-supporting-text-layout'), encoded(supporting(locale, phase))))
+        for phase in ('prepared', 'copy-observed'):
+            result.append((dict(name='mac-payload-transition'), encoded(transition(locale, phase))))
+    for name in collector.CHECKPOINTS:
+        result.append((dict(name='mac-audit-element'), ('Checkpoint: ' + name + '\nContrast failed\nStrict callback').encode()))
+    result.extend([(dict(name='mac-failure'), b'\xff\xd8failure1'), (dict(name='mac-failure'), b'\xff\xd8failure2')])
+    return result
+
+
+class CollectorTests(unittest.TestCase):
+    def exercise(self, *, edit=None, edit_summary=None, edit_tests=None, mode=None, hosted=False, clock=None):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / 'build').mkdir()
+            (root / collector.RESULT).mkdir()
+            (root / collector.RESULT / 'Info.plist').write_bytes(b'offline-fixture')
+            if hosted:
+                (root / 'MacTestResults.xcresult').mkdir()
+                (root / 'MacTestResults.xcresult/Info.plist').write_bytes(b'offline-hosted-fixture')
+            initial = dict(job='platform', scope='macos', diagnostic_only=True, release_qualification=False,
+                           selected_ui_cases=list(collector.CASES), metadata_checkpoints=list(collector.CHECKPOINTS),
+                           source_sha='a' * 40, tested_tree='b' * 40, workflow_sha='a' * 40, run_id='123',
+                           run_attempt='1', ref=real_route.REF, workflow_ref=real_route.WORKFLOW_REF)
+            route = types.SimpleNamespace(current_identity=lambda: copy.deepcopy(initial),
+                                          retained_initial_record=lambda expected: copy.deepcopy(expected),
+                                          fixed_commands=real_route.fixed_commands)
+            for key, filename in [('sandbox_build', 'mac-sandbox-build.log'), ('sandbox_test', 'mac-sandbox-test.log')]:
+                command, seconds = real_route.fixed_commands()[key]
+                code = 0 if key == 'sandbox_build' else 65
+                outcome = dict(command=command, timeout_seconds=seconds, state='completed', exit=code,
+                               cleanup_confirmed=True, output_bytes=100, elapsed_seconds=10.0)
+                if mode == 'receipt-cleanup' and key == 'sandbox_test':
+                    outcome.update(state='cleanup_unconfirmed', exit=126, original_exit=65, cleanup_confirmed=False)
+                if mode == 'receipt-timeout' and key == 'sandbox_test':
+                    outcome.update(state='timed_out', exit=124, cleanup_confirmed=True, elapsed_seconds=601.0)
+                if mode == 'wrong-command' and key == 'sandbox_test':
+                    outcome['command'] = command + ['-only-testing:Other/Other/testOther']
+                log = b'BOUNDED_COMMAND_START ' + encoded(dict(command=command, seconds=seconds)) + b'\n'
+                if key == 'sandbox_test' and mode != 'missing-launch-context':
+                    bundle = str(root / 'build/MacSandbox/Build/Products/Debug/QRCatcherMac.app')
+                    for pid in (1200, 1201):
+                        launch = dict(actual_bundle=bundle, expected_bundle=bundle,
+                                      actual_executable=bundle + '/Contents/MacOS/QRCatcherMac', pid=pid,
+                                      executable_sha256='a' * 64, product_app_sandbox=True,
+                                      code_payload_sha256={'QRCatcherMac': 'a' * 64, 'QRCatcherMac.debug.dylib': 'b' * 64})
+                        if mode == 'wrong-launch-path':
+                            launch['actual_bundle'] = '/Applications/QRCatcherMac.app'
+                        if mode == 'numeric-launch-sandbox':
+                            launch['product_app_sandbox'] = 1
+                        log += b'RUNNING_APP_PROVENANCE: ' + encoded(launch) + b'\n'
+                log += b'product fixture log\nBOUNDED_COMMAND_END ' + encoded(outcome) + b'\n'
+                (root / filename).write_bytes(log)
+            if mode == 'durable-cleanup':
+                (root / 'build/owned-process-cleanup.json').write_bytes(b'{"blocked":true}')
+            if mode == 'fixture-latch':
+                (root / 'build/fixture-query-inflight.json').write_bytes(b'{"inflight":true}')
+            if mode == 'initial-seal':
+                route.retained_initial_record = lambda _: (_ for _ in ()).throw(ValueError('Initial source/run seal differs'))
+            if mode == 'result-symlink':
+                (root / collector.RESULT / 'Info.plist').unlink()
+                (root / 'info.plist').write_bytes(b'fixture')
+                (root / collector.RESULT / 'Info.plist').symlink_to(root / 'info.plist')
+            data = attachments()
+            if edit:
+                edit(data)
+            native_summary, tests = summary(), test_tree()
+            if edit_summary:
+                edit_summary(native_summary)
+            if edit_tests:
+                edit_tests(tests)
+            calls = []
+
+            def runner(command, seconds, **options):
+                calls.append((command, seconds, options))
+                operation = dict(command=command, timeout_seconds=seconds, cleanup_confirmed=True, state='completed',
+                                 exit=0, output_bytes=0, elapsed_seconds=0.0)
+                if mode == 'mid-cleanup' and len(calls) == 1:
+                    operation.update(cleanup_confirmed=False, state='cleanup_unconfirmed', exit=126)
+                    return 126, '', operation
+                if mode == 'durable-mid-cleanup' and len(calls) == 1:
+                    (root / 'build/owned-process-cleanup.json').write_bytes(b'{"blocked":true}')
+                if mode == 'tool-output-limit' and len(calls) == 1:
+                    operation.update(state='output_limit', exit=125)
+                    return 125, 'x' * collector.JSON_CAP, operation
+                if mode == 'wrong-operation-command' and len(calls) == 1:
+                    operation['command'] = command + ['--other']
+                if mode == 'wrong-operation-cap' and len(calls) == 1:
+                    operation['timeout_seconds'] = seconds + 1
+                if mode == 'numeric-operation-exit' and len(calls) == 1:
+                    operation['exit'] = False
+                if mode == 'numeric-operation-cleanup' and len(calls) == 1:
+                    operation['cleanup_confirmed'] = 1
+                if mode == 'boolean-operation-bytes' and len(calls) == 1:
+                    operation['output_bytes'] = True
+                if mode == 'nonfinite-operation-time' and len(calls) == 1:
+                    operation['elapsed_seconds'] = float('nan')
+                if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
+                    text = encoded(summary(True) if command[-1] == 'MacTestResults.xcresult' else native_summary).decode()
+                elif command[1:5] == ['xcresulttool', 'get', 'test-results', 'tests']:
+                    text = encoded(tests).decode()
+                elif command[1:4] == ['xcresulttool', 'export', 'attachments']:
+                    staging = root / command[-1]
+                    staging.mkdir()
+                    manifest = []
+                    for n, (entry, body) in enumerate(data):
+                        entry = copy.deepcopy(entry)
+                        filename = str(n) + ('.json' if body.startswith(b'{') else '.bin')
+                        (staging / filename).write_bytes(body)
+                        entry['exportedFileName'] = filename
+                        manifest.append(entry)
+                    if mode == 'attachment-path-escape':
+                        manifest[0]['exportedFileName'] = '../outside.png'
+                    if mode == 'attachment-symlink':
+                        (staging / manifest[0]['exportedFileName']).unlink()
+                        (staging / manifest[0]['exportedFileName']).symlink_to(root / 'info.png')
+                        (root / 'info.png').write_bytes(png('redirected'))
+                    if mode == 'attachment-hardlink':
+                        os.link(staging / manifest[0]['exportedFileName'], staging / 'hardlink.png')
+                    if mode == 'attachment-count':
+                        manifest = [dict(exportedFileName=f'extra-{n}.bin') for n in range(129)]
+                    if mode == 'manifest-oversize':
+                        manifest = {'oversize': 'x' * collector.JSON_CAP}
+                    (staging / 'manifest.json').write_bytes(encoded(manifest))
+                    text = ''
+                else:
+                    raise AssertionError('Unexpected command: ' + str(command))
+                if mode != 'boolean-operation-bytes':
+                    operation['output_bytes'] = len(text.encode())
+                return 0, text, operation
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                environment = {'GITHUB_WORKSPACE': str(root), 'QRCATCHER_OWNED_PROCESS_BARRIER': str(root / 'build/owned-process-cleanup.json')}
+                if mode == 'propagated-cleanup':
+                    environment['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED'] = 'true'
+                with patch.dict(os.environ, environment, clear=True):
+                    report = collector.collect(runner=runner, route=route, clock=clock)
+                self.files = {p.name: p.read_bytes() for p in (root / collector.OUT).iterdir()}
+                self.calls = calls
+                self.size = sum(len(v) for v in self.files.values())
+                self.assertLessEqual(self.size, collector.SCOPE_CAP)
+                self.assertTrue(all(len(v) <= collector.FILE_CAP for v in self.files.values()))
+                self.assertIs(report['auditQualified'], False)
+                self.assertIs(report['contrastQualified'], False)
+                self.assertIs(report['release_qualification'], False)
+                self.assertFalse(any('xcresult' in name for name in self.files))
+                return report
+            finally:
+                os.chdir(previous)
+
+    def mutate_receipt(self, action, checkpoint=collector.CHECKPOINTS[0]):
+        def edit(rows):
+            for n, (entry, body) in enumerate(rows):
+                if entry.get('name') == 'mac-public-metadata-' + checkpoint:
+                    value = schema.decode(body)
+                    action(value)
+                    rows[n] = (entry, encoded(value))
+                    return
+            raise AssertionError(checkpoint)
+        return edit
+
+    def test_exact_two_failed_cases_preserve_actual_65_and_all_original_evidence(self):
+        report = self.exercise()
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertEqual(report['sameState'], 'OBSERVED')
+        self.assertEqual(report['original_commands']['sandbox_test']['exit'], 65)
+        self.assertEqual(len(report['executed_tests']), 2)
+        self.assertEqual(len(report['metadata']), 4)
+        self.assertEqual(len(report['screenshots']), 7)
+        self.assertEqual(report['strict_audit_callbacks'], 4)
+        self.assertIn(b'Strict callback', self.files['sandbox-audit-1.txt'])
+        self.assertFalse(report['offline_freshness_revalidated'])
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+        self.assertTrue(all(call[2] == dict(output_limit=131072, tail_limit=131072, echo=False) for call in self.calls))
+        self.assertEqual(sum(call[1] for call in self.calls), 135)
+
+    def test_lossless_bytes_and_dimensions_are_preserved_without_conversion(self):
+        report = self.exercise()
+        for row in report['screenshots']:
+            if row['checkpoint'] in collector.PNG_FRAMES:
+                self.assertEqual(self.files[row['name']], png(row['checkpoint']))
+                self.assertEqual(row['native_pixel_dimensions'], [1024, 768])
+                self.assertTrue(row['source_bytes_preserved'])
+        self.assertEqual(self.files['sandbox-mac-chinese-policy.jpg'], b'\xff\xd8mac-chinese-policy')
+
+    def test_valid_unknown_metadata_is_retained_without_qualification(self):
+        def edit(rows):
+            for n, (entry, body) in enumerate(rows):
+                if entry.get('name', '').startswith('mac-public-metadata-'):
+                    value = schema.decode(body)
+                    rows[n] = (entry, encoded(paired(value['case'], value['checkpoint'], observed=False)))
+        report = self.exercise(edit=edit)
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertTrue(all(row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+
+    def test_no_process_after_propagated_durable_latch_or_receipt_cleanup_uncertainty(self):
+        for mode in ('propagated-cleanup', 'durable-cleanup', 'fixture-latch', 'receipt-cleanup'):
+            with self.subTest(mode=mode):
+                report = self.exercise(mode=mode)
+                self.assertFalse(self.calls)
+                self.assertFalse(report['evidence_complete'])
+                self.assertEqual(report['sameState'], 'UNKNOWN')
+                self.assertTrue(report['owned_cleanup_uncertainty_observed'])
+                self.assertIn('mac-sandbox-test-tail.log', self.files)
+                self.assertEqual(len(report['metadata']), 4)
+                self.assertTrue(all(row['sameState'] == 'UNKNOWN' and row['receipt_retained'] is False for row in report['metadata']))
+                self.assertEqual(set(report['missing_metadata']), set(collector.CHECKPOINTS))
+                if mode == 'receipt-cleanup':
+                    self.assertEqual(report['original_commands']['sandbox_test']['original_exit'], 65)
+
+    def test_mid_export_uncertainty_prevents_every_later_launch(self):
+        for mode in ('mid-cleanup', 'durable-mid-cleanup', 'tool-output-limit'):
+            with self.subTest(mode=mode):
+                report = self.exercise(mode=mode)
+                self.assertEqual(len(self.calls), 1)
+                self.assertEqual(report['sameState'], 'UNKNOWN')
+                self.assertFalse(report['evidence_complete'])
+
+    def test_public_tool_operator_identity_cap_boolean_and_numeric_receipts_reject(self):
+        for mode in ('wrong-operation-command', 'wrong-operation-cap', 'numeric-operation-exit',
+                     'numeric-operation-cleanup', 'boolean-operation-bytes', 'nonfinite-operation-time'):
+            with self.subTest(mode=mode):
+                report = self.exercise(mode=mode)
+                self.assertEqual(len(self.calls), 1)
+                self.assertFalse(report['evidence_complete'])
+                self.assertEqual(report['sameState'], 'UNKNOWN')
+
+    def test_actual_original_launches_bind_adjacent_debug_hashes_pids_source_run_device(self):
+        report = self.exercise()
+        launch = report['launch_context']
+        self.assertEqual(launch['state'], 'OBSERVED')
+        self.assertEqual([row['pid'] for row in launch['rows']], [1200, 1201])
+        self.assertEqual(launch['source_sha'], report['provenance']['source_sha'])
+        self.assertEqual(launch['run_id'], report['provenance']['run_id'])
+        self.assertEqual(launch['result_device'], report['device'])
+        self.assertTrue(launch['checkpoint_pid_pairing'].startswith('UNKNOWN'))
+        for mode in ('missing-launch-context', 'wrong-launch-path', 'numeric-launch-sandbox'):
+            report = self.exercise(mode=mode)
+            self.assertEqual(report['launch_context']['state'], 'UNKNOWN')
+            self.assertFalse(report['evidence_complete'])
+            self.assertEqual(report['sameState'], 'UNKNOWN')
+            self.assertEqual(sum(row['receipt_retained'] for row in report['metadata']), 4)
+
+    def test_initial_seal_wrong_command_or_result_alias_cannot_launch_export(self):
+        for mode in ('initial-seal', 'wrong-command', 'result-symlink'):
+            report = self.exercise(mode=mode)
+            self.assertFalse(self.calls)
+            self.assertFalse(report['evidence_complete'])
+
+    def test_leaf_missing_extra_duplicate_target_identifier_and_url_fail_closed(self):
+        changes = [lambda t: t['testNodes'].pop(), lambda t: t['testNodes'].append(copy.deepcopy(t['testNodes'][0])),
+                   lambda t: t['testNodes'][0].update(nodeIdentifier='QRCatcherMacUITests/testOther()'),
+                   lambda t: t['testNodes'][0].update(nodeIdentifierURL=t['testNodes'][0]['nodeIdentifierURL'].replace('/QRCatcherMacUITests/', '/Other/', 1)),
+                   lambda t: t['testNodes'][0].update(result='Skipped')]
+        for edit in changes:
+            report = self.exercise(edit_tests=edit)
+            self.assertFalse(report['evidence_complete'])
+            self.assertEqual(len(self.calls), 2)
+
+    def test_bounded_test_display_variant_keeps_exact_ids_and_raw_tree_unqualified(self):
+        report = self.exercise(edit_tests=lambda t: t['testNodes'][0].update(name='-[QRCatcherMacUITests testNativeWindowResizeKeepsFullActionTitles]'))
+        self.assertFalse(report['evidence_complete'])
+        self.assertIn('sandbox-test-results.json', self.files)
+        self.assertEqual(report['executed_tests'][0]['presentation_binding'], 'UNKNOWN')
+        self.assertEqual(len(report['metadata']), 4)
+
+    def test_summary_exact_counts_booleans_device_and_original_exit_binding(self):
+        changes = [lambda s: s.update(totalTestCount=True), lambda s: s.update(totalTestCount=7),
+                   lambda s: s.update(skippedTests=1), lambda s: s['devicesAndConfigurations'][0]['device'].update(platform='macOS Simulator'),
+                   lambda s: s['devicesAndConfigurations'][0]['device'].update(architecture='x86_64'),
+                   lambda s: s['devicesAndConfigurations'].append(copy.deepcopy(s['devicesAndConfigurations'][0])),
+                   lambda s: s.update(finishTime=1601), lambda s: s.update(title='Test - Other')]
+        for edit in changes:
+            report = self.exercise(edit_summary=edit)
+            self.assertFalse(report['evidence_complete'])
+            self.assertEqual(len(self.calls), 1)
+
+    def test_optional_hosted_summary_is_exact_26_same_mac_device_and_within_three_minutes(self):
+        report = self.exercise(hosted=True)
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertIn('test-summary.json', self.files)
+        self.assertEqual(sum(call[1] for call in self.calls), 165)
+        hosted_summary = summary(True)
+        hosted_summary['finishTime'] = hosted_summary['startTime'] + 1155
+        collector.validate_summary(hosted_summary, hosted=True)
+        hosted_summary['finishTime'] += 1
+        with self.assertRaises(ValueError):
+            collector.validate_summary(hosted_summary, hosted=True)
+        for change in [lambda s: s.update(totalTestCount=27), lambda s: s.update(totalTestCount=True),
+                       lambda s: s.update(title='Test - QRCatcherMacUITests')]:
+            value = summary(True)
+            change(value)
+            with self.assertRaises(ValueError):
+                collector.validate_summary(value, hosted=True)
+
+    def test_total_export_clock_budget_stops_before_next_process(self):
+        ticks = iter([0, 0, 31, 180, 180])
+        report = self.exercise(clock=lambda: next(ticks))
+        self.assertEqual(len(self.calls), 2)
+        self.assertFalse(report['evidence_complete'])
+        self.assertTrue(any('time budget' in error for error in report['errors']))
+
+    def test_metadata_unsafe_core_fields_are_never_retained(self):
+        changes = [lambda r: r.update(token=r['token'].lower()), lambda r: r.update(sequence=True),
+                   lambda r: r.update(case='testOther'), lambda r: r.update(checkpoint='mac-before-export'),
+                   lambda r: r.update(requestID='not-a-uuid'), lambda r: r.update(auditQualified=True),
+                   lambda r: r.update(contrastQualified=0), lambda r: r.update(decoded_text='private history'),
+                   lambda r: r['native'].update(uptime=True), lambda r: r['native']['window'].update(visible=1),
+                   lambda r: r['native']['targets'][0]['queried'].update(frame=[True, 0, 100, 20]),
+                   lambda r: r['native']['targets'][0].update(requestedRange=[0, 4097]),
+                   lambda r: r['paired'].update(screens=2)]
+        for change in changes:
+            with self.subTest(change=change):
+                report = self.exercise(edit=self.mutate_receipt(change))
+                self.assertFalse(report['evidence_complete'])
+                self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+
+    def test_negative_native_uptime_is_not_an_admissible_offline_clock(self):
+        receipt = paired(collector.CASES[0], collector.CHECKPOINTS[0])
+        receipt['native']['uptime'] = -1.0
+        with self.assertRaisesRegex(ValueError, 'native receipt uptime'):
+            collector.validate_metadata(encoded(receipt))
+        report = self.exercise(edit=self.mutate_receipt(lambda r: r['native'].update(uptime=-0.001)))
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+        slot = next(row for row in report['metadata'] if row['checkpoint'] == collector.CHECKPOINTS[0])
+        self.assertEqual(slot['sameState'], 'UNKNOWN')
+        self.assertIs(slot['receipt_retained'], False)
+        # The synthetic no-native UNKNOWN envelope has no freshness claim.
+        absent = paired(collector.CASES[0], collector.CHECKPOINTS[0], observed=False)
+        self.assertEqual(collector.validate_metadata(encoded(absent))['sameState'], 'UNKNOWN')
+
+    def test_native_typed_font_variants_and_raw_cgcolor_unknown_remain_unqualified(self):
+        def typed(r):
+            attributes = r['native']['targets'][0]['runs'][0]['attributes']
+            attributes['font']['name'] = '.AppleSystemUIFont Monospaced'
+            attributes['accessibilityForegroundColor'] = {'state': 'UNKNOWN', 'type': 'unsupported'}
+        report = self.exercise(edit=self.mutate_receipt(typed))
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertIn(b'.AppleSystemUIFont Monospaced', self.files['sandbox-public-metadata-mac-before-resize.json'])
+        def cg(r):
+            r['native']['targets'][0]['runs'][0]['attributes']['foregroundColor'] = dict(state='OBSERVED', type='CGColor', components=[0, 0, 0, 1])
+        report = self.exercise(edit=self.mutate_receipt(cg))
+        self.assertFalse(report['evidence_complete'])
+        self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+
+    def test_metadata_prefix_variants_preserve_validated_bytes_and_exact_name_diagnostics(self):
+        for actual in ['mac-public-metadata-mac-before-resize_0_C17CB4FC-D16E-4FA8-9551-EDA6E400A4D2.json',
+                       'mac-public-metadata-mac-before-resize (public diagnostic)',
+                       'mac-public-metadata-mac-before-resize_01_unproved.json']:
+            def edit(rows):
+                for entry, _ in rows:
+                    if entry.get('name') == 'mac-public-metadata-mac-before-resize':
+                        entry.clear()
+                        entry['suggestedHumanReadableName'] = actual
+                        return
+            report = self.exercise(edit=edit)
+            self.assertFalse(report['evidence_complete'])
+            self.assertIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+            row = next(r for r in report['metadata'] if r['checkpoint'] == 'mac-before-resize')
+            self.assertEqual(row['presentation_binding'], 'UNKNOWN')
+            self.assertEqual(row['presentation']['expected_name'], 'mac-public-metadata-mac-before-resize')
+            field = row['presentation']['fields'][0]
+            self.assertEqual(field['actual'], actual)
+            self.assertEqual(field['utf8_bytes'], len(actual.encode()))
+            self.assertEqual(field['sha256'], hashlib.sha256(actual.encode()).hexdigest())
+
+    def test_conflicting_metadata_presentation_or_wrong_internal_checkpoint_is_rejected(self):
+        def conflict(rows):
+            rows[6][0]['suggestedHumanReadableName'] = 'mac-public-metadata-mac-minimum-window'
+        report = self.exercise(edit=conflict)
+        self.assertFalse(report['evidence_complete'])
+        self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+        self.assertEqual(sum(row['receipt_retained'] for row in report['metadata']), 3)
+        report = self.exercise(edit=self.mutate_receipt(lambda r: r.update(checkpoint='mac-minimum-window', sequence=2)))
+        self.assertFalse(report['evidence_complete'])
+        self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+
+    def test_duplicate_checkpoints_request_ids_and_stale_case_tokens_fail_closed(self):
+        for action in [lambda rows: rows.append(copy.deepcopy(rows[6])),
+                       self.mutate_receipt(lambda r: r.update(requestID=str(uuid.uuid5(uuid.NAMESPACE_URL, 'mac-before-resize')).upper()),
+                                           checkpoint='mac-minimum-window'),
+                       self.mutate_receipt(lambda r: (r.update(token='E996E346-3618-4B39-954E-1ABD7795010B'),
+                                                     r['native'].update(token='E996E346-3618-4B39-954E-1ABD7795010B')),
+                                           checkpoint='mac-minimum-window')]:
+            report = self.exercise(edit=action)
+            self.assertFalse(report['evidence_complete'])
+
+    def test_manifest_count_bytes_escape_symlinks_and_hardlinks_fail_closed(self):
+        for mode in ('attachment-count', 'manifest-oversize', 'attachment-path-escape',
+                     'attachment-symlink', 'attachment-hardlink'):
+            with self.subTest(mode=mode):
+                report = self.exercise(mode=mode)
+                self.assertFalse(report['evidence_complete'])
+                self.assertEqual(len(self.calls), 3)
+
+    def test_all_six_bounded_audit_checkpoint_receipts_remain_failures(self):
+        def more(rows):
+            for name in ('mac-minimum-long-text-en', 'mac-minimum-long-text-zh-Hans'):
+                rows.append((dict(name='mac-audit-element'), ('Checkpoint: ' + name + '\nStrict audit failure').encode()))
+        report = self.exercise(edit=more)
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertEqual(report['strict_audit_callbacks'], 6)
+        self.assertIs(report['auditQualified'], False)
+        def excessive(rows):
+            for _ in range(9):
+                rows.append((dict(name='mac-audit-element'), b'Checkpoint: mac-before-resize\nStrict audit failure'))
+        report = self.exercise(edit=excessive)
+        self.assertFalse(report['evidence_complete'])
+        self.assertTrue(any('per-checkpoint bounds' in error for error in report['errors']))
+
+    def test_per_file_and_mac_allocation_cannot_silently_discard_emitted_frames(self):
+        def large(rows):
+            rows[0] = (rows[0][0], png(collector.FRAMES[0], collector.FILE_CAP + 1))
+        report = self.exercise(edit=large)
+        self.assertFalse(report['evidence_complete'])
+        self.assertIn(collector.FRAMES[0], report['missing_frames'])
+        def aggregate(rows):
+            for n, (entry, data) in enumerate(rows):
+                if entry.get('name') in collector.PNG_FRAMES:
+                    rows[n] = (entry, png(entry['name'], collector.FILE_CAP))
+        report = self.exercise(edit=aggregate)
+        self.assertFalse(report['evidence_complete'])
+        self.assertTrue(report['missing_frames'])
+        self.assertTrue(any('allocation' in error for error in report['errors']))
+
+    def test_missing_each_of_six_original_frames_and_four_metadata_receipts_is_explicit(self):
+        for name in list(collector.FRAMES) + ['mac-public-metadata-' + c for c in collector.CHECKPOINTS]:
+            report = self.exercise(edit=lambda rows: rows.__setitem__(slice(None), [r for r in rows if r[0].get('name') != name]))
+            self.assertFalse(report['evidence_complete'])
+            self.assertTrue(report['missing_frames'] or report['missing_metadata'])
+
+    def test_lossless_cannot_fall_back_to_jpeg_or_expand_png_scope(self):
+        for name in collector.PNG_FRAMES | {'mac-chinese-policy', 'mac-failure'}:
+            def edit(rows):
+                for n, (entry, _) in enumerate(rows):
+                    if entry.get('name') == name:
+                        rows[n] = (entry, b'\xff\xd8bad' if name in collector.PNG_FRAMES else png(name))
+            report = self.exercise(edit=edit)
+            self.assertFalse(report['evidence_complete'])
+
+    def test_supporting_and_transition_numeric_booleans_and_acceptance_claims_reject(self):
+        for field in ('contrast_qualified', 'reference_font_is_resolved_element_font', 'height_proxy_used_as_acceptance'):
+            row = supporting('en', 'full')
+            row[field] = 0
+            with self.assertRaises(ValueError):
+                collector.validate_supporting(encoded(row))
+        for field in ('full_equality_verified', 'fixture_control_exact'):
+            row = transition('en', 'copy-observed')
+            row[field] = 1
+            with self.assertRaises(ValueError):
+                collector.validate_transition(encoded(row))
+        row = transition('en', 'copy-observed')
+        row['rendered_text_observation']['observations_qualify_pass'] = True
+        with self.assertRaises(ValueError):
+            collector.validate_transition(encoded(row))
+
+    def test_original_command_boolean_missing_duplicate_and_changed_caps_reject(self):
+        command, seconds = real_route.fixed_commands()['sandbox_test']
+        start = b'BOUNDED_COMMAND_START ' + encoded(dict(command=command, seconds=seconds)) + b'\n'
+        end = dict(command=command, timeout_seconds=seconds, state='completed', exit=65, cleanup_confirmed=True)
+        for change in [lambda r: r.update(exit=True), lambda r: r.update(cleanup_confirmed=1),
+                       lambda r: r.update(timeout_seconds=601), lambda r: r.update(command=command[:-1]),
+                       lambda r: r.update(state='passed')]:
+            row = copy.deepcopy(end)
+            change(row)
+            with self.assertRaises(ValueError):
+                collector.command_outcome(start + b'BOUNDED_COMMAND_END ' + encoded(row), command, seconds)
+        valid = start + b'BOUNDED_COMMAND_END ' + encoded(end) + b'\n'
+        for data in (start, valid + valid):
+            with self.assertRaises(ValueError):
+                collector.command_outcome(data, command, seconds)
+
+    def test_original_elapsed_boundary_and_failed_timeout_cleanup_codes_stay_actual(self):
+        command, seconds = real_route.fixed_commands()['sandbox_test']
+        start = b'BOUNDED_COMMAND_START ' + encoded(dict(command=command, seconds=seconds)) + b'\n'
+        outcomes = [dict(command=command, timeout_seconds=seconds, state='completed', exit=65,
+                         cleanup_confirmed=True, elapsed_seconds=seconds + 3),
+                    dict(command=command, timeout_seconds=seconds, state='timed_out', exit=124,
+                         cleanup_confirmed=True, elapsed_seconds=seconds + 3),
+                    dict(command=command, timeout_seconds=seconds, state='cleanup_unconfirmed', exit=126,
+                         original_exit=65, cleanup_confirmed=False, elapsed_seconds=seconds + 3)]
+        for end in outcomes:
+            data = start + b'BOUNDED_COMMAND_END ' + encoded(end)
+            actual = collector.command_outcome(data, command, seconds)
+            self.assertEqual(actual, end)
+            end['elapsed_seconds'] = seconds + 3.01
+            with self.assertRaises(ValueError):
+                collector.command_outcome(start + b'BOUNDED_COMMAND_END ' + encoded(end), command, seconds)
+        for elapsed in (-1, True, float('inf'), float('nan')):
+            end = dict(outcomes[0], elapsed_seconds=elapsed)
+            data = start + b'BOUNDED_COMMAND_END ' + json.dumps(end, allow_nan=True).encode()
+            with self.assertRaises(ValueError):
+                collector.command_outcome(data, command, seconds)
+        report = self.exercise(mode='receipt-timeout')
+        self.assertEqual(report['original_commands']['sandbox_test']['exit'], 124)
+        self.assertEqual(report['original_commands']['sandbox_test']['state'], 'timed_out')
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertTrue(all(row['receipt_retained'] is False for row in report['metadata']))
+
+    def test_existing_output_and_unknown_cli_arguments_never_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            previous = Path.cwd()
+            try:
+                os.chdir(temporary)
+                Path(collector.OUT).mkdir(parents=True)
+                Path(collector.OUT, 'old.json').write_bytes(b'{}')
+                with self.assertRaises(ValueError):
+                    collector.collect(runner=lambda *args, **kwargs: self.fail('Must never launch'), route=real_route)
+                with self.assertRaises(ValueError):
+                    collector.main(['--accept-all'])
+            finally:
+                os.chdir(previous)
+
+    def test_schema_duplicate_keys_nonfinite_json_and_structural_bombs_reject(self):
+        for data in (b'{"schema":1,"schema":1}', b'{"value":NaN}', b'x' * 32769):
+            with self.assertRaises(ValueError):
+                collector.validate_metadata(data)
+        with self.assertRaises(ValueError):
+            list(collector.walk({'deep': [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}))
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -12,6 +12,9 @@ executable=app/'Contents/MacOS'/info['CFBundleExecutable']
 archs=subprocess.check_output(['xcrun','lipo','-archs',str(executable)],text=True,timeout=30).split()
 assert set(archs)=={'arm64','x86_64'}
 reader_symbols=inspect_file_reader_imports(executable,True)
+strings=subprocess.check_output(['strings',str(executable)],text=True,timeout=30)
+for marker in ['QRCATCHER_MAC_PUBLIC_METADATA_', 'QRCatcher.MacPublicMetadata.', 'org.qrcatcher.mac-public-metadata.', 'MacAuditPublicMetadataObserver', 'MAC_PUBLIC_METADATA_']:
+    if marker in strings:raise ValueError('Debug public-metadata observer leaked into Mac Release: '+marker)
 minima={}
 for arch in archs:
     load=subprocess.check_output(['xcrun','otool','-arch',arch,'-l',str(executable)],text=True,timeout=30)
