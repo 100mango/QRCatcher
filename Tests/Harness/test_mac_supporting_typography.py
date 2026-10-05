@@ -127,4 +127,137 @@ class MacSupportingTextTests(unittest.TestCase):
         self.assertIn('try capturePixels("mac-minimum-long-text-" + locale)',ui)
 
 
+class MacRenderedPayloadTests(unittest.TestCase):
+    """Source-bound synthetic public-node predicates, not native Swift/XCUI proof."""
+    def accepted(self, wrapper, children, window, scroll, payload):
+        import math
+        def valid(frame):
+            if not isinstance(frame,list) or len(frame)!=4 or any(type(x) not in {int,float} for x in frame):return False
+            try:return all(math.isfinite(x) for x in frame+[frame[0]+frame[2],frame[1]+frame[3]]) and frame[2]>0 and frame[3]>0
+            except OverflowError:return False
+        def contains(outer,inner,rounding=0):
+            if not valid(outer) or not valid(inner):return False
+            return (outer[0]-rounding<=inner[0] and outer[1]-rounding<=inner[1] and
+                    inner[0]+inner[2]<=outer[0]+outer[2]+rounding and inner[1]+inner[3]<=outer[1]+outer[3]+rounding)
+        if (wrapper.get('role')!='staticText' or wrapper.get('identifier')!='mac.payload' or
+                wrapper.get('value')!=payload or len(children)!=1):return False
+        child=children[0]
+        return (child.get('role')=='staticText' and child.get('identifier')=='' and child.get('value')==payload and
+                contains(window,wrapper['frame']) and contains(scroll,wrapper['frame']) and
+                contains(window,child['frame']) and contains(scroll,child['frame']) and
+                contains(wrapper['frame'],child['frame'],1))
+
+    def fixture(self):
+        payload='Keep the full QR result readable alongside its safety instruction and saved-history count. '*4
+        wrapper=dict(role='staticText',identifier='mac.payload',value=payload,frame=[318,306,388,139],enabled=False,hittable=False)
+        child=dict(role='staticText',identifier='',value=payload,frame=[317.5,306,388,139])
+        return wrapper,[child],[0,31,760,572],[280,83,480,520],payload
+
+    def test_observed_noninteractive_wrapper_and_direct_rendered_child(self):
+        self.assertTrue(self.accepted(*self.fixture()))
+        wrapper,children,window,scroll,payload=self.fixture()
+        wrapper['frame']=[318,286,387,159];children[0]['frame']=[318,286,387,159]
+        wrapper['value']=payload='完整保留二维码内容，支持中文和 English。'*7;children[0]['value']=payload
+        self.assertTrue(self.accepted(wrapper,children,window,scroll,payload))
+
+    def test_wrong_duplicate_or_unowned_child_never_qualifies(self):
+        import copy
+        original=self.fixture()
+        for mutate in [lambda w,c: c.clear(),lambda w,c:c.append(copy.deepcopy(c[0])),
+                       lambda w,c:c[0].update(role='button'),lambda w,c:c[0].update(identifier='elsewhere.payload'),
+                       lambda w,c:c[0].update(value='truncated'),lambda w,c:w.update(value='stale'),
+                       lambda w,c:w.update(identifier='wrong.payload'),lambda w,c:c[0].update(frame=[300,306,388,139])]:
+            w,c,window,scroll,payload=copy.deepcopy(original);mutate(w,c)
+            self.assertFalse(self.accepted(w,c,window,scroll,payload))
+
+    def test_clipped_nonfinite_or_invalid_rendered_frames_never_qualify(self):
+        import copy
+        for frame in [[318,20,388,139],[318,550,388,139],[318,306,0,139],
+                      [318,306,388,float('nan')],[float('inf'),306,388,139],
+                      [318,306,True,139],[1e308,306,1e308,139],[10**400,306,388,139]]:
+            w,c,window,scroll,payload=copy.deepcopy(self.fixture());c[0]['frame']=frame
+            self.assertFalse(self.accepted(w,c,window,scroll,payload))
+
+    def test_exact_public_node_scope_visibility_and_real_copy_remain_required(self):
+        source=(ROOT/'QRCatcherMacUITests/QRCatcherMacUITests.swift').read_text()
+        helper=source.split('private func verifyLongCopyAndCapture')[1].split('private func resizeToMinimumReadabilityWindow')[0]
+        for required in ['matching(identifier: "mac.payload")','guard matches.count == 1',
+                         'value.children(matching: .any)','value.children(matching: .staticText)',
+                         'guard children.count == 1, text.count == 1','XCTAssertEqual(rendered.identifier, "")',
+                         'XCTAssertEqual((rendered.value as? String) ?? rendered.label, payload)',
+                         'frame.maxX, frame.maxY','XCTAssertGreaterThan(frame.width, 0)',
+                         'XCTAssertGreaterThan(frame.height, 0)','window.frame.contains(frame)',
+                         'scroll.frame.contains(frame)','value.frame.insetBy(dx: -1, dy: -1).contains(frame)',
+                         '"wrapper_hittable": value.isHittable','"observations_qualify_pass": false',
+                         'XCTAssertTrue(copy.isHittable)','XCTAssertTrue(copy.isEnabled)',
+                         'window.frame.contains(copy.frame)','scroll.frame.contains(copy.frame)',
+                         'copy.click()','NSPasteboard.general.string(forType: .string)','XCTAssertEqual(copied, payload)',
+                         'try capturePixels("mac-minimum-long-text-" + locale)']:
+            self.assertIn(required,helper)
+        self.assertNotIn('descendants(',helper)
+        self.assertNotIn('XCTAssertTrue(value.isHittable)',helper)
+        self.assertNotIn('click()',helper.split('XCTAssertTrue(copy.isHittable)')[0])
+        self.assertIn('try app.performAccessibilityAudit(for: .all)',source)
+        self.assertIn('XCTFail("Accessibility audit [',source)
+
+
+class MacResizeBaselineTests(unittest.TestCase):
+    """Source-bound geometry adversaries, never native XCUI proof."""
+    def plan(self,original,display,visible,windows=1,screens=1,sheets=0,dialogs=0):
+        import math
+        def valid(f):
+            return (len(f)==4 and all(type(x) in {int,float} and math.isfinite(x) for x in f)
+                    and f[2]>0 and f[3]>0 and all(math.isfinite(x) for x in [f[0]+f[2],f[1]+f[3]]))
+        def inside(a,b):return a[0]<=b[0] and a[1]<=b[1] and b[0]+b[2]<=a[0]+a[2] and b[1]+b[3]<=a[1]+a[3]
+        if windows!=1 or screens!=1 or sheets or dialogs or not all(map(valid,[original,display,visible])) or display[:2]!=[0,0]:return None
+        target=[*original[:2],min(1000,visible[0]+visible[2]-original[0]),min(660,visible[1]+visible[3]-original[1])]
+        if not valid(target) or not inside(display,original) or not inside(display,visible) or not inside(visible,target) or target[2]<=860 or target[3]<=632:return None
+        points=[]
+        if abs(original[2]-target[2])>2:
+            points.extend([[original[0]+original[2]-1,original[1]+original[3]/2],[original[0]+target[2]-1,original[1]+original[3]/2]])
+        if abs(original[3]-target[3])>2:
+            points.extend([[original[0]+target[2]/2,original[1]+original[3]-1],[original[0]+target[2]/2,original[1]+target[3]-1]])
+        if any(not(visible[0]<=x<visible[0]+visible[2] and visible[1]<=y<visible[1]+visible[3]) for x,y in points):return None
+        return target,len(points)//2
+
+    def test_retained_minimum_and_full_frames_need_verified_baseline(self):
+        for initial,gestures in [([0,31,760,572],2),([0,31,1024,674],2),([0,31,1000,660],0)]:
+            self.assertEqual(self.plan(initial,[0,0,1024,768],[0,31,1024,674]),([0,31,1000,660],gestures))
+        self.assertLess(760,1000-100);self.assertLess(572,660-60)
+        self.assertFalse(760<760-100)
+
+    def test_unknown_modal_nonfinite_small_or_offscreen_setup_cannot_plan_gesture(self):
+        original=[0,31,760,572];display=[0,0,1024,768];visible=[0,31,1024,674]
+        for c in [dict(windows=0),dict(windows=2),dict(screens=2),dict(sheets=1),dict(dialogs=1)]:
+            self.assertIsNone(self.plan(original,display,visible,**c))
+        for f in [[0,31,0,572],[0,31,float('nan'),572],[0,31,True,572],[-1,31,760,572],[0,31,760,float('inf')],[0,31,1025,572],[900,31,760,572]]:
+            self.assertIsNone(self.plan(f,display,visible))
+        for f in [[0,31,860,674],[0,31,1024,632],[0,31,1024,600],[0,40,1024,665],[0,31,1024,float('nan')],[-1,31,1024,674]]:
+            self.assertIsNone(self.plan(original,display,f))
+        self.assertIsNone(self.plan(original,[1,0,1024,768],visible))
+        self.assertIsNone(self.plan([0,31,760,705],display,visible))
+
+    def test_public_setup_cap_readback_and_exact_original_case_preserved(self):
+        source=(ROOT/'QRCatcherMacUITests/QRCatcherMacUITests.swift').read_text()
+        helper=source.split('private func establishReadabilityResizeBaseline() throws {')[1].split('private func resizeToMinimumReadabilityWindow')[0]
+        for token in ['matching(identifier: "main")','matches.count == 1','NSScreen.screens.count == 1','screen.frame.origin == .zero',
+                      'app.sheets.count == 0','app.dialogs.count == 0','screen.frame.maxY - screen.visibleFrame.maxY',
+                      'display.contains(original)','visible.contains(target)','target.width > 860','target.height > 632',
+                      'visible.contains(right.screenPoint)','visible.contains(end.screenPoint)','visible.contains(bottom.screenPoint)',
+                      'XCTAssertLessThanOrEqual(gestures, 2)','XCTAssertEqual(observed.width, target.width, accuracy: 2)',
+                      'XCTAssertEqual(observed.height, target.height, accuracy: 2)','XCTAssertGreaterThan(observed.width, 860)',
+                      'XCTAssertGreaterThan(observed.height, 632)','XCTAssertTrue(visible.contains(observed))']:
+            self.assertIn(token,helper)
+        self.assertEqual(helper.count('click(forDuration: 0.3, thenDragTo: end)'),2)
+        for forbidden in ['while ','for _','sleep(','UserDefaults','setFrame','AXUIElement','performAccessibilityAudit']:
+            self.assertNotIn(forbidden,helper)
+        signature='    func testNativeWindowResizeKeepsFullActionTitles() throws {'
+        case=signature+source.split(signature,1)[1].split('\n    func test',1)[0]
+        self.assertEqual(case.count('        try establishReadabilityResizeBaseline()\n'),1)
+        case=case.replace('        try establishReadabilityResizeBaseline()\n','')
+        self.assertEqual(hashlib.sha256(case.encode()).hexdigest(),'dc46dabdddfb526a53b6151797629c19fbce1c98c7b43c096c5251b620174677')
+        self.assertIn('.frame(minWidth: 760, minHeight: 520)',(ROOT/'QRCatcherMac/QRCatcherMacApp.swift').read_text())
+        self.assertEqual(source.count('\n    func test'),7)
+
+
 if __name__=='__main__':unittest.main()
