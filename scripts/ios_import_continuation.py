@@ -66,10 +66,17 @@ def identity(device, result):
     if str(uuid.UUID(device)).upper() != device or result != RESULT:
         raise ValueError('Continuation is scoped to the exact observed Pro result/device')
     source = os.environ.get('GITHUB_SHA', '')
-    if not re.fullmatch('[0-9a-f]{40}', source) or os.environ.get('GITHUB_REPOSITORY') != '100mango/QRCatcher' or os.environ.get('GITHUB_REF') != 'refs/heads/codex/apple-platforms':
+    if not re.fullmatch('[0-9a-f]{40}', source) or os.environ.get('GITHUB_REPOSITORY') != '100mango/QRCatcher':
         raise ValueError('Unexpected source/repository/ref')
     if os.environ.get('EVIDENCE_SCOPE') != 'iphone_pro' or os.environ.get('SIMULATOR_ID') != device:
         raise ValueError('Unexpected platform/device profile')
+    if os.environ.get('GITHUB_REF') != 'refs/heads/codex/apple-platforms':
+        # No broad branch acceptance or GITHUB_REF spoofing. The only extra
+        # context is the exact phone workflow/ref/push and sealed job receipt.
+        if os.environ.get('GITHUB_REF') != 'refs/heads/codex/apple-platforms-diagnostic-phone47':
+            raise ValueError('Unexpected source/repository/ref')
+        from diagnostic_phone_smoke_route import verify_continuation_context
+        verify_continuation_context(source)
     return source
 
 

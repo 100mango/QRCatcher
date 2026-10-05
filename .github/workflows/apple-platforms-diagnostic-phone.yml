@@ -1,0 +1,190 @@
+name: Diagnostic Apple phone smoke (Pro and SE3 only)
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-apple-platforms
+  cancel-in-progress: false
+env:
+  DIAGNOSTIC_ONLY: 'true'
+jobs:
+  preflight:
+    name: Compile and verify setup before runtime matrix
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify exact source and prepare bounded build inputs
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        python3 scripts/diagnostic_phone_smoke_route.py validate
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        git rev-parse 'HEAD^{tree}'
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 -m unittest discover -s Tests/Harness -p 'test_*.py' -v
+        python3 scripts/verify_portable_source.py
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py
+        git diff --exit-code -- QRCatcher.xcodeproj
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Build all test schemes and verify actual Debug Watch embedding
+      timeout-minutes: 16
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/compile_platform_preflight.py
+    - name: Verify preflight source stayed unchanged
+      if: ${{ always() }}
+      run: git diff --exit-code HEAD --
+  platform:
+    needs: preflight
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+      EVIDENCE_SCOPE: ${{ matrix.scope }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify exact source and stable toolchain
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        python3 scripts/diagnostic_phone_smoke_route.py validate
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Tested commit: $(git rev-parse HEAD)"
+        echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 Tests/Harness/test_ios_launcher.py
+        python3 Tests/Harness/test_watch_process.py
+        python3 Tests/Harness/test_required_reason_symbols.py
+        python3 Tests/Harness/test_atomic_json.py
+        python3 Tests/Harness/test_vision_ui_cases.py
+        python3 Tests/Harness/test_embedded_watch_gate.py
+        python3 scripts/verify_portable_source.py
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py
+        git diff --exit-code -- QRCatcher.xcodeproj
+        plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
+        xcodebuild -list -project QRCatcher.xcodeproj
+
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Compile iOS tests before this device boots
+      id: ios_test_build
+      if: ${{ ((startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 8
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -o pipefail
+        python3 -u scripts/run_bounded.py 435 xcodebuild build-for-testing -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination 'generic/platform=iOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee ios-test-build.log
+        python3 scripts/verify_embedded_watch.py simulator
+    - name: Select this fresh VM phone or iPad device
+      if: ${{ ((startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 scripts/select_ios_platform_matrix.py
+    - name: Run iOS codec equivalence and existing unit regression
+      if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 15
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -o pipefail
+        python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$SIMULATOR_ID" || true
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/run_bounded.py 300 xcrun simctl bootstatus "$SIMULATOR_ID" -b
+        python3 -u scripts/run_bounded.py 855 xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
+    - name: Run large-phone UI regression
+      if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 20
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
+    - name: Run compact-phone UI regression
+      if: ${{ ((matrix.scope == 'iphone_se3') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 22
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests
+    - name: Export bounded phone and iPad evidence
+      if: ${{ (matrix.scope != 'macos' && !startsWith(matrix.scope, 'visionos_')) && (always()) }}
+      timeout-minutes: 3
+      run: python3 -u scripts/export_ios_platform_screenshots.py
+    - name: Retain diagnostic phone identity
+      id: phone_diagnostic_identity
+      if: ${{ always() }}
+      timeout-minutes: 1
+      run: python3 scripts/diagnostic_phone_smoke_route.py retain
+    - name: Validate isolated platform and whole-run evidence allocation
+      id: platform_evidence_budget
+      if: ${{ (matrix.scope != 'macos') && (always()) }}
+      run: python3 scripts/validate_evidence_budget.py build/ios-platform-evidence --scope "$EVIDENCE_SCOPE" --report build/platform-evidence-budget.json
+    - name: Retain small phone and iPad evidence
+      if: ${{ (matrix.scope != 'macos') && (always() && steps.platform_evidence_budget.outcome == 'success' && steps.phone_diagnostic_identity.outcome == 'success') }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-diagnostic-phone47-${{ matrix.scope }}-evidence
+        path: build/ios-platform-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Summarize executed evidence
+      if: always()
+      timeout-minutes: 3
+      run: |
+        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult VisionPhotosUIResults.xcresult VisionFilesUIResults.xcresult VisionChineseUIResults.xcresult VisionLargestUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
+          if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
+        done
+        echo 'Runtime proof requires successful Mac XCTest; x86_64 build is separate from runtime proof. Physical camera capture/denial/disconnect and paired Watch background file transport remain physical-device gates; exact sandbox/platform outcomes are reported separately.' >> "$GITHUB_STEP_SUMMARY"
+    - name: Verify source stayed unchanged
+      if: always()
+      run: |
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+    name: ${{ matrix.scope }} · diagnostic-only fresh standard VM
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        scope:
+        - iphone_pro
+        - iphone_se3
+'on':
+  push:
+    branches:
+    - codex/apple-platforms-diagnostic-phone47

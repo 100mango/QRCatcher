@@ -2,6 +2,7 @@
 #import "AppDelegate.h"
 #import "URLEntity.h"
 #import "NSString+Tools.h"
+#import "QRPhoneResultViewController.h"
 @interface QRURLViewController () <UITableViewDataSource, UITableViewDelegate, NSFetchedResultsControllerDelegate>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UILabel *emptyLabel;
@@ -67,16 +68,13 @@
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     URLEntity *record = [self.fetchedResultsController objectAtIndexPath:indexPath];
     if (self.selectedPayloadHandler && record.url.length) { self.selectedPayloadHandler(record.url); return; }
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"QR Code", nil) message:record.url preferredStyle:UIAlertControllerStyleAlert];
-    NSURL *URL = [NSString HTTPURLFromString:record.url];
-    if (URL) [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Open Website", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    if (self.presentedViewController) return;
+    QRPhoneResultViewController *result = [[QRPhoneResultViewController alloc] initWithPayload:record.url ?: @"" openWebsiteHandler:^(NSURL *URL) {
         [UIApplication.sharedApplication openURL:URL options:@{} completionHandler:^(BOOL success) {
             if (!success) [self showMessage:NSLocalizedString(@"This website could not be opened.", nil)];
         }];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Copy Result", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { UIPasteboard.generalPasteboard.string = record.url; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel", nil) style:UIAlertActionStyleCancel handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
+    [self presentViewController:result animated:YES completion:nil];
 }
 - (void)showMessage:(NSString *)message {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"History", nil) message:message preferredStyle:UIAlertControllerStyleAlert];

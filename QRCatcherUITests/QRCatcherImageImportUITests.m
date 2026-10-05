@@ -27,6 +27,7 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
 @interface QRCatcherImageImportUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
+@property (nonatomic, copy) NSArray *historyRowsBeforePresentation;
 @end
 @implementation QRCatcherImageImportUITests
 - (void)setUp {
@@ -64,6 +65,7 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
                 return NO;
             } error:&error];
             XCTAssertTrue(apiReturnedSuccess, @"Real imported/reopened result accessibility audit: %@", error);
+            XCTAssertEqual(callbackIssues, 0, @"Every full-audit issue remains a failure");
         } else { XCTFail(@"The strict imported-result audit is unavailable on this runtime"); }
     } @finally { self.continueAfterFailure = previousContinuation; }
     NSDictionary *receipt = @{@"phase": phase, @"callback_issues": @(callbackIssues),
@@ -99,23 +101,25 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
     if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPhone) {
         [self auditCurrentResultPhase:@"selected-result"]; return;
     }
-    XCUIElement *alert = self.app.alerts[@"QR Code"];
-    XCTAssertTrue(alert.exists && alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists);
-    if (!alert.exists || !alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists) return;
-    NSArray *before = [self importedHistoryRows];
+    XCUIElement *result = self.app.otherElements[@"history.result"];
+    XCUIElement *body = result.staticTexts[@"history.result.payload"];
+    XCTAssertTrue(result.exists && [body.label isEqualToString:@"QRCatcher 你好 🌈 123"]);
+    if (!result.exists || ![body.label isEqualToString:@"QRCatcher 你好 🌈 123"]) return;
+    NSArray *before = self.historyRowsBeforePresentation;
+    XCTAssertNotNil(before, @"Retain the actual saved rows before full-screen presentation");
     if (!before) return;
-    [self attachBoundedText:@"phone-alert-history" name:@"image-import-audit-pair-required"];
-    [self attachImportAuditTree:@"image-import-alert-audit-tree"];
-    NSDictionary *first = [self auditCurrentResultPhase:@"native-alert"];
-    // The action must belong to this same native QR alert. Never dismiss an
-    // unrelated system dialog or infer Cancel from a screen coordinate.
-    XCUIElement *cancel = alert.buttons[@"Cancel"];
-    BOOL canCancel = alert.exists && alert.staticTexts[@"QRCatcher 你好 🌈 123"].exists &&
+    [self attachBoundedText:@"phone-result-history" name:@"image-import-audit-pair-required"];
+    [self attachImportAuditTree:@"image-import-result-audit-tree"];
+    NSDictionary *first = [self auditCurrentResultPhase:@"app-owned-result"];
+    // Only this exact app-owned result may supply Cancel. System permission
+    // dialogs remain native, and must never be dismissed by this action.
+    XCUIElement *cancel = result.buttons[@"history.result.cancel"];
+    BOOL canCancel = result.exists && [body.label isEqualToString:@"QRCatcher 你好 🌈 123"] &&
                      cancel.exists && cancel.enabled && cancel.hittable;
-    XCTAssertTrue(canCancel, @"The original native QR alert must own an available Cancel");
+    XCTAssertTrue(canCancel, @"The original app-owned QR result must own an available Cancel");
     if (!canCancel) return;
     [cancel tap];
-    XCTNSPredicateExpectation *closed = [[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:alert];
+    XCTNSPredicateExpectation *closed = [[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:result];
     XCTWaiterResult closeResult = [XCTWaiter waitForExpectations:@[closed] timeout:10];
     XCTAssertEqual(closeResult, XCTWaiterResultCompleted);
     if (closeResult != XCTWaiterResultCompleted) return;
@@ -163,15 +167,16 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
     XCUIElement *table=self.app.tables[@"history.table"];
     XCTAssertTrue([table.cells.firstMatch waitForExistenceWithTimeout:10]); XCTAssertEqual(table.cells.count,2);
     XCTAssertTrue(table.cells.firstMatch.staticTexts[@"QRCatcher 你好 🌈 123"].exists);
+    if (phone) self.historyRowsBeforePresentation = [self importedHistoryRows];
     [table.cells.firstMatch tap];
     if (phone) {
-        // Preserve the established phone history alert, rather than expecting
-        // the iPad split-view selection callback to replace the scanner.
-        XCUIElement *result=self.app.alerts[@"QR Code"];
+        // Phone history uses its app-owned detail; the iPad split callback
+        // still replaces only the selected scanner result.
+        XCUIElement *result=self.app.otherElements[@"history.result"];
         XCTAssertTrue([result waitForExistenceWithTimeout:10]);
-        XCTAssertTrue(result.staticTexts[@"QRCatcher 你好 🌈 123"].exists);
-        XCTAssertTrue(result.buttons[@"Copy Result"].hittable);
-        XCTAssertFalse(result.buttons[@"Open Website"].exists);
+        XCTAssertEqualObjects(result.staticTexts[@"history.result.payload"].label,@"QRCatcher 你好 🌈 123");
+        XCTAssertTrue(result.buttons[@"history.result.copy"].hittable);
+        XCTAssertFalse(result.buttons[@"history.result.open"].exists);
     } else {
         XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:10]);
         XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label,@"QRCatcher 你好 🌈 123");
