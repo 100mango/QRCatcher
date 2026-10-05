@@ -47,6 +47,13 @@ def test_tree():
                           for c in collector.CASES]}
 
 
+def non_case_children(tests):
+    """Synthetic result details, never a claim about unretained native children."""
+    for row in tests['testNodes']:
+        row['children'] = [dict(nodeType='Failure Message', name='Strict audit callback',
+                                children=[dict(nodeType='Source Location', name='fixture')])]
+
+
 def paired(case, checkpoint, observed=True):
     native = fixtures.MacPublicMetadataTests().receipt(case, checkpoint, observed=True)
     token = ('7FAAE2C9-89A0-4FFB-946D-3F01CB62C875' if case == collector.CASES[0]
@@ -196,6 +203,9 @@ class CollectorTests(unittest.TestCase):
                 if mode == 'mid-cleanup' and len(calls) == 1:
                     operation.update(cleanup_confirmed=False, state='cleanup_unconfirmed', exit=126)
                     return 126, '', operation
+                if mode == 'tests-cleanup' and len(calls) == 2 or mode == 'export-cleanup' and len(calls) == 3:
+                    operation.update(cleanup_confirmed=False, state='cleanup_unconfirmed', exit=126)
+                    return 126, '', operation
                 if mode == 'durable-mid-cleanup' and len(calls) == 1:
                     (root / 'build/owned-process-cleanup.json').write_bytes(b'{"blocked":true}')
                 if mode == 'tool-output-limit' and len(calls) == 1:
@@ -217,6 +227,14 @@ class CollectorTests(unittest.TestCase):
                     text = encoded(summary(True) if command[-1] == 'MacTestResults.xcresult' else native_summary).decode()
                 elif command[1:5] == ['xcresulttool', 'get', 'test-results', 'tests']:
                     text = encoded(tests).decode()
+                    if mode == 'tests-durable-cleanup':
+                        (root / 'build/owned-process-cleanup.json').write_bytes(b'{"blocked":true}')
+                    if mode == 'tests-duplicate-keys':
+                        text = '{"testNodes":[],"testNodes":[]}'
+                    if mode == 'tests-nonfinite':
+                        text = '{"testNodes":[],"value":NaN}'
+                    if mode == 'tests-oversize':
+                        text = '{"value":"' + 'x' * collector.JSON_CAP + '"}'
                 elif command[1:4] == ['xcresulttool', 'export', 'attachments']:
                     staging = root / command[-1]
                     staging.mkdir()
@@ -376,7 +394,120 @@ class CollectorTests(unittest.TestCase):
         for edit in changes:
             report = self.exercise(edit_tests=edit)
             self.assertFalse(report['evidence_complete'])
+            self.assertEqual(len(self.calls), 3)
+            self.assertEqual(report['test_identity']['state'], 'UNKNOWN')
+            self.assertTrue(report['test_identity']['raw_retained'])
+            self.assertEqual(report['sameState'], 'UNKNOWN')
+            self.assertEqual(report['strict_audit_callbacks'], 0)
+            self.assertNotIn('sandbox-mac-failure.jpg', self.files)
+
+    def test_bounded_non_case_children_preserve_exact_failed_cases_without_qualification(self):
+        # Both original cases fail strict audits. Non-case detail rows do not
+        # become selected tests; every actual Test Case still counts globally.
+        report = self.exercise(edit_tests=non_case_children)
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertEqual(report['test_identity']['state'], 'OBSERVED')
+        self.assertEqual([row['result'] for row in report['executed_tests']], ['Failed', 'Failed'])
+        self.assertEqual(report['original_commands']['sandbox_test']['exit'], 65)
+        self.assertTrue(all(row['source_bytes_preserved'] for row in report['screenshots']))
+        expected = test_tree()
+        non_case_children(expected)
+        self.assertEqual(self.files['sandbox-test-results.json'], encoded(expected))
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_semantic_failure_keeps_bounded_raw_tree_and_only_closed_unqualified_diagnostics(self):
+        def malformed(tests):
+            non_case_children(tests)
+            tests['testNodes'][0]['children'] = tests['testNodes'][0]['children'][0]
+        def receipts(rows):
+            for n, (entry, body) in enumerate(rows):
+                if entry.get('name', '').startswith('mac-public-metadata-'):
+                    value = schema.decode(body)
+                    value = paired(value['case'], value['checkpoint'])
+                    value['sameState'] = 'UNKNOWN'
+                    value['reason'] = 'state-or-geometry-mismatch'
+                    rows[n] = (entry, encoded(value))
+            rows.append((dict(name='private-arbitrary-attachment'), b'private arbitrary bytes'))
+        report = self.exercise(edit_tests=malformed, edit=receipts)
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertEqual(report['test_identity'], dict(state='UNKNOWN', reason='test-results-semantic-validation-failed', raw_retained=True))
+        self.assertNotIn('executed_tests', report)
+        self.assertTrue(any('children must be' in error for error in report['errors']))
+        expected = test_tree()
+        malformed(expected)
+        self.assertEqual(self.files['sandbox-test-results.json'], encoded(expected))
+        self.assertEqual(report['original_commands']['sandbox_test']['exit'], 65)
+        self.assertEqual(report['strict_audit_callbacks'], 0)
+        self.assertFalse(any(name.startswith('sandbox-audit-') or name == 'sandbox-mac-failure.jpg' for name in self.files))
+        self.assertFalse(any(b'private arbitrary bytes' in data for data in self.files.values()))
+        self.assertEqual(len(report['screenshots']), len(collector.FRAMES))
+        for row in report['screenshots']:
+            self.assertEqual(row['test_identity_binding'], 'UNKNOWN')
+            self.assertEqual(self.files[row['name']], png(row['checkpoint']) if row['checkpoint'] in collector.PNG_FRAMES else b'\xff\xd8mac-chinese-policy')
+        for row in report['metadata']:
+            self.assertTrue(row['receipt_retained'])
+            self.assertEqual(row['test_identity_binding'], 'UNKNOWN')
+            self.assertEqual(row['sameState'], 'UNKNOWN')
+            self.assertEqual(row['reason'], 'state-or-geometry-mismatch')
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+        self.assertEqual(collector.EXPORT_SECONDS, 180)
+
+    def test_nested_selected_or_extra_test_case_subtrees_never_complete_interpretation(self):
+        def extra(tests):
+            non_case_children(tests)
+            tests['testNodes'][0]['children'].append(copy.deepcopy(tests['testNodes'][1]))
+        def nested(tests):
+            child = tests['testNodes'].pop()
+            tests['testNodes'][0]['children'] = [dict(nodeType='Failure Message', children=[child])]
+        for edit in (extra, nested):
+            report = self.exercise(edit_tests=edit)
+            self.assertFalse(report['evidence_complete'])
+            self.assertEqual(report['test_identity']['state'], 'UNKNOWN')
+            self.assertEqual(report['sameState'], 'UNKNOWN')
+            self.assertIn('sandbox-test-results.json', self.files)
+            self.assertEqual(len(self.calls), 3)
+            self.assertEqual(sum(row['receipt_retained'] for row in report['metadata']), 4)
+
+    def test_unknown_interpretation_preserves_closed_receipt_owner_schema_and_path_negatives(self):
+        wrong_tree = lambda t: t['testNodes'][0].update(nodeIdentifier='Other/testOther()')
+        changes = [lambda r: r.update(case='testOther'), lambda r: r.update(decoded_text='private history'),
+                   lambda r: r.update(sequence=True)]
+        for change in changes:
+            report = self.exercise(edit_tests=wrong_tree, edit=self.mutate_receipt(change))
+            self.assertFalse(report['evidence_complete'])
+            self.assertEqual(report['test_identity']['state'], 'UNKNOWN')
+            self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+        report = self.exercise(edit_tests=wrong_tree, mode='attachment-path-escape')
+        self.assertFalse(report['evidence_complete'])
+        self.assertFalse(report['screenshots'])
+        self.assertTrue(all(row['receipt_retained'] is False for row in report['metadata']))
+
+    def test_unsafe_raw_tests_are_not_retained_and_cleanup_stops_before_diagnostic_export(self):
+        for mode in ('tests-duplicate-keys', 'tests-nonfinite', 'tests-oversize',
+                     'tests-cleanup', 'tests-durable-cleanup'):
+            report = self.exercise(mode=mode)
             self.assertEqual(len(self.calls), 2)
+            self.assertNotIn('sandbox-test-results.json', self.files)
+            self.assertFalse(report['evidence_complete'])
+            self.assertFalse(report['screenshots'])
+        def deep(tests):
+            value = 0
+            for _ in range(34):
+                value = [value]
+            tests['details'] = value
+        for edit in (deep, lambda t: t.update(details=['x'] * 8192)):
+            report = self.exercise(edit_tests=edit)
+            self.assertEqual(len(self.calls), 2)
+            self.assertNotIn('sandbox-test-results.json', self.files)
+            self.assertFalse(report['evidence_complete'])
+            self.assertFalse(report['screenshots'])
+        report = self.exercise(mode='export-cleanup', edit_tests=lambda t: t['testNodes'].pop())
+        self.assertEqual(len(self.calls), 3)
+        self.assertTrue(report['owned_cleanup_uncertainty_observed'])
+        self.assertIn('sandbox-test-results.json', self.files)
+        self.assertFalse(report['screenshots'])
+        self.assertTrue(all(row['receipt_retained'] is False for row in report['metadata']))
 
     def test_bounded_test_display_variant_keeps_exact_ids_and_raw_tree_unqualified(self):
         report = self.exercise(edit_tests=lambda t: t['testNodes'][0].update(name='-[QRCatcherMacUITests testNativeWindowResizeKeepsFullActionTitles]'))

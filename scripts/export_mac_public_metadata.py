@@ -298,7 +298,10 @@ def validate_tests(value, summary):
         case = case_identity(row.get('nodeIdentifier'), row.get('nodeIdentifierURL'))
         require(case not in seen and small_string(row.get('name')) and
                 row.get('result') in {'Passed', 'Failed'}, 'Duplicate, missing or invalid selected test leaf')
-        require(not row.get('children'), 'Selected test leaf contains another test subtree')
+        children = row.get('children', [])
+        require(type(children) is list, 'Selected test children must be a bounded result list')
+        require(not any(child.get('nodeType') == 'Test Case' for child in walk(children)),
+                'Selected test leaf contains another Test Case subtree')
         seen.add(case)
         normalized.append({'case': case, 'display_name': row['name'], 'result': row['result'],
                            'nodeIdentifier': row['nodeIdentifier'], 'nodeIdentifierURL': row['nodeIdentifierURL'],
@@ -444,6 +447,8 @@ def collect(runner=None, clock=None, route=None):
               'launch_context': {'state': 'UNKNOWN', 'reason': 'missing-or-uncollected-original-launch-receipts', 'rows': [],
                                  'checkpoint_pid_pairing': 'UNKNOWN: original launch rows have no per-checkpoint token/PID link'},
               'screenshots': [], 'strict_audit_callbacks': 0,
+              'test_identity': {'state': 'UNKNOWN', 'reason': 'missing-or-uncollected-test-results',
+                                'raw_retained': False},
               'offline_freshness_revalidated': False,
               'freshness_limit': 'Native synchronous source guard is the observed five-second envelope; offline export cannot reobserve request time or now'}
     used, stopped, started = 0, blocked(), clock()
@@ -574,10 +579,18 @@ def collect(runner=None, clock=None, route=None):
             report['device'] = device
             report['launch_context']['result_device'] = device
             tests_data = run(['xcrun', 'xcresulttool', 'get', 'test-results', 'tests', '--path', RESULT], 30)
-            report['executed_tests'] = validate_tests(schema.decode(tests_data, JSON_CAP), summary)
+            tests = schema.decode(tests_data, JSON_CAP)
+            list(walk(tests))
             retain('sandbox-test-results.json', tests_data, JSON_CAP)
-            if any(row['presentation_binding'] == 'UNKNOWN' for row in report['executed_tests']):
-                error('Exact test identities retained with UNKNOWN display-name presentation binding')
+            report['test_identity']['raw_retained'] = True
+            try:
+                report['executed_tests'] = validate_tests(tests, summary)
+                report['test_identity'].update(state='OBSERVED', reason='exact-two-qualified-test-case-results')
+                if any(row['presentation_binding'] == 'UNKNOWN' for row in report['executed_tests']):
+                    error('Exact test identities retained with UNKNOWN display-name presentation binding')
+            except (ValueError, TypeError, KeyError) as failure:
+                report['test_identity']['reason'] = 'test-results-semantic-validation-failed'
+                error(failure)
             test_exit = report['original_commands']['sandbox_test']['exit']
             require((summary['result'] == 'Passed' and test_exit == 0) or
                     (summary['result'] == 'Failed' and test_exit == 65),
@@ -606,6 +619,11 @@ def collect(runner=None, clock=None, route=None):
                 try:
                     name = presentation_name(entry)
                     prefix = owned_prefix(entry)
+                    # Unknown test interpretation permits only named frames and
+                    # independently closed receipts, never arbitrary callback text.
+                    if report['test_identity']['state'] == 'UNKNOWN' and (
+                            name in {'mac-failure', 'mac-audit-element'} or prefix == 'mac-audit-element'):
+                        continue
                     path = staging / entry['exportedFileName']
                     if name in set(FRAMES) | {'mac-failure'}:
                         data = read_regular(path, root, FILE_CAP)
@@ -616,7 +634,8 @@ def collect(runner=None, clock=None, route=None):
                         else:
                             require(name not in retained_frames, 'Duplicate ordinary Mac frame')
                         row = retain('sandbox-' + name + ('.png' if dimensions else '.jpg'), data)
-                        row = dict(row, checkpoint=name, source_bytes_preserved=True, diagnostic_failure=name == 'mac-failure')
+                        row = dict(row, checkpoint=name, source_bytes_preserved=True, diagnostic_failure=name == 'mac-failure',
+                                   test_identity_binding=report['test_identity']['state'])
                         if dimensions:
                             row['native_pixel_dimensions'] = dimensions
                         report['screenshots'].append(row)
@@ -666,6 +685,7 @@ def collect(runner=None, clock=None, route=None):
                         slot = next(row for row in report['metadata'] if row['checkpoint'] == checkpoint)
                         slot.update(token=receipt['token'], requestID=receipt['requestID'], sameState=receipt['sameState'],
                                     presentation_binding='OBSERVED' if name else 'UNKNOWN', receipt_retained=True,
+                                    test_identity_binding=report['test_identity']['state'],
                                     reason=receipt['reason'], presentation=presentation_diagnostic(entry, expected_name))
                         receipt_checkpoints.add(checkpoint)
                         tokens[case] = receipt['token']
