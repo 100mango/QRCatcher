@@ -1,6 +1,7 @@
 #import <XCTest/XCTest.h>
 #import <CoreFoundation/CoreFoundation.h>
 #include <stdio.h>
+#include <math.h>
 #import "QRPhoneResultViewController.h"
 #import "QRURLViewController.h"
 #import "QRCatchViewController.h"
@@ -229,6 +230,26 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
         XCTAssertNil(history.recordedPresentation); XCTAssertEqualObjects([self savedRows:store], before);
     } @finally { AppDelegate.appDelegate.historyStore = oldStore; }
 }
+// Keep strict containment of the original content target; only the public
+// scroll request gains one physical pixel of vertical room inside known padding.
+- (void)scrollOriginalRectWithOnePixelMargin:(CGRect)original inScroll:(UIScrollView *)scroll {
+    CGFloat scale = scroll.traitCollection.displayScale;
+    BOOL scaleValid = isfinite(scale) && scale >= 1;
+    XCTAssertTrue(scaleValid, @"A finite actual display scale is required");
+    if (!scaleValid) return;
+    CGFloat margin = 1.0 / scale;
+    CGRect request = CGRectInset(original, 0, -margin);
+    BOOL fits = isfinite(margin) && margin > 0 && margin <= 1 &&
+        isfinite(request.origin.x) && isfinite(request.origin.y) &&
+        isfinite(request.size.width) && isfinite(request.size.height) &&
+        request.size.width > 0 && request.size.height > 0 &&
+        request.size.width <= scroll.bounds.size.width && request.size.height <= scroll.bounds.size.height &&
+        CGRectGetMinX(request) >= 0 && CGRectGetMinY(request) >= 0 &&
+        CGRectGetMaxX(request) <= scroll.contentSize.width && CGRectGetMaxY(request) <= scroll.contentSize.height;
+    XCTAssertTrue(fits, @"The one-pixel request must fit both viewport and available content padding");
+    if (!fits) return;
+    [scroll scrollRectToVisible:request animated:NO];
+}
 - (void)attachGeometryBeforeContainment:(NSString *)stage payloadKind:(NSString *)kind payload:(NSString *)payload viewport:(CGSize)viewport host:(UIViewController *)host result:(QRPhoneResultViewController *)result text:(UIScrollView *)text actions:(UIScrollView *)actions body:(UILabel *)body title:(UILabel *)title target:(CGRect)target fullText:(CGSize)fullText fullTitle:(CGSize)fullTitle {
     NSMutableArray *buttons = [NSMutableArray new];
     NSArray *identifiers = [kind isEqualToString:@"website"] ? @[@"history.result.open", @"history.result.copy", @"history.result.cancel"] : @[@"history.result.copy", @"history.result.cancel"];
@@ -264,7 +285,9 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
     fprintf(stdout, "HOSTED_GEOMETRY_JSON %lu/44 %s\n", (unsigned long)self.geometryConsoleCount, consoleJSON.UTF8String);
     fflush(stdout);
     XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
-    attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, stage];
+    NSDictionary *nameTokens = @{ @"history.result.open": @"action-open", @"history.result.copy": @"action-copy", @"history.result.cancel": @"action-cancel" };
+    NSString *nameStage = nameTokens[stage] ?: stage;
+    attachment.name = [NSString stringWithFormat:@"phone-hosted-geometry-%@-%dx%d-%@", kind, (int)viewport.width, (int)viewport.height, nameStage];
     attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:attachment];
 }
@@ -301,11 +324,11 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
             CGRect fullBody = [body convertRect:body.bounds toView:text];
             CGFloat endpointHeight = body.font.lineHeight;
             CGRect beginning = CGRectMake(fullBody.origin.x, fullBody.origin.y, fullBody.size.width, endpointHeight);
-            [text scrollRectToVisible:beginning animated:NO];
+            [self scrollOriginalRectWithOnePixelMargin:beginning inScroll:text];
             [self attachGeometryBeforeContainment:@"beginning" payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:beginning fullText:fullText fullTitle:CGSizeZero];
             XCTAssertTrue(CGRectContainsRect(text.bounds, beginning));
             CGRect ending = CGRectMake(fullBody.origin.x, CGRectGetMaxY(fullBody)-endpointHeight, fullBody.size.width, endpointHeight);
-            [text scrollRectToVisible:ending animated:NO];
+            [self scrollOriginalRectWithOnePixelMargin:ending inScroll:text];
             [self attachGeometryBeforeContainment:@"ending" payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:ending fullText:fullText fullTitle:CGSizeZero];
             XCTAssertTrue(CGRectContainsRect(text.bounds, ending));
             CGPoint readableEnding = text.contentOffset;
@@ -317,7 +340,7 @@ static BOOL QRDiagnosticJSONBooleanTypesAreValid(id object) {
                 XCTAssertGreaterThanOrEqual(button.titleLabel.bounds.size.height+0.5, fullTitle.height);
                 CGRect rect = [button convertRect:button.bounds toView:actions];
                 XCTAssertGreaterThanOrEqual(rect.size.height, 44);
-                [actions scrollRectToVisible:rect animated:NO];
+                [self scrollOriginalRectWithOnePixelMargin:rect inScroll:actions];
                 [self attachGeometryBeforeContainment:identifier payloadKind:completePayload == website ? @"website" : @"text" payload:completePayload viewport:value.CGSizeValue host:host result:result text:text actions:actions body:body title:title target:rect fullText:fullText fullTitle:fullTitle];
                 XCTAssertTrue(CGRectContainsRect(actions.bounds, rect));
                 XCTAssertTrue(CGPointEqualToPoint(text.contentOffset, readableEnding));

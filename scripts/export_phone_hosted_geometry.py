@@ -34,6 +34,7 @@ RESULT_LIMIT = 64 * 1024 * 1024
 NOT_RUN = ['full_phone_UI', 'Files_import_and_reopen', 'Photos_import_and_reopen',
            'paired_result_history_accessibility_audits', 'SE3', 'canonical_thirteen_row_qualification']
 SIZES = [(320, 568), (375, 667), (440, 956), (568, 320)]
+NAME_TOKENS = {'history.result.open': 'action-open', 'history.result.copy': 'action-copy', 'history.result.cancel': 'action-cancel'}
 ACTIONS = {'text': ['history.result.copy', 'history.result.cancel'],
            'website': ['history.result.open', 'history.result.copy', 'history.result.cancel']}
 PAYLOADS = {'text': 'BEGIN 👩🏽\u200d💻 e\u0301 你好\n' + 'Long readable Arabic العربية Hebrew עברית 🌈\n' * 80 + '最后一行 END',
@@ -265,7 +266,7 @@ def collect_entries(manifest):
             seen_files.add(filename)
             data = read_regular(ATTACHMENTS / filename, RECEIPT_LIMIT)
             key, value = receipt(data)
-            expected_name = PREFIX + key[0] + '-' + str(int(key[1])) + 'x' + str(int(key[2])) + '-' + key[3]
+            expected_name = PREFIX + key[0] + '-' + str(int(key[1])) + 'x' + str(int(key[2])) + '-' + NAME_TOKENS.get(key[3], key[3])
             # Xcode may suffix exported filenames, but the public human-readable attachment name is exact.
             if re.fullmatch(re.escape(expected_name) + r'(?:\.json|_(?:0|[1-9][0-9]*)_[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\.json)?', name) is None:
                 # Already-owned test/prefix and validated synthetic receipt only.
@@ -325,12 +326,22 @@ def console_observations(log):
 
 def retain_console_diagnostics(record, rows, context):
     """Pure bounded reads/writes after confirmed native/collector cleanup only."""
+    trace = {'stage': 'cleanup-before-retention', 'expected_result_fingerprint': context['fingerprint']}
+    record['console_retention_trace'] = trace
     require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
-    require(result_fingerprint() == context['fingerprint'], 'Hosted result changed before console retention')
+    trace['stage'] = 'result-fingerprint-read'
+    observed = result_fingerprint()
+    trace['observed_result_fingerprint'] = observed
+    trace['stage'] = 'result-fingerprint-match'
+    require(observed == context['fingerprint'], 'Hosted result changed before console retention')
+    trace['stage'] = 'initial-source-seal-check'
     require(route.retained_initial_record(context['identity']) == context['initial'], 'Initial console source proof changed')
+    trace['stage'] = 'cleanup-before-directory'
     require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
     destination = OUT / 'console-geometry'
+    trace['stage'] = 'new-directory-check'
     require(not destination.exists() and not destination.is_symlink(), 'Console diagnostic folder is stale')
+    trace['stage'] = 'directory-create'
     destination.mkdir()
     diagnostic = {'state': 'INCOMPLETE UNQUALIFIED CONSOLE OBSERVATIONS', 'acceptance': False,
                   'attachment_name_binding_performed': False, 'observations_qualify_pass': False,
@@ -341,14 +352,29 @@ def retain_console_diagnostics(record, rows, context):
     record['console_diagnostics'] = diagnostic
     # All44 records were validated before any copy; invalid JSON is never copied.
     for key, data, value in sorted(rows):
+        trace['stage'] = 'cleanup-before-receipt'
         require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
         name = 'console-' + key[0] + '-' + str(int(key[1])) + 'x' + str(int(key[2])) + '-' + key[3] + '.json'
+        trace['stage'] = 'receipt-write'; trace['receipt_key'] = list(key)
         retain_exact_bytes(destination / name, data)
         diagnostic['receipts'].append({'name': 'console-geometry/' + name, 'key': list(key),
                                        'bytes': len(data), 'sha256': route.sha256(data),
                                        'observations_qualify_pass': False})
+    trace['stage'] = 'cleanup-after-receipts'
     require(not blocked(), 'Console diagnostics blocked by cleanup uncertainty')
     diagnostic['state'] = 'UNQUALIFIED CONSOLE OBSERVATIONS'
+    trace['stage'] = 'complete-unqualified'
+
+
+def record_console_retention_failure(record, error):
+    trace = record.setdefault('console_retention_trace', {'stage': 'not-entered'})
+    # Error class and a closed message allow-list only; no raw OSError paths,
+    # unexpected values, payload text or opaque exception representations.
+    allowed = {'Console diagnostics blocked by cleanup uncertainty',
+               'Hosted result changed before console retention', 'Initial console source proof changed',
+               'Console diagnostic folder is stale'}
+    trace['failure_type'] = type(error).__name__[:64]
+    trace['failure_reason'] = str(error) if str(error) in allowed else 'UNEXPECTED BOUNDED RETENTION FAILURE'
 
 
 def main():
@@ -413,13 +439,16 @@ def main():
         write_json(OUT / 'manifest.json', record, limit=64 * 1024)
         return 0
     except Exception as error:
+        if 'console_retention_trace' in record:
+            record_console_retention_failure(record, error)
         if isinstance(error, AttachmentNameMismatch):
             record['attachment_name_rejection'] = error.diagnostic
             print('HOSTED_ATTACHMENT_NAME_MISMATCH ' + json.dumps(error.diagnostic, ensure_ascii=True, sort_keys=True), flush=True)
         if console_rows is not None and 'console-geometry' not in [p.name for p in OUT.iterdir()] and not blocked():
             try:
                 retain_console_diagnostics(record, console_rows, console_context)
-            except Exception:
+            except Exception as retention_error:
+                record_console_retention_failure(record, retention_error)
                 if record.get('console_diagnostics', {}).get('receipts'):
                     record['console_diagnostics']['state'] = 'INCOMPLETE OR UNCERTAIN'
                 else:
