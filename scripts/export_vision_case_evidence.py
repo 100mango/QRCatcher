@@ -191,13 +191,23 @@ def export(scope):
         (out / target).write_bytes(data)
         summary['files'].append({'name': target, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
 
+    from owned_process_barrier import blocked
+    if blocked():
+        summary['errors'].append('Owned-process cleanup remains unconfirmed')
+    pending = Path('build/vision-command-inflight.json')
+    if pending.exists() or pending.is_symlink():
+        summary['errors'].append('Vision command bootstrap or cleanup remains unconfirmed')
+        try: retain(pending, cap=1024)
+        except (OSError, ValueError) as error: summary['errors'].append(str(error))
+
     # Retain each row's own compact diagnostics once. No raw xcresult or broad
     # runtime directory copying; known result/frame identities are checked below.
     diagnostic_json = ['runtime.json', 'optional-simulator.json', 'ui-cases.json', 'runner-bindings.json',
-                       'checkpoint-captures.json', 'host-failure-capture.json', 'realitywidgets-crash-summary.json']
+                       'checkpoint-captures.json', 'host-failure-capture.json', 'realitywidgets-crash-summary.json',
+                       'fenced-install.json', 'fenced-shutdown.json']
     if scope == 'visionos_largest': diagnostic_json.append('system-content-size.json')
     for name in diagnostic_json:
-        try: retain(runtime / name, 'vision-' + name)
+        try: retain(runtime / name, 'vision-' + name, cap=16 * 1024 if name.startswith('fenced-') else 64 * 1024)
         except (OSError, ValueError) as error: summary['errors'].append(str(error))
     logs = [(Path('vision-test-build.log'), 16 * 1024), (Path('vision-ui-test.log'), 16 * 1024),
             (runtime / 'checkpoint-capture.log', 8 * 1024), (runtime / 'boot.log', 8 * 1024),

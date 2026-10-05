@@ -29,7 +29,7 @@ def check_workflow(text):
     need("matrix.scope == 'visionos_photos'" in hosted,'Hosted tests must run once on Photos')
     need("matrix.scope == 'visionos_files'" in release,'Release must run once on Files')
     install=steps['Install the exact built Vision app before any fixtures']
-    need('run_bounded.py 90 xcrun simctl install "$VISION_SIMULATOR_ID" build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVision.app' in install,'Exact bounded install required')
+    need('. scripts/run_vision_fenced_command.sh install' in install and 'timeout-minutes: 2' in install,'Exclusive pre-Python bounded install required')
     seed=steps['Seed the Vision QR photo only for the selected Photos case']
     need("matrix.scope == 'visionos_files'" not in seed and all("matrix.scope == '"+scope+"'" in seed for scope in ['visionos_photos','visionos_chinese','visionos_largest']),'Photo seed scope changed')
     need('run_bounded.py 150 xcrun simctl addmedia' in seed and 'stage_owned_import_fixture.py' not in seed,'Photo seed cap or independence changed')
@@ -40,7 +40,8 @@ def check_workflow(text):
     runner=steps['Execute exactly one existing Vision UI case on this fresh VM']
     need('run_vision_ui_cases.py "$VISION_SIMULATOR_ID" "$EVIDENCE_SCOPE"' in runner,'Closed selector not forwarded')
     need("steps.vision_files_stage.outcome == 'success'" in runner and "steps.vision_photo_seed.outcome == 'success'" in runner,'Required fixture gate missing')
-    for value in [install,seed,stage,runner,hosted,release]:
+    need("env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true'" in install,'Install global barrier missing')
+    for value in [seed,stage,runner,hosted,release]:
         need("env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true'" in value and 'python3 scripts/owned_process_barrier.py --check' in value,'Owned cleanup barrier missing')
     need(text.count('retention-days: 1')==2,'One-day retention changed')
     need('name: qrcatcher-${{ matrix.scope }}-evidence' in text,'Case-specific artifact identity missing')
@@ -54,7 +55,7 @@ class FreshVMWorkflowTests(unittest.TestCase):
         self.assertEqual(check_workflow((ROOT/'.github/workflows/apple-platforms.yml').read_text()),605)
     def test_workflow_scope_concurrency_reuse_seed_and_install_mutations_are_rejected(self):
         original=(ROOT/'.github/workflows/apple-platforms.yml').read_text()
-        mutations=[('        - visionos_files\n',''),('max-parallel: 1','max-parallel: 2'),('timeout-minutes: 45','timeout-minutes: 46'),('cancel-in-progress: false','cancel-in-progress: true'),('runs-on: xcode-27','runs-on: self-hosted'),('run_bounded.py 90 xcrun simctl install','run_bounded.py 100 xcrun simctl install'),('run_bounded.py 150 xcrun simctl addmedia','run_bounded.py 200 xcrun simctl addmedia'),('run_vision_ui_cases.py "$VISION_SIMULATOR_ID" "$EVIDENCE_SCOPE"','run_vision_ui_cases.py "$VISION_SIMULATOR_ID"'),('retention-days: 1','retention-days: 2')]
+        mutations=[('        - visionos_files\n',''),('max-parallel: 1','max-parallel: 2'),('timeout-minutes: 45','timeout-minutes: 46'),('cancel-in-progress: false','cancel-in-progress: true'),('runs-on: xcode-27','runs-on: self-hosted'),('. scripts/run_vision_fenced_command.sh install','. scripts/run_vision_fenced_command.sh shutdown'),('run_bounded.py 150 xcrun simctl addmedia','run_bounded.py 200 xcrun simctl addmedia'),('run_vision_ui_cases.py "$VISION_SIMULATOR_ID" "$EVIDENCE_SCOPE"','run_vision_ui_cases.py "$VISION_SIMULATOR_ID"'),('retention-days: 1','retention-days: 2')]
         for old,new in mutations:
             with self.subTest(old=old),self.assertRaises(ValueError):check_workflow(original.replace(old,new))
     def test_closed_selector_rejects_combined_default_unknown_and_path_input(self):
@@ -171,6 +172,12 @@ class VisionExporterIntegrationTests(unittest.TestCase):
             if mode=='failure-substitute':
                 rows[0]['checkpoint']='vision-host-failure';(runtime/'checkpoint-captures.json').write_text(json.dumps(rows))
             (runtime/'ui-cases.json').write_text(json.dumps(report))
+            if mode in ['pending-fence', 'partial-fence']:
+                (root/'build/vision-command-inflight.json').write_text('{"version":1}' if mode=='pending-fence' else '{')
+            if mode=='oversized-command-receipt':
+                (runtime/'fenced-install.json').write_text(json.dumps({'large':'x'*(16*1024)}))
+            if mode=='global-uncertainty':
+                (root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
             if mode in ['host-failure','host-wrong-lease']:
                 data=b'\xff\xd8host-failure';(runtime/'vision-host-failure.jpg').write_bytes(data)
                 failure=dict(bindings[0],success=False,diagnostic_only=True,pixels_retained=True,capture_success=True,file='vision-host-failure.jpg',bytes=len(data),sha256=hashlib.sha256(data).hexdigest())
@@ -194,7 +201,10 @@ class VisionExporterIntegrationTests(unittest.TestCase):
             old=Path.cwd()
             try:
                 os.chdir(root)
-                with patch.dict(os.environ,{'EVIDENCE_SCOPE':case.scope,'GITHUB_SHA':'a'*40,'VISION_SIMULATOR_ID':expected['device']}),patch('subprocess.check_output',side_effect=['a'*40,'b'*40]),patch('subprocess.run',side_effect=command),contextlib.redirect_stdout(io.StringIO()):
+                environment={'EVIDENCE_SCOPE':case.scope,'GITHUB_SHA':'a'*40,'VISION_SIMULATOR_ID':expected['device'],
+                             'GITHUB_WORKSPACE':str(root),'QRCATCHER_OWNED_PROCESS_BARRIER':str(root/'build/owned-process-cleanup.json'),
+                             'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED':'true' if mode=='propagated-uncertainty' else 'false'}
+                with patch.dict(os.environ,environment),patch('subprocess.check_output',side_effect=['a'*40,'b'*40]),patch('subprocess.run',side_effect=command),contextlib.redirect_stdout(io.StringIO()):
                     if mode:
                         with self.assertRaises(ValueError if mode=='aggregate-oversized' else SystemExit):export(case.scope)
                     else:export(case.scope)
@@ -205,6 +215,12 @@ class VisionExporterIntegrationTests(unittest.TestCase):
                 else:self.assertLessEqual(sum(p.stat().st_size for p in out.iterdir()),case.evidence_bytes)
                 if mode in ['host-failure','host-wrong-lease']:self.assertEqual((out/'vision-host-failure.jpg').exists(),mode=='host-failure')
                 if mode=='case-failed':self.assertTrue((out/('vision-'+case.frames[0]+'.jpg')).exists(),'Valid partial native frames survive a later XCTest failure')
+                if mode in ['pending-fence', 'partial-fence']:
+                    self.assertIn('Vision command bootstrap or cleanup remains unconfirmed', summary['errors'])
+                    self.assertEqual((out/'vision-command-inflight.json').exists(),mode=='pending-fence')
+                if mode=='oversized-command-receipt':self.assertFalse((out/'vision-fenced-install.json').exists())
+                if mode in ['propagated-uncertainty','global-uncertainty']:
+                    self.assertIn('Owned-process cleanup remains unconfirmed',summary['errors'])
                 return summary
             finally:os.chdir(old)
     def test_every_closed_case_exports_its_exact_set_with_icon_only_on_files(self):
@@ -214,5 +230,13 @@ class VisionExporterIntegrationTests(unittest.TestCase):
         for mode in ['case-failed','wrong-case','missing-frame','oversized-frame','failure-substitute','cross-result','host-failure','host-wrong-lease','aggregate-oversized']:
             with self.subTest(mode=mode):self.exercise(CASES[0],mode)
         self.exercise(CASES[3],'restore-failed')
+    def test_unknown_or_partial_command_fence_preserves_red_despite_all_success_frames(self):
+        for mode in ['pending-fence', 'partial-fence']:
+            with self.subTest(mode=mode):self.exercise(CASES[0],mode)
+    def test_command_receipt_retention_remains_bounded(self):
+        self.exercise(CASES[0],'oversized-command-receipt')
+    def test_propagated_or_global_uncertainty_keeps_complete_success_packet_red(self):
+        for mode in ['propagated-uncertainty','global-uncertainty']:
+            with self.subTest(mode=mode):self.exercise(CASES[0],mode)
 
 if __name__=='__main__':unittest.main()

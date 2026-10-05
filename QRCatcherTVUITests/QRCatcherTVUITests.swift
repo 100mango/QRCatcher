@@ -31,9 +31,12 @@ final class QRCatcherTVUITests: XCTestCase {
         var previousDirection: XCUIRemote.Button?
         for attempt in 0..<30 {
             if target.hasFocus { if activate { XCUIRemote.shared.press(.select) }; return }
+            // Reuse metadata only until this iteration performs its next remote action.
+            // The next iteration resolves fresh elements and real focus again.
+            let targetIdentifier = target.identifier
             let focusedCell = scope.descendants(matching: .cell).matching(NSPredicate(format: "hasFocus == true")).firstMatch
-            if focusedCell.exists, !target.identifier.isEmpty,
-               focusedCell.buttons.count == 1, focusedCell.buttons[target.identifier].exists {
+            if focusedCell.exists, !targetIdentifier.isEmpty,
+               focusedCell.buttons.count == 1, focusedCell.buttons[targetIdentifier].exists {
                 // Native tvOS List reports focus on the cell that owns its one
                 // button. Never infer an action from a multi-button cell.
                 if activate { XCUIRemote.shared.press(.select) }; return
@@ -42,9 +45,12 @@ final class QRCatcherTVUITests: XCTestCase {
             let focused = focusedButton.exists ? focusedButton : scope.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
             if focused.exists {
                 let destination = target.frame, origin = focused.frame
-                if focused.label == target.label && abs(destination.midX-origin.midX) < 2 && abs(destination.midY-origin.midY) < 2 {
+                let focusedIdentifier = focused.identifier
+                let focusedLabel = focused.label, targetLabel = target.label
+                if focusedLabel == targetLabel && abs(destination.midX-origin.midX) < 2 && abs(destination.midY-origin.midY) < 2 {
                     // tvOS can expose nested buttons with the same frame/title;
                     // activate the actual focused child of this exact control.
+                    guard focused.hasFocus else { continue }
                     if activate { XCUIRemote.shared.press(.select) }; return
                 }
                 // Prefer the direct row movement, including native permission
@@ -54,23 +60,24 @@ final class QRCatcherTVUITests: XCTestCase {
                 if destination.minY >= origin.maxY - 1 { direction = .down }
                 else if destination.maxY <= origin.minY + 1 { direction = .up }
                 else { direction = destination.midX >= origin.midX ? .right : .left }
-                let unchanged = previousIdentifier == focused.identifier && previousFrame == origin
+                let unchanged = previousIdentifier == focusedIdentifier && previousFrame == origin
                 if unchanged, previousDirection == direction, direction == .down || direction == .up,
                    min(destination.maxX, origin.maxX) <= max(destination.minX, origin.minX) {
-                    let peers = scope.descendants(matching: .button).allElementsBoundByIndex.filter { peer in
-                        guard peer.exists, peer.isEnabled, peer.isHittable, !peer.hasFocus else { return false }
+                    let peers = scope.descendants(matching: .button).allElementsBoundByIndex.compactMap { peer -> (element: XCUIElement, frame: CGRect)? in
+                        guard peer.exists, peer.isEnabled, peer.isHittable, !peer.hasFocus else { return nil }
                         let frame = peer.frame
-                        return min(frame.maxY, origin.maxY) > max(frame.minY, origin.minY) + 1 &&
+                        guard min(frame.maxY, origin.maxY) > max(frame.minY, origin.minY) + 1 &&
                                min(frame.maxX, destination.maxX) > max(frame.minX, destination.minX) + 1 &&
-                               (frame.midX - origin.midX) * (destination.midX - origin.midX) > 0
+                               (frame.midX - origin.midX) * (destination.midX - origin.midX) > 0 else { return nil }
+                        return (peer, frame)
                     }
                     if let bridge = peers.min(by: { abs($0.frame.midX - origin.midX) < abs($1.frame.midX - origin.midX) }) {
                         direction = bridge.frame.midX > origin.midX ? .right : .left
-                        print("TV_REMOTE_FOCUS_BRIDGE", bridge.identifier, bridge.frame)
+                        print("TV_REMOTE_FOCUS_BRIDGE", bridge.element.identifier, bridge.frame)
                     }
                 }
-                print("TV_REMOTE_FOCUS_STEP", attempt, focused.identifier, origin, "toward", target.identifier, destination, "press", direction)
-                previousFrame = origin; previousIdentifier = focused.identifier; previousDirection = direction
+                print("TV_REMOTE_FOCUS_STEP", attempt, focusedIdentifier, origin, "toward", targetIdentifier, destination, "press", direction)
+                previousFrame = origin; previousIdentifier = focusedIdentifier; previousDirection = direction
                 XCUIRemote.shared.press(direction)
             } else { XCUIRemote.shared.press(.down) }
         }

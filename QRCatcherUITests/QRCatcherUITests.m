@@ -49,7 +49,30 @@
         QRRespondToObservedCameraPrompt(alert, @"Allow");
         handledAllow = YES; return YES;
     }];
-    [self.app launch]; [self.app tap];
+    [self.app launch];
+    // A single app tap cannot invoke the monitor before the real dialog exists.
+    // Observe only the known SpringBoard camera prompt; polling never taps.
+    XCUIApplication *cameraSystem = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
+    NSPredicate *cameraPromptReady = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        (void)object; (void)bindings;
+        XCUIElementQuery *dialogs = [cameraSystem.alerts matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Allow “QRCatcher” to access your camera?"]];
+        if (dialogs.count != 1) return NO;
+        XCUIElement *dialog = dialogs.firstMatch;
+        XCUIElementQuery *buttons = dialog.buttons;
+        XCUIElementQuery *allow = [buttons matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Allow"]];
+        XCUIElementQuery *deny = [buttons matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Don’t Allow"]];
+        return buttons.count == 2 && allow.count == 1 && deny.count == 1 &&
+               allow.firstMatch.enabled && allow.firstMatch.hittable &&
+               deny.firstMatch.enabled && deny.firstMatch.hittable;
+    }];
+    NSTimeInterval promptStarted = NSProcessInfo.processInfo.systemUptime;
+    XCTNSPredicateExpectation *cameraPrompt = [[XCTNSPredicateExpectation alloc] initWithPredicate:cameraPromptReady object:cameraSystem];
+    XCTWaiterResult promptResult = [XCTWaiter waitForExpectations:@[cameraPrompt] timeout:10];
+    NSLog(@"PRODUCTION_CAMERA_PROMPT_READY outcome=%ld elapsed=%.3f", (long)promptResult,
+          NSProcessInfo.processInfo.systemUptime - promptStarted);
+    XCTAssertEqual(promptResult, XCTWaiterResultCompleted, @"The exact camera dialog must be ready before the single Allow interaction.");
+    if (promptResult != XCTWaiterResultCompleted) return;
+    [self.app tap];
     NSPredicate *unavailable = [NSPredicate predicateWithFormat:@"label CONTAINS %@", @"No camera is available"];
     [self expectationForPredicate:unavailable evaluatedWithObject:self.app.staticTexts[@"scan.status"] handler:nil];
     [self waitForExpectationsWithTimeout:10 handler:nil];
@@ -57,7 +80,19 @@
     XCTAssertFalse(self.app.buttons[@"scan.settings"].exists);
     NSLog(@"PRODUCTION_CAMERA_ALLOW_OBSERVED: real system Allow, no simulator capture device");
     [XCUIDevice.sharedDevice pressButton:XCUIDeviceButtonHome]; [self.app activate];
-    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"No camera is available"]);
+    // Resume schedules real camera configuration on sessionQueue, then publishes
+    // the unavailable state back on main. Activation is not that completion.
+    XCUIElement *resumedStatus = self.app.staticTexts[@"scan.status"];
+    NSTimeInterval resumeStarted = NSProcessInfo.processInfo.systemUptime;
+    XCTNSPredicateExpectation *resumedUnavailable = [[XCTNSPredicateExpectation alloc] initWithPredicate:unavailable object:resumedStatus];
+    XCTWaiterResult resumedResult = [XCTWaiter waitForExpectations:@[resumedUnavailable] timeout:10];
+    NSLog(@"PRODUCTION_CAMERA_RESUMED_WAIT outcome=%ld elapsed=%.3f", (long)resumedResult,
+          NSProcessInfo.processInfo.systemUptime - resumeStarted);
+    XCTAssertEqual(resumedResult, XCTWaiterResultCompleted, @"The real post-activation unavailable state must settle before permission reset.");
+    if (resumedResult != XCTWaiterResultCompleted) return;
+    NSString *resumedLabel = resumedStatus.label;
+    NSLog(@"PRODUCTION_CAMERA_RESUMED_STATE status=%@", resumedLabel);
+    XCTAssertTrue([resumedLabel containsString:@"No camera is available"]);
     [self.app terminate];
     XCTAssertTrue([self.app waitForState:XCUIApplicationStateNotRunning timeout:5]);
     [self removeUIInterruptionMonitor:allowMonitor];

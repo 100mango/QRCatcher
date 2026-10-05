@@ -219,8 +219,7 @@ jobs:
       if: ${{ (startsWith(matrix.scope, 'visionos_') && !cancelled() && env.VISION_READY == 'true' && steps.vision_test_build.outcome == 'success') && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 2
       run: |
-        python3 scripts/owned_process_barrier.py --check
-        python3 -u scripts/run_bounded.py 90 xcrun simctl install "$VISION_SIMULATOR_ID" build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVision.app
+        . scripts/run_vision_fenced_command.sh install
     - name: Execute native Vision hosted decode and persistence
       if: ${{ ((matrix.scope == 'visionos_photos') && (!cancelled() && env.VISION_READY == 'true' && steps.vision_app_install.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 10
@@ -254,8 +253,7 @@ jobs:
       if: ${{ ((startsWith(matrix.scope, 'visionos_')) && (always() && env.VISION_SIMULATOR_ID != '' && env.VISION_SIZE_CLEANUP_UNCONFIRMED != 'true')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
       timeout-minutes: 1
       run: |
-        python3 scripts/owned_process_barrier.py --check
-        python3 -u scripts/run_bounded.py 45 xcrun simctl shutdown "$VISION_SIMULATOR_ID"
+        . scripts/run_vision_fenced_command.sh shutdown
     - name: Record bounded Vision component crash metadata
       if: ${{ (startsWith(matrix.scope, 'visionos_')) && (always()) }}
       timeout-minutes: 1

@@ -15,12 +15,25 @@ def barrier_path():
         raise ValueError('Owned-process barrier must be this checkout build marker')
     return path
 
-def blocked():
+def blocked(command=None):
     if os.environ.get(KEY)=='true':return True
     try:
         path=barrier_path()
-        return path is not None and (path.exists() or path.is_symlink())
-    except (OSError,ValueError):return True
+        if path is not None and (path.exists() or path.is_symlink()):return True
+        # A claimed latch disappearing is uncertainty, never permission. The
+        # controller's held identity must be consulted before path existence.
+        controller=sys.modules.get('vision_command_fence')
+        if controller is not None and controller.active_claim_exists():
+            return not controller.active_claim_is_current(command)
+        root=Path(os.environ.get('GITHUB_WORKSPACE',Path.cwd())).resolve()
+        pending=root/'build'/'vision-command-inflight.json'
+        if pending.exists() or pending.is_symlink():
+            # Only the validated controller for this exact direct command may
+            # enter. Other interpreters and generic barrier checks stay blocked.
+            from vision_command_fence import active_claim_is_current
+            return not active_claim_is_current(command)
+        return False
+    except (OSError,ValueError,ImportError):return True
 
 def mark_unconfirmed(operation):
     os.environ[KEY]='true'

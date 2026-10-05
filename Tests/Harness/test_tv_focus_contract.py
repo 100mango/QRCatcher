@@ -47,7 +47,7 @@ class TVFocusContracts(unittest.TestCase):
         self.assertEqual(bridge_candidates(self.photos, self.export, peers), [])
 
     def test_real_failed_press_is_required_before_bounded_bridge(self):
-        for token in ['for attempt in 0..<30', 'previousIdentifier == focused.identifier && previousFrame == origin',
+        for token in ['for attempt in 0..<30', 'previousIdentifier == focusedIdentifier && previousFrame == origin',
                       'previousDirection == direction', 'direction == .down || direction == .up',
                       'peer.exists, peer.isEnabled, peer.isHittable, !peer.hasFocus',
                       'scope.descendants(matching: .button)', 'XCUIRemote.shared.press(direction)']:
@@ -62,8 +62,41 @@ class TVFocusContracts(unittest.TestCase):
         self.assertNotIn('setValue(', helper)
         self.assertEqual(helper.count('XCUIRemote.shared.press(.select)'), 3)
         for proof in ['if target.hasFocus', 'focusedCell.buttons.count == 1',
-                      'focusedCell.buttons[target.identifier].exists', 'focused.label == target.label']:
+                      'focusedCell.buttons[targetIdentifier].exists', 'focusedLabel == targetLabel',
+                      'guard focused.hasFocus else { continue }']:
             self.assertIn(proof, helper)
+
+    def test_metadata_is_reread_inside_each_iteration_and_reused_before_next_press(self):
+        helper = SOURCE.split('private func focusAndSelect(', 1)[1].split('private func respondToExactPhotosPermissionIfPresent', 1)[0]
+        iteration = helper.split('for attempt in 0..<30 {',1)[1].split('        if root != nil',1)[0]
+        for token in ['let targetIdentifier = target.identifier', 'let focusedIdentifier = focused.identifier',
+                      'let focusedLabel = focused.label, targetLabel = target.label',
+                      'let destination = target.frame, origin = focused.frame']:
+            self.assertIn(token,iteration)
+            self.assertNotIn(token,helper.split('for attempt in 0..<30 {',1)[0])
+        self.assertEqual(iteration.count('target.identifier'),1)
+        self.assertEqual(iteration.count('focused.identifier'),1)
+        self.assertEqual(iteration.count('target.label'),1)
+        self.assertEqual(iteration.count('focused.label'),1)
+        self.assertIn('previousFrame = origin; previousIdentifier = focusedIdentifier; previousDirection = direction',iteration)
+        self.assertIn('attempt, focusedIdentifier, origin, "toward", targetIdentifier, destination',iteration)
+        self.assertNotIn('waitFor',iteration); self.assertNotIn('sleep',iteration); self.assertNotIn('await',iteration)
+        self.assertLess(iteration.index('if target.hasFocus'),iteration.index('let targetIdentifier'))
+
+    def test_bridge_frames_are_single_iteration_values_with_live_eligibility(self):
+        helper = SOURCE.split('private func focusAndSelect(',1)[1].split('private func respondToExactPhotosPermissionIfPresent',1)[0]
+        self.assertIn('compactMap { peer -> (element: XCUIElement, frame: CGRect)? in',helper)
+        self.assertIn('peer.exists, peer.isEnabled, peer.isHittable, !peer.hasFocus',helper)
+        self.assertEqual(helper.count('peer.frame'),1)
+        self.assertIn('return (peer, frame)',helper)
+        self.assertIn('abs($0.frame.midX - origin.midX) < abs($1.frame.midX - origin.midX)',helper)
+        self.assertNotIn('bridge.element.frame',helper)
+
+    def test_test_allowance_and_all_other_test_source_remain_unchanged(self):
+        workflow=(ROOT/'scripts/run_tv_platform_tests.sh').read_text()
+        self.assertIn('-default-test-execution-time-allowance 180',workflow)
+        self.assertIn('capture("tv-history-after-removal")',SOURCE)
+        self.assertIn('XCTAssertFalse(app.buttons["tv.record"].exists)',SOURCE)
 
 
 if __name__ == '__main__':

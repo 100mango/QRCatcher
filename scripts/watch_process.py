@@ -3,13 +3,14 @@ import os,selectors,subprocess,sys,time
 from owned_process_group import stop_group
 from owned_process_barrier import blocked,mark_unconfirmed
 
-def execute(args,seconds=120,output_limit=2*1024*1024,tail_limit=512*1024,echo=True):
- if blocked():return 126,'',{'command':args,'state':'blocked_owned_process_cleanup_unconfirmed','exit':126,'cleanup_confirmed':False}
+def execute(args,seconds=120,output_limit=2*1024*1024,tail_limit=512*1024,echo=True,on_spawn=None):
+ if blocked(args):return 126,'',{'command':args,'state':'blocked_owned_process_cleanup_unconfirmed','exit':126,'cleanup_confirmed':False}
  started=time.monotonic();operation={'command':args,'timeout_seconds':seconds}
  process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
  selector=selectors.DefaultSelector();selector.register(process.stdout,selectors.EVENT_READ)
  tail=bytearray();total=0;forced=None;ended=None
  try:
+  if on_spawn is not None:on_spawn(process.pid)
   while selector.get_map():
    for key,_ in selector.select(timeout=.5):
     chunk=os.read(key.fileobj.fileno(),65536)
