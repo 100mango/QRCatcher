@@ -248,10 +248,37 @@ final class QRCatcherMacUITests: XCTestCase {
     private func verifyLongCopyAndCapture(_ payload: String, locale: String) throws {
         let window = app.windows["main"]
         let scroll = app.groups["mac.pane.result"].scrollViews.firstMatch
-        let value = app.staticTexts["mac.payload"], copy = app.buttons["mac.copy"]
+        let matches = app.staticTexts.matching(identifier: "mac.payload")
+        XCTAssertEqual(matches.count, 1)
+        guard matches.count == 1 else { return }
+        let value = matches.firstMatch, copy = app.buttons["mac.copy"]
         let after = (value.value as? String) ?? value.label
         XCTAssertEqual(after, payload)
-        XCTAssertTrue(value.isHittable); XCTAssertTrue(scroll.frame.contains(value.frame))
+        // The observed selectable-Text wrapper is noninteractive. Resolve only
+        // its one direct rendered StaticText child; never search elsewhere in
+        // the pane or infer a tap target for a read-only payload.
+        let children = value.children(matching: .any)
+        let text = value.children(matching: .staticText)
+        XCTAssertEqual(children.count, 1); XCTAssertEqual(text.count, 1)
+        guard children.count == 1, text.count == 1 else { return }
+        let rendered = text.firstMatch
+        XCTAssertEqual(rendered.identifier, "")
+        XCTAssertEqual((rendered.value as? String) ?? rendered.label, payload)
+        let frame = rendered.frame
+        XCTAssertTrue([frame.minX, frame.minY, frame.maxX, frame.maxY, frame.width, frame.height].allSatisfy { $0.isFinite })
+        XCTAssertGreaterThan(frame.width, 0); XCTAssertGreaterThan(frame.height, 0)
+        XCTAssertTrue(window.frame.contains(value.frame)); XCTAssertTrue(scroll.frame.contains(value.frame))
+        XCTAssertTrue(window.frame.contains(frame)); XCTAssertTrue(scroll.frame.contains(frame))
+        // The retained English child differs from its wrapper by half a point
+        // at the left edge. Allow only native pixel-rounding around that same
+        // wrapper; viewport containment above remains exact.
+        XCTAssertTrue(value.frame.insetBy(dx: -1, dy: -1).contains(frame))
+        let renderedObservation: [String: Any] = [
+            "wrapper_hittable": value.isHittable, "wrapper_enabled": value.isEnabled,
+            "direct_child_count": children.count, "rendered_static_text_count": text.count,
+            "rendered_identifier": rendered.identifier,
+            "rendered_frame": [Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height)],
+            "wrapper_interaction_required": false, "observations_qualify_pass": false]
         XCTAssertTrue(copy.isHittable); XCTAssertTrue(copy.isEnabled)
         XCTAssertTrue(window.frame.contains(copy.frame)); XCTAssertTrue(scroll.frame.contains(copy.frame))
         copy.click()
@@ -260,6 +287,7 @@ final class QRCatcherMacUITests: XCTestCase {
         XCTAssertEqual(report["locale"] as? String, locale)
         report["phase"] = "copy-observed"
         report["wrapper_after"] = after
+        report["rendered_text_observation"] = renderedObservation
         report["copy_after_sha256"] = copied.map { SHA256.hash(data: Data($0.utf8)).map { String(format: "%02x", $0) }.joined() } ?? "missing"
         report["copy_after_utf8_bytes"] = copied?.utf8.count ?? 0
         report["full_equality_verified"] = after == payload && copied == payload

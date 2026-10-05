@@ -127,4 +127,78 @@ class MacSupportingTextTests(unittest.TestCase):
         self.assertIn('try capturePixels("mac-minimum-long-text-" + locale)',ui)
 
 
+class MacRenderedPayloadTests(unittest.TestCase):
+    """Source-bound synthetic public-node predicates, not native Swift/XCUI proof."""
+    def accepted(self, wrapper, children, window, scroll, payload):
+        import math
+        def valid(frame):
+            if not isinstance(frame,list) or len(frame)!=4 or any(type(x) not in {int,float} for x in frame):return False
+            try:return all(math.isfinite(x) for x in frame+[frame[0]+frame[2],frame[1]+frame[3]]) and frame[2]>0 and frame[3]>0
+            except OverflowError:return False
+        def contains(outer,inner,rounding=0):
+            if not valid(outer) or not valid(inner):return False
+            return (outer[0]-rounding<=inner[0] and outer[1]-rounding<=inner[1] and
+                    inner[0]+inner[2]<=outer[0]+outer[2]+rounding and inner[1]+inner[3]<=outer[1]+outer[3]+rounding)
+        if (wrapper.get('role')!='staticText' or wrapper.get('identifier')!='mac.payload' or
+                wrapper.get('value')!=payload or len(children)!=1):return False
+        child=children[0]
+        return (child.get('role')=='staticText' and child.get('identifier')=='' and child.get('value')==payload and
+                contains(window,wrapper['frame']) and contains(scroll,wrapper['frame']) and
+                contains(window,child['frame']) and contains(scroll,child['frame']) and
+                contains(wrapper['frame'],child['frame'],1))
+
+    def fixture(self):
+        payload='Keep the full QR result readable alongside its safety instruction and saved-history count. '*4
+        wrapper=dict(role='staticText',identifier='mac.payload',value=payload,frame=[318,306,388,139],enabled=False,hittable=False)
+        child=dict(role='staticText',identifier='',value=payload,frame=[317.5,306,388,139])
+        return wrapper,[child],[0,31,760,572],[280,83,480,520],payload
+
+    def test_observed_noninteractive_wrapper_and_direct_rendered_child(self):
+        self.assertTrue(self.accepted(*self.fixture()))
+        wrapper,children,window,scroll,payload=self.fixture()
+        wrapper['frame']=[318,286,387,159];children[0]['frame']=[318,286,387,159]
+        wrapper['value']=payload='完整保留二维码内容，支持中文和 English。'*7;children[0]['value']=payload
+        self.assertTrue(self.accepted(wrapper,children,window,scroll,payload))
+
+    def test_wrong_duplicate_or_unowned_child_never_qualifies(self):
+        import copy
+        original=self.fixture()
+        for mutate in [lambda w,c: c.clear(),lambda w,c:c.append(copy.deepcopy(c[0])),
+                       lambda w,c:c[0].update(role='button'),lambda w,c:c[0].update(identifier='elsewhere.payload'),
+                       lambda w,c:c[0].update(value='truncated'),lambda w,c:w.update(value='stale'),
+                       lambda w,c:w.update(identifier='wrong.payload'),lambda w,c:c[0].update(frame=[300,306,388,139])]:
+            w,c,window,scroll,payload=copy.deepcopy(original);mutate(w,c)
+            self.assertFalse(self.accepted(w,c,window,scroll,payload))
+
+    def test_clipped_nonfinite_or_invalid_rendered_frames_never_qualify(self):
+        import copy
+        for frame in [[318,20,388,139],[318,550,388,139],[318,306,0,139],
+                      [318,306,388,float('nan')],[float('inf'),306,388,139],
+                      [318,306,True,139],[1e308,306,1e308,139],[10**400,306,388,139]]:
+            w,c,window,scroll,payload=copy.deepcopy(self.fixture());c[0]['frame']=frame
+            self.assertFalse(self.accepted(w,c,window,scroll,payload))
+
+    def test_exact_public_node_scope_visibility_and_real_copy_remain_required(self):
+        source=(ROOT/'QRCatcherMacUITests/QRCatcherMacUITests.swift').read_text()
+        helper=source.split('private func verifyLongCopyAndCapture')[1].split('private func resizeToMinimumReadabilityWindow')[0]
+        for required in ['matching(identifier: "mac.payload")','guard matches.count == 1',
+                         'value.children(matching: .any)','value.children(matching: .staticText)',
+                         'guard children.count == 1, text.count == 1','XCTAssertEqual(rendered.identifier, "")',
+                         'XCTAssertEqual((rendered.value as? String) ?? rendered.label, payload)',
+                         'frame.maxX, frame.maxY','XCTAssertGreaterThan(frame.width, 0)',
+                         'XCTAssertGreaterThan(frame.height, 0)','window.frame.contains(frame)',
+                         'scroll.frame.contains(frame)','value.frame.insetBy(dx: -1, dy: -1).contains(frame)',
+                         '"wrapper_hittable": value.isHittable','"observations_qualify_pass": false',
+                         'XCTAssertTrue(copy.isHittable)','XCTAssertTrue(copy.isEnabled)',
+                         'window.frame.contains(copy.frame)','scroll.frame.contains(copy.frame)',
+                         'copy.click()','NSPasteboard.general.string(forType: .string)','XCTAssertEqual(copied, payload)',
+                         'try capturePixels("mac-minimum-long-text-" + locale)']:
+            self.assertIn(required,helper)
+        self.assertNotIn('descendants(',helper)
+        self.assertNotIn('XCTAssertTrue(value.isHittable)',helper)
+        self.assertNotIn('click()',helper.split('XCTAssertTrue(copy.isHittable)')[0])
+        self.assertIn('try app.performAccessibilityAudit(for: .all)',source)
+        self.assertIn('XCTFail("Accessibility audit [',source)
+
+
 if __name__=='__main__':unittest.main()

@@ -99,4 +99,124 @@ class WatchScrollSourceContracts(unittest.TestCase):
         self.assertIn('"system_propagation_qualified": false',source)
 
 
+class WatchRootIdentityPredicateTests(unittest.TestCase):
+    """Execute a restricted translation of source predicates against synthetic AX.
+
+    This does not compile Swift or execute XCTest, Settings, a gesture, or a device.
+    Unknown syntax is rejected rather than guessed. Native qualification is separate.
+    """
+    def setUp(self):
+        import re
+        self.re = re
+        self.source = WatchScrollSourceContracts().source()
+        candidates = self.source.split('private func titleCandidates', 1)[1].split('private func observedTitle', 1)[0]
+        self.bars = re.search(r'let bars = observation.nodes.filter \{(.*?)\n        \}', candidates, re.S).group(1)
+        self.fallback = re.search(r'return bars.isEmpty \? observation.nodes.filter \{(.*?)\n        \} : bars', candidates, re.S).group(1)
+        live = self.source.split('private func liveElement', 1)[1].split('private func verifyPane', 1)[0]
+        self.identity_condition = re.search(r'if (.*?) \{', live).group(1)
+        queries = re.findall(r'query = app.descendants\(matching: (.*?)\)\.matching\(NSPredicate\(format: "(identifier|label) == %@", (.*?)\)\)', live)
+        self.assertEqual(queries, [('.navigationBar', 'identifier', '"Settings"'), ('captured.elementType', 'label', 'captured.label')])
+        self.live_guard = re.search(r'guard element.exists,(.*?) else \{', live, re.S).group(1)
+        self.assertIn('guard query.count == 1 else', live)
+        self.assertIn('matches.count == 1', self.source)
+        self.assertIn('whollyVisible(match, observation)', self.source)
+        self.assertIn('if !titleCandidates(other, observation).isEmpty', self.source)
+        root = self.source.split('private func rootNavigationMenu', 1)[1].split('private func revealRootDisplayRow', 1)[0]
+        self.assertIn('header.snapshot.elementType == .navigationBar', root)
+
+    def node(self, role='navigationBar', identifier='Settings', label='', **changes):
+        from types import SimpleNamespace
+        return SimpleNamespace(**dict(dict(elementType=role, identifier=identifier, label=label,
+            frame=(0, 0, 208, 62), inControl=False, visible=True, exists=True, isHittable=True), **changes))
+
+    def predicate(self, source, **values):
+        import ast
+        text = source.strip().replace('$0.snapshot.', 'node.').replace('$0.inControl', 'node.inControl')
+        text = self.re.sub(r'(node|captured)\.label\.isEmpty', r'\1.label == ""', text)
+        text = text.replace('.navigationBar', '"navigationBar"').replace('.staticText', '"staticText"')
+        text = text.replace('&&', ' and ').replace('||', ' or ').replace(',', ' and ')
+        text = self.re.sub(r'!(?!=)', 'not ', text)
+        tree = ast.parse('(' + text + ')', mode='eval')
+        allowed = (ast.Expression, ast.BoolOp, ast.And, ast.Or, ast.UnaryOp, ast.Not,
+                   ast.Compare, ast.Eq, ast.NotEq, ast.Name, ast.Load, ast.Attribute, ast.Constant)
+        self.assertTrue(all(isinstance(item, allowed) for item in ast.walk(tree)), text)
+        self.assertTrue(all(item.id in values for item in ast.walk(tree) if isinstance(item, ast.Name)), text)
+        return eval(compile(tree, '<source-bound-Swift-predicate>', 'eval'), {'__builtins__': {}}, values)
+
+    def candidates(self, title, nodes):
+        bars = [node for node in nodes if self.predicate(self.bars, node=node, title=title)]
+        return bars or [node for node in nodes if self.predicate(self.fallback, node=node, title=title)]
+
+    def verify(self, title, nodes, live=None, root=False):
+        candidates = self.candidates(title, nodes)
+        if len(candidates) != 1 or not candidates[0].visible:
+            raise discovery.DiscoveryStopped('synthetic missing, duplicate or clipped title')
+        captured = candidates[0]
+        special = self.predicate(self.identity_condition, captured=captured)
+        field, wanted = ('identifier', 'Settings') if special else ('label', captured.label)
+        matches = [item for item in (nodes if live is None else live)
+                   if item.elementType == captured.elementType and getattr(item, field) == wanted]
+        if len(matches) != 1:
+            raise discovery.DiscoveryStopped('synthetic live query ambiguity')
+        element = matches[0]
+        if not element.exists or not self.predicate(self.live_guard, element=element, captured=captured):
+            raise discovery.DiscoveryStopped('synthetic live identity changed')
+        for other in ['Settings', 'Display & Brightness', 'Text Size']:
+            if other != title and self.candidates(other, nodes):
+                raise discovery.DiscoveryStopped('synthetic competing pane')
+        if root and captured.elementType != 'navigationBar':
+            raise discovery.DiscoveryStopped('synthetic root requires native navigation bar')
+        return captured
+
+    def rejects(self, title, nodes, **options):
+        with self.assertRaises(discovery.DiscoveryStopped):
+            self.verify(title, nodes, **options)
+
+    def test_retained_identifier_only_root_bar_is_admitted(self):
+        bar = self.node()
+        static = self.node('staticText', '', 'Settings')
+        self.assertIs(self.verify('Settings', [bar, static], root=True), bar)
+
+    def test_wrong_missing_or_nonempty_label_root_identity_stops(self):
+        for identifier, label in [('Other', ''), ('', ''), ('settings', ''), ('Settings ', ''),
+                                  ('Other', 'Settings'), ('Settings', 'Settings')]:
+            self.rejects('Settings', [self.node(identifier=identifier, label=label)], root=True)
+
+    def test_duplicate_bar_is_not_erased_by_clipping(self):
+        for visible in [True, False]:
+            self.rejects('Settings', [self.node(), self.node(visible=visible)], root=True)
+
+    def test_duplicate_live_identifier_even_with_other_label_stops(self):
+        self.rejects('Settings', [self.node()], live=[self.node(), self.node(label='Other')], root=True)
+
+    def test_other_pane_identifier_is_not_a_title(self):
+        for title in ['Display & Brightness', 'Text Size']:
+            self.rejects(title, [self.node(identifier=title)])
+            labelled = self.node(identifier='unrelated', label=title)
+            self.assertIs(self.verify(title, [labelled]), labelled)
+
+    def test_settings_identifier_outside_current_root_pane_stops(self):
+        self.rejects('Display & Brightness', [self.node(), self.node(identifier='display', label='Display & Brightness')])
+
+    def test_identifier_exception_does_not_extend_to_other_roles(self):
+        for role in ['staticText', 'button', 'cell', 'collectionView']:
+            self.rejects('Settings', [self.node(role)], root=True)
+
+    def test_static_fallback_cannot_authorize_root_scroll(self):
+        self.rejects('Settings', [self.node('staticText', '', 'Settings')], root=True)
+
+    def test_competing_route_title_and_nested_row_static_label_stay_distinct(self):
+        self.rejects('Settings', [self.node(), self.node('staticText', '', 'Text Size')], root=True)
+        bar = self.node()
+        self.assertIs(self.verify('Settings', [bar, self.node('staticText', '', 'Text Size', inControl=True)], root=True), bar)
+
+    def test_live_role_identifier_label_frame_and_hittability_remain_exact(self):
+        for changes in [dict(elementType='staticText'), dict(identifier='Other'), dict(label='Other'),
+                        dict(frame=(0, 0, 208, 61)), dict(isHittable=False), dict(exists=False)]:
+            self.rejects('Settings', [self.node()], live=[self.node(**changes)], root=True)
+
+    def test_wrong_root_bar_cannot_be_rescued_by_static_title(self):
+        self.rejects('Settings', [self.node(identifier='Other'), self.node('staticText', '', 'Settings')], root=True)
+
+
 if __name__=='__main__':unittest.main()

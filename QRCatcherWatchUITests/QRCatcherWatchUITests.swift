@@ -300,7 +300,13 @@ import CoreGraphics
         // title just because it is duplicated, clipped or otherwise unverifiable.
         // Prefer a semantic navigation bar; otherwise accept only standalone text
         // outside every control. A row's static label cannot verify a pane.
-        let bars = observation.nodes.filter { $0.snapshot.elementType == .navigationBar && $0.snapshot.label == title }
+        // The retained Watch Settings root bar exposes identifier "Settings"
+        // with an empty label. This exception is for that exact root identity only.
+        let bars = observation.nodes.filter {
+            $0.snapshot.elementType == .navigationBar &&
+                ((title == "Settings" && $0.snapshot.identifier == "Settings" && $0.snapshot.label.isEmpty) ||
+                 (title != "Settings" && $0.snapshot.label == title))
+        }
         return bars.isEmpty ? observation.nodes.filter {
             $0.snapshot.elementType == .staticText && $0.snapshot.label == title && !$0.inControl
         } : bars
@@ -315,7 +321,12 @@ import CoreGraphics
     }
     private func liveElement(_ app: XCUIApplication, _ node: ObservedNode) throws -> XCUIElement {
         let captured = node.snapshot
-        let query = app.descendants(matching: captured.elementType).matching(NSPredicate(format: "label == %@", captured.label))
+        let query: XCUIElementQuery
+        if captured.elementType == .navigationBar && captured.identifier == "Settings" && captured.label.isEmpty {
+            query = app.descendants(matching: .navigationBar).matching(NSPredicate(format: "identifier == %@", "Settings"))
+        } else {
+            query = app.descendants(matching: captured.elementType).matching(NSPredicate(format: "label == %@", captured.label))
+        }
         guard query.count == 1 else { throw Stop.discovery("Live control/title identity is ambiguous") }
         let element = query.element(boundBy: 0)
         guard element.exists, element.identifier == captured.identifier, element.label == captured.label,
