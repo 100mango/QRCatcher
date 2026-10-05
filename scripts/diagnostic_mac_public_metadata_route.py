@@ -26,7 +26,7 @@ CANONICAL_SHA256 = '481b9030b9b80637d35ab408c76d1f8de1e84a8fce5028eb9929a206c645
 BASE_SHA = '5b6b4f1cf5470ab6d834505698e56eb35ee8327d'
 BASE_TREE = '90579d6202c3716b170c0e3596ff02f41b467653'
 SCOPES = ('macos',)
-COMPONENT_TREE = 'b0212ca03b344dc680db3b5e7c7e0f6f9624fd0f'
+COMPONENT_TREE = '4ebb9c0d0ce6efe8cf27e67ee5396b381d322b06'
 CASES = ('testNativeWindowResizeKeepsFullActionTitles', 'testChineseCriticalFlow')
 CHECKPOINTS = ('mac-before-resize', 'mac-minimum-window', 'mac-chinese-reopened', 'mac-chinese-policy')
 
@@ -50,7 +50,7 @@ def fixed_commands():
     return {'sandbox_build': (base, 240), 'sandbox_test': (test, 600)}
 
 CANONICAL_DRIVER_SHA256 = '79468a33261c598b17f147c4812c32e7664852bd13cb720385632814356d412e'
-COMPONENT_FILES = [('QRCatcherMac/QRCatcherMacApp.swift', '520cab06d26c246c58414dca4b09e8379fbb60cba59cda0f648025cdb6b3b6fa', 25197, '100644'), ('QRCatcherMacUITests/QRCatcherMacUITests.swift', 'e2fe60914836219c025e91d172e4ce0090c92b35965f78e250239193511b54d7', 70108, '100644'), ('Tests/Harness/test_mac_public_metadata.py', '484a61d9c4b092a7d77038588c457f472631275fb791ca33600a6fb4823eccf9', 21056, '100644'), ('scripts/mac_public_metadata_schema.py', 'ef0870f24e30d9d762650f5e94fac15bab0bddbcd09d4168809056768f9cdd99', 23969, '100644'), ('scripts/verify_mac_release.py', '4a5d934a1e1040bf5bf68922349e6f0a886ade2b005119d3fe795a5a291189f1', 2275, '100644')]
+COMPONENT_FILES = [('QRCatcherMac/QRCatcherMacApp.swift', '9f34a7460cdde90295598356da6ab094e673df6c479061dde69a09ff461b690b', 26393, '100644'), ('QRCatcherMacUITests/QRCatcherMacUITests.swift', '6ae59acc68685e734a912ea64aec3653764862a3770fe5bebf2b3ec6174b8b26', 74651, '100644'), ('Tests/Harness/test_mac_public_metadata.py', 'f7cdc9db6a45f424057ca3747caa439c2ffdf79886850da0421d26b58984e673', 30195, '100644'), ('scripts/mac_public_metadata_schema.py', '2672c4cfe6e67539ae30851b6e959b39fbd95e040683c55d366e88904c730894', 28891, '100644'), ('scripts/verify_mac_release.py', '4a5d934a1e1040bf5bf68922349e6f0a886ade2b005119d3fe795a5a291189f1', 2275, '100644')]
 
 
 def render_driver(canonical):

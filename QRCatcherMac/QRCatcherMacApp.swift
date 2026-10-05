@@ -256,7 +256,8 @@ private final class MacAuditPublicMetadataObserver {
             }
             var result: [String: Any] = ["kind": target.kind, "identifier": target.identifier, "pane": target.pane,
                                        "expectedUTF16Length": target.expected.utf16.count, "expectedSHA256": hash(target.expected),
-                                       "state": "UNKNOWN", "reason": "missing-target", "matchCount": matching.count]
+                                       "state": "UNKNOWN", "reason": "missing-target", "matchCount": matching.count,
+                                       "matchScope": "visited-owned-public-nodes", "attributedCall": "not-run"]
             guard matching.count == 1, let wrapper = matching.first else {
                 if matching.count > 1 { result["reason"] = "duplicate-target" }; return result
             }
@@ -279,7 +280,11 @@ private final class MacAuditPublicMetadataObserver {
                 queried = child; queryKind = "direct-rendered-static-text"
             }
             result["queried"] = identityRecord(queried); result["queryKind"] = queryKind
-            guard issues.isEmpty else { result["reason"] = "incomplete-public-traversal"; return result }
+            // A visited candidate is never proof of complete traversal or global
+            // uniqueness. The one observed unsupported-node issue permits only
+            // its exact owned wrapper; every other issue and child route stops.
+            let partial = issues == Set(["unsupported-public-node"]) && queryKind == "exact-wrapper"
+            guard issues.isEmpty || partial else { result["reason"] = "incomplete-public-traversal"; return result }
             guard let value = stringValue(queried.object), value == target.expected,
                   value.utf16.count > 0, value.utf16.count <= 4096,
                   let frame = finiteFrame(queried.object.accessibilityFrame()), frame[2] > 0, frame[3] > 0,
@@ -287,8 +292,19 @@ private final class MacAuditPublicMetadataObserver {
                   wrapper.root.frame.contains(wrapper.object.accessibilityFrame()) else { result["reason"] = "wrong-value-or-frame"; return result }
             let range = NSRange(location: 0, length: value.utf16.count)
             result["requestedRange"] = [range.location, range.length]
-            guard let attributed = queried.object.accessibilityAttributedString(for: range),
-                  attributed.length == range.length, attributed.string == value else { result["reason"] = "unsupported-or-mismatched-attributed-string"; return result }
+            result["attributedScope"] = partial ? "partial-owned-exact-wrapper" : "complete-public-traversal"
+            // The synchronous public call below must return before a completed
+            // result can be emitted. No receipt proves a crashed/interrupted call.
+            let returned = queried.object.accessibilityAttributedString(for: range)
+            guard let attributed = returned else {
+                result["attributedCall"] = "completed-nil"
+                result["reason"] = "unsupported-or-mismatched-attributed-string"; return result
+            }
+            guard attributed.length == range.length, attributed.string == value else {
+                result["attributedCall"] = "completed-mismatched"
+                result["reason"] = "unsupported-or-mismatched-attributed-string"; return result
+            }
+            result["attributedCall"] = "completed-matched"
             result["returnedUTF16Length"] = attributed.length; result["returnedSHA256"] = hash(attributed.string)
             var runs: [[String: Any]] = [], offset = 0
             while offset < attributed.length && runs.count < 16 {
@@ -304,7 +320,9 @@ private final class MacAuditPublicMetadataObserver {
                 runs.append(["range": [effective.location, effective.length], "attributes": metadata]); offset = NSMaxRange(effective)
             }
             guard offset == attributed.length else { result["reason"] = "run-limit"; return result }
-            result["runs"] = runs; result["state"] = "OBSERVED"; result["reason"] = "public-attributed-string"
+            result["runs"] = runs
+            result["state"] = partial ? "UNKNOWN" : "OBSERVED"
+            result["reason"] = partial ? "partial-public-attributed-string" : "public-attributed-string"
             return result
         }
         return ["state": issues.isEmpty ? "OBSERVED" : "UNKNOWN", "issues": issues.sorted(), "visitedNodes": visits,

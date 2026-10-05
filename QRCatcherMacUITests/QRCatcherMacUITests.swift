@@ -548,9 +548,57 @@ final class QRCatcherMacUITests: XCTestCase {
               let ordered = value["orderedWindows"] as? [Int], ordered.count <= 8,
               let issues = value["issues"] as? [String], issues.count <= 12,
               issues.allSatisfy({ ["depth-limit", "cycle", "node-limit", "unsupported-public-node", "outside-root-or-unknown-owner", "missing-content", "missing-attached-sheet", "unexpected-sheet-state", "window-order-limit", "invalid-window-frame", "screen-identity-unknown"].contains($0) }) else { return false }
+        // Partial results describe only an owned exact wrapper in the visited
+        // subset. They never change target, traversal or same-state qualification.
+        for target in targets {
+            guard target["matchScope"] as? String == "visited-owned-public-nodes",
+                  let call = target["attributedCall"] as? String,
+                  ["not-run", "completed-nil", "completed-mismatched", "completed-matched"].contains(call) else { return false }
+            if call == "not-run" {
+                guard target["state"] as? String == "UNKNOWN" else { return false }
+                if ["attributedScope", "requestedRange", "returnedUTF16Length", "returnedSHA256", "runs"].contains(where: { target[$0] != nil }) { return false }
+            } else {
+                guard let scope = target["attributedScope"] as? String,
+                      ["partial-owned-exact-wrapper", "complete-public-traversal"].contains(scope),
+                      target["matchCount"] as? Int == 1,
+                      let wrapper = target["wrapper"] as? [String: Any], let queried = target["queried"] as? [String: Any],
+                      let length = target["expectedUTF16Length"] as? Int, (1...4096).contains(length),
+                      target["requestedRange"] as? [Int] == [0, length],
+                      let expectedHash = target["expectedSHA256"] as? String,
+                      queried["valueUTF16Length"] as? Int == length, queried["valueSHA256"] as? String == expectedHash,
+                      let rootKind = queried["root"] as? String, ["main-content", "attached-sheet"].contains(rootKind),
+                      let owner = value[rootKind == "main-content" ? "window" : "attachedSheet"] as? [String: Any],
+                      owner["number"] as? Int == queried["window"] as? Int, strictMetadataBool(owner["visible"], equals: true),
+                      let ownerFrame = owner["frame"] as? [Double], let candidateFrame = queried["frame"] as? [Double],
+                      let wrapperFrame = wrapper["frame"] as? [Double], ownerFrame.count == 4, candidateFrame.count == 4, wrapperFrame.count == 4,
+                      (ownerFrame + candidateFrame + wrapperFrame).allSatisfy({ $0.isFinite }) else { return false }
+                for frame in [candidateFrame, wrapperFrame] {
+                    guard frame[2] > 0, frame[3] > 0, frame[0] >= ownerFrame[0], frame[1] >= ownerFrame[1],
+                          frame[0] + frame[2] <= ownerFrame[0] + ownerFrame[2], frame[1] + frame[3] <= ownerFrame[1] + ownerFrame[3] else { return false }
+                }
+                if scope == "partial-owned-exact-wrapper" {
+                    guard issues == ["unsupported-public-node"], value["state"] as? String == "UNKNOWN", target["state"] as? String == "UNKNOWN",
+                          target["queryKind"] as? String == "exact-wrapper",
+                          wrapper["valueUTF16Length"] as? Int == length, wrapper["valueSHA256"] as? String == expectedHash,
+                          wrapper["root"] as? String == queried["root"] as? String, wrapper["window"] as? Int == queried["window"] as? Int,
+                          wrapper["path"] as? [String] == queried["path"] as? [String], wrapper["frame"] as? [Double] == queried["frame"] as? [Double] else { return false }
+                } else if !issues.isEmpty { return false }
+                if call == "completed-matched" {
+                    guard target["returnedUTF16Length"] as? Int == length, target["returnedSHA256"] as? String == expectedHash,
+                          let reason = target["reason"] as? String else { return false }
+                    if target["runs"] != nil {
+                        guard reason == (scope == "partial-owned-exact-wrapper" ? "partial-public-attributed-string" : "public-attributed-string"),
+                              target["state"] as? String == (scope == "partial-owned-exact-wrapper" ? "UNKNOWN" : "OBSERVED") else { return false }
+                    } else if !["invalid-attribute-range", "run-limit"].contains(reason) || target["state"] as? String != "UNKNOWN" { return false }
+                } else {
+                    guard target["state"] as? String == "UNKNOWN", target["reason"] as? String == "unsupported-or-mismatched-attributed-string" else { return false }
+                    if ["returnedUTF16Length", "returnedSHA256", "runs"].contains(where: { target[$0] != nil }) { return false }
+                }
+            }
+        }
         // Closed JSON keys and bounded types. Portable review checks are kept
         // separate from native evidence; neither is an audit acceptance gate.
-        let allowed: Set<String> = required.union(["number", "frame", "visible", "key", "main", "sheetParent", "kind", "identifier", "pane", "expectedUTF16Length", "expectedSHA256", "reason", "matchCount", "wrapper", "queried", "queryKind", "role", "root", "path", "enabled", "valueUTF16Length", "valueSHA256", "requestedRange", "returnedUTF16Length", "returnedSHA256", "runs", "range", "attributes", "accessibilityFont", "font", "accessibilityForegroundColor", "foregroundColor", "accessibilityBackgroundColor", "backgroundColor", "type", "name", "pointSize", "traits", "family", "visibleName", "components"])
+        let allowed: Set<String> = required.union(["number", "frame", "visible", "key", "main", "sheetParent", "kind", "identifier", "pane", "expectedUTF16Length", "expectedSHA256", "reason", "matchCount", "matchScope", "attributedCall", "attributedScope", "wrapper", "queried", "queryKind", "role", "root", "path", "enabled", "valueUTF16Length", "valueSHA256", "requestedRange", "returnedUTF16Length", "returnedSHA256", "runs", "range", "attributes", "accessibilityFont", "font", "accessibilityForegroundColor", "foregroundColor", "accessibilityBackgroundColor", "backgroundColor", "type", "name", "pointSize", "traits", "family", "visibleName", "components"])
         func bounded(_ object: Any, depth: Int) -> Bool {
             guard depth <= 16 else { return false }
             if let dictionary = object as? [String: Any] {

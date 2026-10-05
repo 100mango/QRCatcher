@@ -30,7 +30,7 @@ class MacPublicMetadataTests(unittest.TestCase):
         rows = []
         for kind, identifier, pane, text, in_sheet in schema.target_specs(case, bind['checkpoint']):
             row = dict(kind=kind, identifier=identifier, pane=pane, expectedUTF16Length=schema.utf16(text), expectedSHA256=schema.digest(text),
-                       state='UNKNOWN', reason='missing-target', matchCount=0)
+                       state='UNKNOWN', reason='missing-target', matchCount=0, matchScope='visited-owned-public-nodes', attributedCall='not-run')
             if observed:
                 root = sheet if in_sheet else window
                 node = dict(role='AXStaticText', root='attached-sheet' if in_sheet else 'main-content', window=root['number'],
@@ -41,7 +41,7 @@ class MacPublicMetadataTests(unittest.TestCase):
                 attrs['font'] = dict(state='OBSERVED', type='NSFont', name='.SFNS-Regular', pointSize=13.0, traits=0)
                 attrs['foregroundColor'] = dict(state='OBSERVED', type='sRGB', components=[0.0, 0.0, 0.0, 1.0])
                 row.update(state='OBSERVED', reason='public-attributed-string', matchCount=1, wrapper=node, queried=copy.deepcopy(node),
-                           queryKind='exact-wrapper', requestedRange=[0, schema.utf16(text)], returnedUTF16Length=schema.utf16(text),
+                           queryKind='exact-wrapper', attributedScope='complete-public-traversal', attributedCall='completed-matched', requestedRange=[0, schema.utf16(text)], returnedUTF16Length=schema.utf16(text),
                            returnedSHA256=schema.digest(text), runs=[dict(range=[0, schema.utf16(text)], attributes=attrs)])
             rows.append(row)
         return dict(schema=1, token=TOKEN, case=case, checkpoint=bind['checkpoint'], sequence=bind['sequence'], requestID=REQUEST,
@@ -250,6 +250,121 @@ class MacPublicMetadataTests(unittest.TestCase):
             elif change=='wrong-main-window':value['native']['mainWindow']=99
             else:value['paired']['coordinateSpace']='AppKit-screen-bottom-left'
             with self.subTest(change=change), self.assertRaises(ValueError):schema.validate_paired_receipt(json.dumps(value).encode(),**self.binding())
+
+    def partial_receipt(self, call='completed-matched', case='testNativeWindowResizeKeepsFullActionTitles', checkpoint=None):
+        receipt = self.receipt(case, checkpoint)
+        receipt.update(state='UNKNOWN', issues=['unsupported-public-node'])
+        row = copy.deepcopy(self.receipt(case, checkpoint, observed=True)['targets'][0])
+        row.update(state='UNKNOWN', reason='partial-public-attributed-string', attributedScope='partial-owned-exact-wrapper', attributedCall=call)
+        if call in ['completed-nil', 'completed-mismatched']:
+            for key in ['returnedUTF16Length', 'returnedSHA256', 'runs']:
+                row.pop(key)
+            row['reason'] = 'unsupported-or-mismatched-attributed-string'
+        receipt['targets'][0] = row
+        return receipt
+
+    def test_partial_exact_wrapper_four_checkpoints_keeps_global_and_target_unknown(self):
+        for case, checkpoints in schema.CASES.items():
+            for checkpoint in checkpoints:
+                value = self.partial_receipt(case=case, checkpoint=checkpoint)
+                self.assertEqual(self.validate(value), value)
+                self.assertEqual(value['state'], 'UNKNOWN')
+                self.assertEqual(value['targets'][0]['state'], 'UNKNOWN')
+                self.assertEqual(value['targets'][0]['matchScope'], 'visited-owned-public-nodes')
+                self.assertFalse(value['auditQualified']); self.assertFalse(value['contrastQualified'])
+                self.assertTrue(all(row['attributedCall'] == 'not-run' for row in value['targets'][1:]))
+
+    def test_partial_completed_nil_mismatched_and_matched_returns_are_distinct(self):
+        for call in ['completed-nil', 'completed-mismatched', 'completed-matched']:
+            value = self.partial_receipt(call)
+            self.validate(value)
+            self.assertEqual(value['targets'][0]['attributedCall'], call)
+            for field, bad in [('attributedCall', 'started'), ('attributedCall', 'not-run'), ('attributedCall', True), ('attributedScope', 'inferred-global')]:
+                mutated = copy.deepcopy(value); mutated['targets'][0][field] = bad; self.reject(mutated)
+            for field in ['attributedCall', 'matchScope', 'attributedScope', 'requestedRange']:
+                mutated = copy.deepcopy(value); mutated['targets'][0].pop(field); self.reject(mutated)
+        for call in ['completed-nil', 'completed-mismatched']:
+            for field, bad in [('returnedUTF16Length', 40), ('returnedSHA256', 'a'*64), ('runs', [])]:
+                value = self.partial_receipt(call); value['targets'][0][field] = bad; self.reject(value)
+
+    def test_partial_unsafe_issue_or_direct_child_never_calls(self):
+        for issue in schema.ISSUES - {'unsupported-public-node'}:
+            for issues in [[issue], ['unsupported-public-node', issue]]:
+                for call in ['completed-nil', 'completed-matched']:
+                    value = self.partial_receipt(call); value['issues'] = issues; self.reject(value)
+        value = self.partial_receipt(); row = value['targets'][0]
+        row['queryKind'] = 'direct-rendered-static-text'
+        row['queried']['path'].append('unidentified'); row['wrapper']['valueUTF16Length'] = -1; row['wrapper']['valueSHA256'] = 'unknown'
+        self.reject(value)
+        value = self.partial_receipt(); value['issues'] = []; value['state'] = 'OBSERVED'; self.reject(value)
+
+    def test_partial_duplicate_missing_outside_root_wrong_value_frame_range_rejected(self):
+        for field, bad in [('matchCount', 0), ('matchCount', 2), ('matchScope', 'complete-global-uniqueness'), ('requestedRange', [0, 4097]), ('requestedRange', [False, 40])]:
+            value = self.partial_receipt(); value['targets'][0][field] = bad; self.reject(value)
+        for field, bad in [('root', 'unowned'), ('window', 99), ('path', ['mac.windowContent', 'mac.pane.history']),
+                           ('frame', [-100, 100, 200, 20]), ('frame', [20, 120, 0, 20]), ('frame', [20, 120, float('nan'), 20]),
+                           ('valueSHA256', 'b'*64), ('valueUTF16Length', 4097)]:
+            value = self.partial_receipt()
+            for node in ['wrapper', 'queried']:
+                value['targets'][0][node][field] = copy.deepcopy(bad)
+            self.reject(value)
+
+    def test_partial_supported_attributes_are_scoped_missing_types_never_inferred(self):
+        value = self.partial_receipt(); attrs = value['targets'][0]['runs'][0]['attributes']
+        attrs['accessibilityFont'] = dict(state='OBSERVED', type='AXFontDictionary', name='Helvetica', pointSize=13.0)
+        attrs['backgroundColor'] = dict(state='UNKNOWN', type='unsupported')
+        self.validate(value)
+        for key in schema.ATTRIBUTES:
+            attrs[key] = dict(state='UNKNOWN', type='absent')
+        self.validate(value)
+        attrs['backgroundColor'] = dict(state='OBSERVED', type='inferred-sRGB', components=[1,1,1,1]); self.reject(value)
+
+    def test_partial_matched_return_bad_runs_remain_unknown_without_run_results(self):
+        for reason in ['invalid-attribute-range', 'run-limit']:
+            value = self.partial_receipt(); row = value['targets'][0]; row.pop('runs'); row['reason'] = reason
+            self.validate(value)
+            row['runs'] = []; self.reject(value)
+        for change in ['too-many-runs', 'range-overflow', 'gap', 'wrong-hash', 'wrong-type']:
+            value = self.partial_receipt(); row = value['targets'][0]
+            if change == 'too-many-runs': row['runs'] *= 17
+            elif change == 'range-overflow': row['runs'][0]['range'][1] += 1
+            elif change == 'gap': row['runs'][0]['range'][0] = 1
+            elif change == 'wrong-hash': row['returnedSHA256'] = 'a'*64
+            else: row['runs'][0]['attributes']['font']['pointSize'] = False
+            self.reject(value)
+
+    def test_partial_cannot_qualify_global_target_pair_audit_or_contrast(self):
+        for level in ['global', 'target', 'audit', 'contrast']:
+            value = self.partial_receipt()
+            if level == 'global': value['state'] = 'OBSERVED'
+            elif level == 'target': value['targets'][0]['state'] = 'OBSERVED'
+            elif level == 'audit': value['auditQualified'] = True
+            else: value['contrastQualified'] = True
+            self.reject(value)
+        value = self.paired_receipt(); value['native'] = self.partial_receipt(); value.update(sameState='UNKNOWN', reason='state-or-geometry-mismatch')
+        self.assertEqual(schema.validate_paired_receipt(json.dumps(value).encode(), **self.binding()), value)
+        value.update(sameState='OBSERVED', reason='bounded-public-pair')
+        with self.assertRaises(ValueError): schema.validate_paired_receipt(json.dumps(value).encode(), **self.binding())
+
+    def test_partial_stale_oversize_and_arbitrary_content_fail_closed(self):
+        value = self.partial_receipt(); value['uptime'] = 90; self.reject(value)
+        for field in ['text', 'value', 'backgroundSource']:
+            value = self.partial_receipt(); value['targets'][0][field] = 'arbitrary private content'; self.reject(value)
+        value = self.partial_receipt(); value['targets'][0]['runs'][0]['attributes']['font']['name'] = 'n'*129; self.reject(value)
+        with self.assertRaises(ValueError): schema.validate_native_receipt(b' '*32769, **self.binding())
+
+    def test_partial_source_guard_order_and_completion_mutations_fail_closed(self):
+        app = (ROOT/'QRCatcherMac/QRCatcherMacApp.swift').read_text(); ui = (ROOT/'QRCatcherMacUITests/QRCatcherMacUITests.swift').read_text(); release = (ROOT/'scripts/verify_mac_release.py').read_text()
+        for token in ['issues == Set(["unsupported-public-node"]) && queryKind == "exact-wrapper"', '"matchScope": "visited-owned-public-nodes"',
+                      'result["attributedCall"] = "completed-nil"', 'result["attributedCall"] = "completed-mismatched"',
+                      'result["attributedCall"] = "completed-matched"', 'partial ? "UNKNOWN" : "OBSERVED"']:
+            with self.subTest(token=token), self.assertRaises(ValueError): schema.validate_observer_source(app.replace(token, 'REMOVED_GUARD'), ui, release)
+        old = 'let partial = issues == Set(["unsupported-public-node"]) && queryKind == "exact-wrapper"'
+        with self.assertRaises(ValueError): schema.validate_observer_source(app.replace(old, old+' || true'), ui, release)
+        call = 'let returned = queried.object.accessibilityAttributedString(for: range)'
+        with self.assertRaises(ValueError): schema.validate_observer_source(app.replace(call, '').replace('guard let value = stringValue(queried.object)', call+'\n            guard let value = stringValue(queried.object)'), ui, release)
+        for token in ['issues == ["unsupported-public-node"]', 'value["state"] as? String == "UNKNOWN", target["state"] as? String == "UNKNOWN"']:
+            with self.assertRaises(ValueError): schema.validate_observer_source(app, ui.replace(token, 'REMOVED_GUARD'), release)
 
     def test_unknown_paired_response_can_never_be_a_pass(self):
         b=self.binding();value=dict(schema=1,token=TOKEN,case=b['case'],checkpoint=b['checkpoint'],sequence=1,requestID=REQUEST,auditQualified=False,

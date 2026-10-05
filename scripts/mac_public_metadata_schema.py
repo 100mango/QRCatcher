@@ -14,7 +14,7 @@ PRIVACY_ZH = 'Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片�
 ATTRIBUTES = {'accessibilityFont', 'font', 'accessibilityForegroundColor', 'foregroundColor', 'accessibilityBackgroundColor', 'backgroundColor'}
 PATH_IDENTIFIERS = {'mac.windowContent', 'mac.pane.result', 'mac.pane.history', 'mac.sheet.privacy', 'mac.payload', 'mac.status', 'privacy.offlineBody', 'unidentified'}
 ISSUES = {'depth-limit', 'cycle', 'node-limit', 'unsupported-public-node', 'outside-root-or-unknown-owner', 'missing-content', 'missing-attached-sheet', 'unexpected-sheet-state', 'window-order-limit', 'invalid-window-frame', 'screen-identity-unknown'}
-REASONS = {'missing-target', 'duplicate-target', 'node-limit', 'missing-or-duplicate-rendered-child', 'incomplete-public-traversal', 'wrong-value-or-frame', 'unsupported-or-mismatched-attributed-string', 'invalid-attribute-range', 'run-limit', 'public-attributed-string'}
+REASONS = {'missing-target', 'duplicate-target', 'node-limit', 'missing-or-duplicate-rendered-child', 'incomplete-public-traversal', 'wrong-value-or-frame', 'unsupported-or-mismatched-attributed-string', 'invalid-attribute-range', 'run-limit', 'public-attributed-string', 'partial-public-attributed-string'}
 
 
 def require(condition, reason):
@@ -154,17 +154,46 @@ def attribute(value, key):
 
 def target(value, spec, main, sheet, issues):
     kind, identifier, pane, text, in_sheet = spec
-    required = {'kind', 'identifier', 'pane', 'expectedUTF16Length', 'expectedSHA256', 'state', 'reason', 'matchCount'}
-    optional = {'wrapper', 'queried', 'queryKind', 'requestedRange', 'returnedUTF16Length', 'returnedSHA256', 'runs'}
+    required = {'kind', 'identifier', 'pane', 'expectedUTF16Length', 'expectedSHA256', 'state', 'reason', 'matchCount', 'matchScope', 'attributedCall'}
+    optional = {'wrapper', 'queried', 'queryKind', 'requestedRange', 'returnedUTF16Length', 'returnedSHA256', 'runs', 'attributedScope'}
     require(type(value) is dict and required <= set(value) <= required | optional, 'Unknown/missing target keys')
     require([value[k] for k in ['kind', 'identifier', 'pane', 'expectedUTF16Length', 'expectedSHA256']] == [kind, identifier, pane, utf16(text), digest(text)], 'Wrong selected target')
     require(type(value['expectedUTF16Length']) is int and integer(value['matchCount'], 0, 256) and value['state'] in ['UNKNOWN', 'OBSERVED'] and value['reason'] in REASONS, 'Invalid target state')
     owning_window = sheet if in_sheet else main
     root = 'attached-sheet' if in_sheet else 'main-content'
     observed = value['state'] == 'OBSERVED'
+    require(type(value['matchScope']) is str and value['matchScope'] == 'visited-owned-public-nodes', 'Candidate count cannot establish global uniqueness')
+    call = value['attributedCall']
+    require(type(call) is str and call in ['not-run', 'completed-nil', 'completed-mismatched', 'completed-matched'], 'Uncompleted/unknown public call')
+    called = call != 'not-run'
+    scope = value.get('attributedScope')
+    partial = scope == 'partial-owned-exact-wrapper'
+    if called:
+        require(scope in ['partial-owned-exact-wrapper', 'complete-public-traversal'] and value['matchCount'] == 1 and owning_window is not None, 'Unbound attributed call')
+        require({'wrapper', 'queried', 'queryKind', 'requestedRange'} <= set(value), 'Missing called candidate')
+        require(issues == ['unsupported-public-node'] and value['queryKind'] == 'exact-wrapper' and not observed if partial else not issues, 'Unsafe partial call or traversal')
+        require(owning_window['visible'] is True and owning_window['number'] >= 0, 'Invalid called owning window')
+        node(value['queried'], expected=text, pane=pane, root=root, owning_window=owning_window, observed=True)
+        frame(value['wrapper']['frame'])
+        require(value['wrapper']['frame'][2] > 0 and value['wrapper']['frame'][3] > 0 and contained(owning_window['frame'], value['wrapper']['frame']), 'Outside-window wrapper geometry')
+    else:
+        require(not {'attributedScope', 'requestedRange', 'returnedUTF16Length', 'returnedSHA256', 'runs'}.intersection(value), 'Unrun public call carries results')
+    if call in ['completed-nil', 'completed-mismatched']:
+        require(not observed and value['reason'] == 'unsupported-or-mismatched-attributed-string' and not {'returnedUTF16Length', 'returnedSHA256', 'runs'}.intersection(value), 'Nil/mismatched return carries matched data')
+    if call == 'not-run':
+        require(not observed and value['reason'] not in ['public-attributed-string', 'partial-public-attributed-string', 'unsupported-or-mismatched-attributed-string', 'invalid-attribute-range', 'run-limit'], 'Unrun call given return reason')
+    if call == 'completed-matched':
+        require({'returnedUTF16Length', 'returnedSHA256'} <= set(value), 'Missing matched return fingerprint')
+        require(value['reason'] in ['public-attributed-string', 'partial-public-attributed-string', 'invalid-attribute-range', 'run-limit'], 'Wrong matched return reason')
+        require(value['reason'] != 'public-attributed-string' or observed, 'Complete matched metadata requires observed target')
+        require(('runs' in value) == (value['reason'] in ['public-attributed-string', 'partial-public-attributed-string']), 'Missing/invalid completed run data')
+    if 'runs' in value:
+        require(call == 'completed-matched' and value['reason'] == ('partial-public-attributed-string' if partial else 'public-attributed-string'), 'Unmatched/unqualified attribute runs')
+    if value['reason'] == 'partial-public-attributed-string':
+        require(partial and call == 'completed-matched' and 'runs' in value and not observed, 'Partial evidence cannot establish target observation')
     if observed:
         require(not issues and value['reason'] == 'public-attributed-string' and value['matchCount'] == 1 and owning_window is not None, 'Unqualified observed target')
-        require(set(value) == required | optional, 'Missing observed target data')
+        require(set(value) == required | optional and call == 'completed-matched' and scope == 'complete-public-traversal', 'Missing observed target data')
     else:
         require(value['reason'] != 'public-attributed-string', 'Unknown target given observed reason')
     for field in ['wrapper', 'queried']:
@@ -241,12 +270,27 @@ def validate_observer_source(app_source, ui_source, release_source):
                 'CFGetTypeID(number) == CFBooleanGetTypeID()', 'event.keyCode == 25, !event.isARepeat',
                 'intersection(.deviceIndependentFlagsMask) == flags', 'let eventWindow = event.window', 'eventWindow === root || eventWindow === root.attachedSheet',
                 'NSEvent.addLocalMonitorForEvents(matching: .keyDown)', 'NSEvent.removeMonitor(monitor)', 'NSPasteboard(name:',
-                'board.changeCount == change', 'guard issues.isEmpty', '"state": "UNKNOWN", "type": "absent"']
+                'board.changeCount == change', 'guard issues.isEmpty || partial',
+                'issues == Set(["unsupported-public-node"]) && queryKind == "exact-wrapper"',
+                '"matchScope": "visited-owned-public-nodes"', '"attributedCall": "not-run"',
+                'result["attributedCall"] = "completed-nil"', 'result["attributedCall"] = "completed-mismatched"',
+                'result["attributedCall"] = "completed-matched"', 'partial ? "UNKNOWN" : "OBSERVED"', '"state": "UNKNOWN", "type": "absent"']
     for token in required:
         require(token in observer, 'Missing observer source guard: '+token)
     for forbidden in ['AXUIElement', 'AXIsProcessTrusted', 'value(forKey', 'performSelector', 'NSSelectorFromString', 'method_exchangeImplementations',
                       'addGlobalMonitor', 'CGEventTap', 'as? CGColor', 'as! CGColor', 'CFGetTypeID(value', 'NSPasteboard.general', 'NSPasteboard.find', 'setAccessibility', '.font(.', '.foregroundStyle(', 'preferredFont']:
         require(forbidden not in observer, 'Forbidden observer behavior: '+forbidden)
+    candidate_gate = observer.index('guard issues.isEmpty || partial')
+    verification = observer.index('guard let value = stringValue(queried.object)')
+    range_gate = observer.index('result["requestedRange"] = [range.location, range.length]')
+    public_call = observer.index('let returned = queried.object.accessibilityAttributedString(for: range)')
+    complete = observer.index('result["attributedCall"] = "completed-matched"')
+    require(candidate_gate < verification < range_gate < public_call < complete, 'Call must follow owned candidate value/frame verification')
+    require('let partial = issues == Set(["unsupported-public-node"]) && queryKind == "exact-wrapper"\n            guard issues.isEmpty || partial else' in observer, 'Partial issue/route allowlist broadened')
+    for token in ['target["matchScope"] as? String == "visited-owned-public-nodes"', 'issues == ["unsupported-public-node"]',
+                  'value["state"] as? String == "UNKNOWN", target["state"] as? String == "UNKNOWN"',
+                  '"not-run", "completed-nil", "completed-mismatched", "completed-matched"']:
+        require(token in ui_source, 'Missing UI partial receipt guard: '+token)
     screenshot = ui_source.split('    private func screenshot(_ name: String) throws {', 1)[1].split('\n    func test', 1)[0]
     require(screenshot.startswith('\n        #if DEBUG\n        collectPublicMetadataIfSelected(name)\n        #endif\n        try capturePixels(name)'), 'Snapshot must precede unchanged capture/audit')
     for token in ['performAccessibilityAudit(for: .all)', 'XCTFail("Accessibility audit', 'return false', 'continueAfterFailure = previousFailureMode']:
