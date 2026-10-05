@@ -24,6 +24,9 @@ SCOPE_CAP = 3_000_000
 WHOLE_CAP = 20_000_000
 FILE_CAP = 800 * 1024
 JSON_CAP = 128 * 1024
+INPUT_ATTACHMENT_CAP = 1024
+SELECTED_ATTACHMENT_CAP = 128
+RETAINED_FILE_CAP = 120
 REPORT_RESERVE = 64 * 1024
 EXPORT_SECONDS = 180
 RESULT = 'MacSandboxResults.xcresult'
@@ -93,16 +96,16 @@ def walk(value, depth=0, counter=None):
 
 def attachment_records(value):
     rows = [row for row in walk(value) if 'exportedFileName' in row]
-    require(len(rows) <= 128, 'Attachment count exceeds 128')
-    files = set()
-    for row in rows:
-        name = row['exportedFileName']
-        require(small_string(name) and Path(name).name == name and
-                name not in {'.', '..', 'manifest.json'} and '/' not in name and '\\' not in name,
-                'Unsafe exported attachment filename')
-        require(name not in files, 'Duplicate exported attachment filename')
-        files.add(name)
+    require(len(rows) <= INPUT_ATTACHMENT_CAP, 'Input attachment count exceeds 1024')
     return rows
+
+
+def attachment_filename(row):
+    name = row['exportedFileName']
+    require(small_string(name) and Path(name).name == name and
+            name not in {'.', '..', 'manifest.json'} and '/' not in name and '\\' not in name,
+            'Unsafe exported attachment filename')
+    return name
 
 
 def presentation_name(entry):
@@ -449,6 +452,11 @@ def collect(runner=None, clock=None, route=None):
               'screenshots': [], 'strict_audit_callbacks': 0,
               'test_identity': {'state': 'UNKNOWN', 'reason': 'missing-or-uncollected-test-results',
                                 'raw_retained': False},
+              'attachment_inventory': {'state': 'UNKNOWN', 'raw_retained': False, 'total_records': None, 'selected_owned_records': 0,
+                                       'unselected_records': 0, 'unclassified_records': None, 'invalid_filename_records': 0,
+                                       'duplicate_filenames': 0, 'duplicate_filename_records': 0,
+                                       'input_record_limit': INPUT_ATTACHMENT_CAP, 'selected_owned_record_limit': SELECTED_ATTACHMENT_CAP,
+                                       'retained_file_limit': RETAINED_FILE_CAP, 'input_json_limit_bytes': JSON_CAP},
               'offline_freshness_revalidated': False,
               'freshness_limit': 'Native synchronous source guard is the observed five-second envelope; offline export cannot reobserve request time or now'}
     used, stopped, started = 0, blocked(), clock()
@@ -463,7 +471,7 @@ def collect(runner=None, clock=None, route=None):
         nonlocal used
         require(Path(name).name == name and not (out / name).exists() and not (out / name).is_symlink(),
                 'Duplicate or unsafe retained filename')
-        require(type(data) is bytes and 0 < len(data) <= cap and len(report['files']) < 120,
+        require(type(data) is bytes and 0 < len(data) <= cap and len(report['files']) < RETAINED_FILE_CAP,
                 'Evidence file/count cap exceeded')
         require(used + len(data) <= SCOPE_CAP - REPORT_RESERVE, 'Evidence exceeds Mac allocation; emitted evidence cannot be silently omitted')
         with (out / name).open('xb') as stream:
@@ -600,25 +608,61 @@ def collect(runner=None, clock=None, route=None):
             run(['xcrun', 'xcresulttool', 'export', 'attachments', '--path', RESULT,
                  '--output-path', STAGING], 75)
             manifest_data = read_regular(staging / 'manifest.json', root, JSON_CAP)
-            entries = attachment_records(schema.decode(manifest_data, JSON_CAP))
-            # No raw result contents or arbitrary unrecognized attachments are uploaded.
+            manifest = schema.decode(manifest_data, JSON_CAP)
+            list(walk(manifest))
+            retain('sandbox-attachment-manifest.json', manifest_data, JSON_CAP)
+            inventory = report['attachment_inventory']
+            inventory.update(raw_retained=True, input_json_bytes=len(manifest_data),
+                             total_records=sum('exportedFileName' in row for row in walk(manifest)))
+            entries = attachment_records(manifest)
+            # Unsafe/aliased rows cannot own any bytes. Reject both sides of a
+            # filename duplicate, but retain independent safe selected records.
+            filenames, safe_entries = {}, []
+            for entry in entries:
+                try:
+                    filename = attachment_filename(entry)
+                    filenames[filename] = filenames.get(filename, 0) + 1
+                    safe_entries.append(entry)
+                except (ValueError, TypeError, KeyError, UnicodeError) as failure:
+                    inventory['invalid_filename_records'] += 1
+                    error(failure)
+            duplicates = {name for name, count in filenames.items() if count > 1}
+            inventory['duplicate_filenames'] = len(duplicates)
+            inventory['duplicate_filename_records'] = sum(filenames[name] for name in duplicates)
+            if duplicates:
+                error('Duplicate exported attachment filename')
+            entries = [entry for entry in safe_entries if entry['exportedFileName'] not in duplicates]
+            # No raw bundle contents or arbitrary unrecognized attachment bytes are uploaded.
             retained_frames, tokens, requests, receipt_checkpoints = set(), {}, set(), set()
             supporting, transitions, audit_counts = set(), set(), {}
-            # Required frames and metadata precede optional failure images.
+            # Closed metadata precedes large required images and optional data.
             def priority(entry):
                 try:
                     name = presentation_name(entry)
-                    return (2 if name == 'mac-failure' else 0 if name in set(FRAMES) else 1,
+                    prefix = owned_prefix(entry)
+                    return (0 if (name and name.startswith('mac-public-metadata-')) or
+                                 name is None and prefix == 'mac-public-metadata-' else
+                            1 if name in set(FRAMES) else
+                            2 if name in {'mac-supporting-text-layout', 'mac-payload-transition'} or
+                                 prefix in {'mac-supporting-text-layout', 'mac-payload-transition'} else
+                            3 if name == 'mac-audit-element' or prefix == 'mac-audit-element' else
+                            4 if name == 'mac-failure' else 5,
                             entry['exportedFileName'])
                 except (ValueError, TypeError, UnicodeError):
                     # Invalid presentation remains an error in the entry loop;
                     # it must not discard other independently validated bytes.
-                    return (3, entry['exportedFileName'])
+                    return (6, entry['exportedFileName'])
             entries.sort(key=priority)
             for entry in entries:
                 try:
                     name = presentation_name(entry)
                     prefix = owned_prefix(entry)
+                    if name not in NAMES and prefix is None:
+                        inventory['unselected_records'] += 1
+                        continue
+                    inventory['selected_owned_records'] += 1
+                    require(inventory['selected_owned_records'] <= SELECTED_ATTACHMENT_CAP,
+                            'Selected owned attachment count exceeds 128')
                     # Unknown test interpretation permits only named frames and
                     # independently closed receipts, never arbitrary callback text.
                     if report['test_identity']['state'] == 'UNKNOWN' and (
@@ -724,8 +768,16 @@ def collect(runner=None, clock=None, route=None):
                 report['sameState'] = 'OBSERVED'
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError) as failure:
         error(failure)
+    inventory = report['attachment_inventory']
+    if inventory['raw_retained']:
+        inventory['state'] = 'PARTIAL' if report['errors'] else 'COMPLETE'
+        inventory['unclassified_records'] = (inventory['total_records'] - inventory['invalid_filename_records'] -
+                                             inventory['duplicate_filename_records'] - inventory['selected_owned_records'] -
+                                             inventory['unselected_records'])
     report['owned_cleanup_uncertainty_observed'] = stopped or blocked()
     if report['owned_cleanup_uncertainty_observed']:
+        if inventory['raw_retained']:
+            inventory['state'] = 'PARTIAL'
         report['sameState'] = 'UNKNOWN'
         report['evidence_complete'] = False
         for row in report['metadata']:

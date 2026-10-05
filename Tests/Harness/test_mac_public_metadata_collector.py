@@ -1,5 +1,6 @@
 """Executable offline collector adversaries; synthetic bytes are not native proof."""
 import copy
+import base64
 import hashlib
 import importlib.util
 import json
@@ -11,6 +12,7 @@ import tempfile
 import types
 import unittest
 import uuid
+import zlib
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +24,27 @@ import mac_public_metadata_schema as schema
 spec = importlib.util.spec_from_file_location('metadata_fixture', Path(__file__).with_name('test_mac_public_metadata.py'))
 fixtures = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixtures)
+
+# Exact retained tree from public 0ab198e38bd8d0a3d54358812f487ec74fa6eac1,
+# run 37371962733, artifact 11370899424. This attests tree shape only.
+ACTUAL_NATIVE_TEST_RESULTS = zlib.decompress(base64.b64decode(
+    'eNrtm91v2jAQwN/5K6w8bdIKJLQB+tahVUJbu60f28PUB8e5FGuOHdlOKZv6v88JbQIj6cfWdup0EkKQu/P57vzDxol/dgjxYrjgDIxHdsk3952Qn+W7k1DNZtwCs7mGQuwupOG29+ZGvrScxqVsB3ZofxyNaMJGw1HEBiyKkjDZhsCPfIj6/mDA+kEQ/25+SNNl4wcLckBZLU5VDKKSfuHa5lQUKjMuoVZT5m3ORXyYpxHoUjUI97aD0arGF9CGK7mUDrv9WpYJahOl01KUUvbx2CtFV+79rNDyLBh76LrSlCDXFRFrkLVoVXyLyu9qd6g2qd/DpM2sNJU3mU0oFxCTLbLH3DAwPOKC2wWhecwt+eZyslVm3MCWBpWBhPhsl0yUtJoaS5bWVUI33bjUnSyypat9p+zGEjlwfug5tFsZlWsGHxSj9rpubXE45cT14BO1s9JF79S4Yvd0LiXo3lzp773PRxNq2cx9bfjkxtPp9MTV2DRd65o5T2xrP51z4VJTj73QH7aoXjVev3rzh0XD/Lfk33+e/CM0CA1C8xzQvBOQgrRkRg2RiriJmGmelRnG+j0vP1iKF4hSpgRnC5x9cPZBZBAZRAaRQWQQGUQGkUFkEBlEBpFBZBAZRAaRQWTakJFAtViQjBqDlft35GAZXhhAeMMA7938vyA1XD1r8ubFua5y4fkp8cfGu1VxKo+BKRmXzxwNx91hOAx3/P7IvXaCRsuqzsXjSpMlhxPNLWdU7As1f/W62WNR4mnsBgZP+PXjU03p/atWT48+VF3b7fWYSrs0ywR0L5nTe3hh23rT3pdqEBf2ZEJN8/D1NJhc2Gq4u0mmcw8A/+GTWREkShe3yw3/AbjIx0U+rlGQGCQGiXlCYnAliYt65OjhHKVc8jRPt+ZcxmqOUw9OPYgMIoPIIDJPigyuEXC5hnuw63uwg/AhG7CDsDsc+aEfjMdBMArD0d07sIeulQv4WjJ4VP5xeg+Qmf1ciD1WODjhVoB5hF3ZR/X0JDu19+zh8+zedu4YK3UZG8LxNrWfNH3N/tbTcZxzu5mPu3Kxmoe1HNw//keMfbPdKsbTKSlaJFEuY7Ee520x3sRXxdYc1zGVcaQu6+Pgm/n9JGj969zmcv20eGHiFkoJP7/+NWk8Or6qcH2E3q8drYmrQ/DLirvOp0CW7Kz471x1fgHr+sSg'))
+
+
+def unknown_metadata(rows):
+    for index, (entry, body) in enumerate(rows):
+        if entry.get('name', '').startswith('mac-public-metadata-'):
+            value = schema.decode(body)
+            value['sameState'], value['reason'] = 'UNKNOWN', 'state-or-geometry-mismatch'
+            rows[index] = (entry, encoded(value))
+
+
+ORDINARY_BYTES = b'UNRELATED-ORDINARY-SNAPSHOT-BYTES-MUST-NOT-BE-UPLOADED'
+
+
+def ordinary_snapshots(rows, total):
+    while len(rows) < total:
+        rows.append((dict(name='Ordinary XCTest snapshot ' + str(len(rows))), ORDINARY_BYTES))
 
 
 def encoded(value):
@@ -134,7 +157,7 @@ def attachments():
 
 
 class CollectorTests(unittest.TestCase):
-    def exercise(self, *, edit=None, edit_summary=None, edit_tests=None, mode=None, hosted=False, clock=None):
+    def exercise(self, *, edit=None, edit_summary=None, edit_tests=None, mode=None, hosted=False, clock=None, native_tests=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             (root / 'build').mkdir()
@@ -189,7 +212,7 @@ class CollectorTests(unittest.TestCase):
             data = attachments()
             if edit:
                 edit(data)
-            native_summary, tests = summary(), test_tree()
+            native_summary, tests = summary(), schema.decode(ACTUAL_NATIVE_TEST_RESULTS) if native_tests else test_tree()
             if edit_summary:
                 edit_summary(native_summary)
             if edit_tests:
@@ -225,8 +248,12 @@ class CollectorTests(unittest.TestCase):
                     operation['elapsed_seconds'] = float('nan')
                 if command[1:5] == ['xcresulttool', 'get', 'test-results', 'summary']:
                     text = encoded(summary(True) if command[-1] == 'MacTestResults.xcresult' else native_summary).decode()
+                    if mode == 'hosted-wrong-device' and command[-1] == 'MacTestResults.xcresult':
+                        value = schema.decode(text.encode())
+                        value['devicesAndConfigurations'][0]['device']['deviceId'] = 'b' * 40
+                        text = encoded(value).decode()
                 elif command[1:5] == ['xcresulttool', 'get', 'test-results', 'tests']:
-                    text = encoded(tests).decode()
+                    text = ACTUAL_NATIVE_TEST_RESULTS.decode() if native_tests and not edit_tests else encoded(tests).decode()
                     if mode == 'tests-durable-cleanup':
                         (root / 'build/owned-process-cleanup.json').write_bytes(b'{"blocked":true}')
                     if mode == 'tests-duplicate-keys':
@@ -254,10 +281,21 @@ class CollectorTests(unittest.TestCase):
                     if mode == 'attachment-hardlink':
                         os.link(staging / manifest[0]['exportedFileName'], staging / 'hardlink.png')
                     if mode == 'attachment-count':
-                        manifest = [dict(exportedFileName=f'extra-{n}.bin') for n in range(129)]
+                        manifest = [dict(exportedFileName=f'extra-{n}.bin') for n in range(1025)]
+                    if mode == 'attachment-duplicate-filename':
+                        manifest[1]['exportedFileName'] = manifest[0]['exportedFileName']
+                    if mode == 'attachment-filename-type':
+                        manifest[0]['exportedFileName'] = True
                     if mode == 'manifest-oversize':
                         manifest = {'oversize': 'x' * collector.JSON_CAP}
-                    (staging / 'manifest.json').write_bytes(encoded(manifest))
+                    manifest_bytes = encoded(manifest)
+                    if mode == 'manifest-duplicate-keys':
+                        manifest_bytes = b'{"value":[],"value":[]}'
+                    if mode == 'manifest-nonfinite':
+                        manifest_bytes = b'{"value":NaN}'
+                    if mode == 'manifest-node-bomb':
+                        manifest_bytes = encoded({'value': ['x'] * 8192})
+                    (staging / 'manifest.json').write_bytes(manifest_bytes)
                     text = ''
                 else:
                     raise AssertionError('Unexpected command: ' + str(command))
@@ -311,6 +349,205 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
         self.assertTrue(all(call[2] == dict(output_limit=131072, tail_limit=131072, echo=False) for call in self.calls))
         self.assertEqual(sum(call[1] for call in self.calls), 135)
+
+    def test_exact_retained_native_tree_has_two_failed_cases_and_34_failure_message_children(self):
+        self.assertEqual(len(ACTUAL_NATIVE_TEST_RESULTS), 16336)
+        self.assertEqual(hashlib.sha256(ACTUAL_NATIVE_TEST_RESULTS).hexdigest(),
+                         '865b06f231cd8d998eccd789c35b760feefefcbdef220534def6efa6a53e8f18')
+        rows = [row for row in collector.walk(schema.decode(ACTUAL_NATIVE_TEST_RESULTS)) if row.get('nodeType') == 'Test Case']
+        self.assertEqual([len(row['children']) for row in rows], [22, 12])
+        self.assertTrue(all(child['nodeType'] == 'Failure Message' for row in rows for child in row['children']))
+        report = self.exercise(native_tests=True, edit=lambda rows: (unknown_metadata(rows), ordinary_snapshots(rows, 200)))
+        self.assertTrue(report['evidence_complete'], report['errors'])
+        self.assertEqual(self.files['sandbox-test-results.json'], ACTUAL_NATIVE_TEST_RESULTS)
+        self.assertEqual(report['test_identity']['state'], 'OBSERVED')
+        self.assertEqual([row['result'] for row in report['executed_tests']], ['Failed', 'Failed'])
+        self.assertEqual(report['original_commands']['sandbox_test']['exit'], 65)
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertTrue(all(row['receipt_retained'] and row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_ordinary_snapshots_above128_and_at1024_keep_closed_bytes_without_uploading_ordinary_files(self):
+        for total in (129, 200, 1024):
+            report = self.exercise(edit=lambda rows: (unknown_metadata(rows), ordinary_snapshots(rows, total)))
+            self.assertTrue(report['evidence_complete'], report['errors'])
+            inventory = report['attachment_inventory']
+            self.assertEqual(inventory['state'], 'COMPLETE')
+            self.assertTrue(inventory['raw_retained'])
+            self.assertEqual(inventory['total_records'], total)
+            self.assertEqual(inventory['selected_owned_records'], 24)
+            self.assertEqual(inventory['unselected_records'], total - 24)
+            self.assertEqual(inventory['input_record_limit'], 1024)
+            self.assertEqual(inventory['selected_owned_record_limit'], 128)
+            self.assertEqual(inventory['retained_file_limit'], 120)
+            self.assertLessEqual(len(self.files), 120)
+            self.assertFalse(any(ORDINARY_BYTES in data for data in self.files.values()))
+            self.assertEqual(sum(row['checkpoint'] in collector.FRAMES for row in report['screenshots']), 6)
+            self.assertTrue(all(row['receipt_retained'] and row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+            manifest = schema.decode(self.files['sandbox-attachment-manifest.json'], collector.JSON_CAP)
+            self.assertEqual(len(collector.attachment_records(manifest)), total)
+            self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_large_valid_required_images_cannot_starve_four_closed_metadata_receipts(self):
+        def edit(rows):
+            unknown_metadata(rows)
+            for index, (entry, data) in enumerate(rows):
+                name = entry.get('name')
+                if name in collector.FRAMES:
+                    data = (png(name, collector.FILE_CAP) if name in collector.PNG_FRAMES else
+                            b'\xff\xd8' + b'x' * (collector.FILE_CAP - 2))
+                    rows[index] = (entry, data)
+            ordinary_snapshots(rows, 200)
+        report = self.exercise(edit=edit, native_tests=True)
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertEqual(report['attachment_inventory']['state'], 'PARTIAL')
+        self.assertTrue(report['missing_frames'])
+        self.assertTrue(any('Mac allocation' in error for error in report['errors']))
+        for row in report['metadata']:
+            self.assertTrue(row['receipt_retained'])
+            self.assertEqual(row['sameState'], 'UNKNOWN')
+            self.assertIn('sandbox-public-metadata-' + row['checkpoint'] + '.json', self.files)
+        self.assertLessEqual(self.size, collector.SCOPE_CAP)
+        names = [row['name'] for row in report['files']]
+        metadata_positions = [index for index, name in enumerate(names) if name.startswith('sandbox-public-metadata-')]
+        frame_positions = [names.index(row['name']) for row in report['screenshots'] if row['checkpoint'] in collector.FRAMES]
+        self.assertEqual(len(metadata_positions), 4)
+        self.assertTrue(frame_positions)
+        self.assertLess(max(metadata_positions), min(frame_positions))
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_input1025_retains_strict_raw_manifest_then_rejects_inventory_without_extra_export(self):
+        report = self.exercise(edit=lambda rows: (unknown_metadata(rows), ordinary_snapshots(rows, 1025)))
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['attachment_inventory']['total_records'], 1025)
+        self.assertEqual(report['attachment_inventory']['state'], 'PARTIAL')
+        self.assertEqual(report['attachment_inventory']['unclassified_records'], 1025)
+        self.assertTrue(report['attachment_inventory']['raw_retained'])
+        self.assertIn('sandbox-attachment-manifest.json', self.files)
+        self.assertTrue(any('Input attachment count exceeds 1024' in error for error in report['errors']))
+        self.assertTrue(all(row['receipt_retained'] is False for row in report['metadata']))
+        self.assertFalse(report['screenshots'])
+        self.assertFalse(any(ORDINARY_BYTES in data for data in self.files.values()))
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_frame_with_unproved_metadata_prefix_cannot_take_metadata_priority_or_starve_32k_receipts(self):
+        def edit(rows):
+            unknown_metadata(rows)
+            for index, (entry, data) in enumerate(rows):
+                name = entry.get('name', '')
+                if name.startswith('mac-public-metadata-'):
+                    rows[index] = (entry, data + b' ' * (32768 - len(data)))
+                elif name in collector.FRAMES:
+                    entry['suggestedHumanReadableName'] = 'mac-public-metadata-unproved-presentation'
+                    size = 400 * 1024 if name == collector.FRAMES[3] else collector.FILE_CAP
+                    data = png(name, size) if name in collector.PNG_FRAMES else b'\xff\xd8' + b'x' * (size - 2)
+                    rows[index] = (entry, data)
+            ordinary_snapshots(rows, 200)
+        report = self.exercise(edit=edit, native_tests=True)
+        self.assertFalse(report['evidence_complete'])
+        self.assertTrue(report['missing_frames'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertTrue(all(row['receipt_retained'] and row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+        names = [row['name'] for row in report['files']]
+        metadata_positions = [index for index, name in enumerate(names) if name.startswith('sandbox-public-metadata-')]
+        frame_positions = [names.index(row['name']) for row in report['screenshots'] if row['checkpoint'] in collector.FRAMES]
+        self.assertEqual(len(metadata_positions), 4)
+        self.assertLess(max(metadata_positions), min(frame_positions))
+        self.assertTrue(all(len(self.files[names[index]]) == 32768 for index in metadata_positions))
+        self.assertLessEqual(self.size, collector.SCOPE_CAP)
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75])
+
+    def test_invalid_and_duplicate_input_filenames_reject_affected_bytes_but_keep_independent_receipts(self):
+        for mode in ('attachment-path-escape', 'attachment-filename-type', 'attachment-symlink',
+                     'attachment-hardlink', 'attachment-duplicate-filename'):
+            report = self.exercise(mode=mode, edit=unknown_metadata)
+            self.assertFalse(report['evidence_complete'])
+            self.assertTrue(report['attachment_inventory']['raw_retained'])
+            self.assertEqual(report['attachment_inventory']['state'], 'PARTIAL')
+            self.assertNotIn('sandbox-' + collector.FRAMES[0] + '.png', self.files)
+            self.assertTrue(all(row['receipt_retained'] and row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+            if mode == 'attachment-duplicate-filename':
+                self.assertEqual(report['attachment_inventory']['duplicate_filenames'], 1)
+                self.assertEqual(report['attachment_inventory']['duplicate_filename_records'], 2)
+                self.assertNotIn('sandbox-' + collector.FRAMES[1] + '.png', self.files)
+            self.assertEqual(len(self.calls), 3)
+
+    def test_late_owned_identity_schema_type_and_byte_errors_never_qualify_or_erase_other_closed_bytes(self):
+        for mutation in (lambda r: r.update(case='testOther'), lambda r: r.update(sequence=True),
+                         lambda r: r.update(private_data='PRIVATE-RECEIPT-BYTES')):
+            def edit(rows):
+                unknown_metadata(rows)
+                self.mutate_receipt(mutation)(rows)
+                ordinary_snapshots(rows, 200)
+            report = self.exercise(edit=edit)
+            self.assertFalse(report['evidence_complete'])
+            self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
+            self.assertEqual(sum(row['receipt_retained'] for row in report['metadata']), 3)
+            self.assertEqual(sum(row['checkpoint'] in collector.FRAMES for row in report['screenshots']), 6)
+            self.assertFalse(any(b'PRIVATE-RECEIPT-BYTES' in data or ORDINARY_BYTES in data for data in self.files.values()))
+        def duplicate(rows):
+            unknown_metadata(rows)
+            rows.append(copy.deepcopy(rows[6]))
+            ordinary_snapshots(rows, 200)
+        report = self.exercise(edit=duplicate)
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(sum(row['receipt_retained'] for row in report['metadata']), 4)
+        def wrong_frame(rows):
+            unknown_metadata(rows)
+            rows[0] = (rows[0][0], b'\xff\xd8not-a-required-lossless-PNG')
+            ordinary_snapshots(rows, 200)
+        report = self.exercise(edit=wrong_frame)
+        self.assertFalse(report['evidence_complete'])
+        self.assertIn(collector.FRAMES[0], report['missing_frames'])
+        self.assertTrue(all(row['receipt_retained'] for row in report['metadata']))
+
+    def test_selected_owned128_retained120_and_per_owner_limits_do_not_expand_with_input_inventory(self):
+        def excessive(rows):
+            unknown_metadata(rows)
+            while len(rows) < 130:
+                rows.append((dict(name='mac-audit-element'), b'Checkpoint: mac-before-resize\nStrict callback failure'))
+        report = self.exercise(edit=excessive)
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['attachment_inventory']['selected_owned_records'], 130)
+        self.assertEqual(report['attachment_inventory']['selected_owned_record_limit'], 128)
+        self.assertLessEqual(len(self.files), 120)
+        self.assertLessEqual(report['strict_audit_callbacks'], 48)
+        self.assertTrue(all(row['receipt_retained'] for row in report['metadata']))
+        self.assertEqual(sum(row['checkpoint'] in collector.FRAMES for row in report['screenshots']), 6)
+
+    def test_raw_manifest_strict_json_topology_and_cleanup_gates_precede_retention(self):
+        for mode in ('manifest-oversize', 'manifest-duplicate-keys', 'manifest-nonfinite',
+                     'manifest-node-bomb', 'export-cleanup'):
+            report = self.exercise(mode=mode)
+            self.assertFalse(report['evidence_complete'])
+            self.assertFalse(report['attachment_inventory']['raw_retained'])
+            self.assertNotIn('sandbox-attachment-manifest.json', self.files)
+            self.assertFalse(report['screenshots'])
+            self.assertEqual(len(self.calls), 3)
+
+    def test_late_hosted_device_failure_preserves_closed_unknown_evidence_inside_existing_budget(self):
+        report = self.exercise(hosted=True, native_tests=True, mode='hosted-wrong-device',
+                               edit=lambda rows: (unknown_metadata(rows), ordinary_snapshots(rows, 200)))
+        self.assertFalse(report['evidence_complete'])
+        self.assertEqual(report['sameState'], 'UNKNOWN')
+        self.assertTrue(all(row['receipt_retained'] and row['sameState'] == 'UNKNOWN' for row in report['metadata']))
+        self.assertEqual(sum(row['checkpoint'] in collector.FRAMES for row in report['screenshots']), 6)
+        self.assertTrue(report['attachment_inventory']['raw_retained'])
+        self.assertEqual(report['attachment_inventory']['state'], 'PARTIAL')
+        self.assertEqual([call[1] for call in self.calls], [30, 30, 75, 30])
+        self.assertLessEqual(sum(call[1] for call in self.calls), collector.EXPORT_SECONDS)
+
+    def test_unused_ordinary_presentation_errors_never_authorize_bytes_or_block_required_retention(self):
+        def edit(rows):
+            unknown_metadata(rows)
+            ordinary_snapshots(rows, 200)
+            rows[-1][0]['name'] = 'Unproved ordinary presentation ' + 'x' * 300
+        report = self.exercise(edit=edit)
+        self.assertFalse(report['evidence_complete'])
+        self.assertTrue(all(row['receipt_retained'] for row in report['metadata']))
+        self.assertEqual(sum(row['checkpoint'] in collector.FRAMES for row in report['screenshots']), 6)
+        self.assertFalse(any(ORDINARY_BYTES in data for data in self.files.values()))
 
     def test_lossless_bytes_and_dimensions_are_preserved_without_conversion(self):
         report = self.exercise()
@@ -480,8 +717,8 @@ class CollectorTests(unittest.TestCase):
             self.assertNotIn('sandbox-public-metadata-mac-before-resize.json', self.files)
         report = self.exercise(edit_tests=wrong_tree, mode='attachment-path-escape')
         self.assertFalse(report['evidence_complete'])
-        self.assertFalse(report['screenshots'])
-        self.assertTrue(all(row['receipt_retained'] is False for row in report['metadata']))
+        self.assertIn(collector.FRAMES[0], report['missing_frames'])
+        self.assertTrue(all(row['receipt_retained'] for row in report['metadata']))
 
     def test_unsafe_raw_tests_are_not_retained_and_cleanup_stops_before_diagnostic_export(self):
         for mode in ('tests-duplicate-keys', 'tests-nonfinite', 'tests-oversize',
