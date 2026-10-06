@@ -522,3 +522,85 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     XCTAssertTrue([self.app.tables[@"history.table"].cells.firstMatch.staticTexts[payload] waitForExistenceWithTimeout:5]);
 }
 @end
+// BEGIN FIXED STORE PNG DISPLAY METHODS
+@interface QRCatcherStoreCaptureUITests : XCTestCase
+@property (nonatomic, strong) XCUIApplication *app;
+@property (nonatomic, strong) id interruptionGuard;
+@end
+@implementation QRCatcherStoreCaptureUITests
+- (void)setUp {
+    [super setUp];
+    self.continueAfterFailure = NO;
+    self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
+    self.app = [XCUIApplication new];
+}
+- (void)tearDown {
+    [self.app terminate];
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
+    [self removeUIInterruptionMonitor:self.interruptionGuard];
+    [super tearDown];
+}
+// Capture-only demonstrations use the existing DEBUG QR encode/decode and
+// isolated history path. They do not claim a physical camera scan occurred.
+- (void)storeLaunchPayload:(NSString *)payload reset:(BOOL)reset {
+    XCTAssertEqualObjects(NSProcessInfo.processInfo.environment[@"QRCATCHER_STORE_CAPTURE"], @"1");
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
+    NSMutableArray *arguments = [@[@"-ui-testing", @"-AppleLanguages", @"(zh-Hans)",
+        @"-AppleLocale", @"zh_CN", @"-fixture-payload", payload] mutableCopy];
+    if (reset) [arguments addObject:@"-reset-history"];
+    self.app.launchArguments = arguments;
+    [self.app launch];
+    XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:15]);
+    XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, payload);
+    XCTAssertEqualObjects(self.app.staticTexts[@"scan.status"].label, @"二维码已保存到历史记录");
+    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+}
+- (void)storeCapturePNG:(NSString *)name {
+    XCTAssertEqualObjects(NSProcessInfo.processInfo.environment[@"QRCATCHER_STORE_CAPTURE"], @"1");
+    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+    XCTAssertEqual(self.app.alerts.count, 0);
+    XCTAssertGreaterThan(self.app.frame.size.height, self.app.frame.size.width);
+    NSData *PNG = XCUIScreen.mainScreen.screenshot.PNGRepresentation;
+    XCTAssertGreaterThan(PNG.length, 0);
+    XCTAssertLessThanOrEqual(PNG.length, 8000000);
+    if (!PNG.length || PNG.length > 8000000) return;
+    XCTAttachment *attachment = [XCTAttachment attachmentWithData:PNG uniformTypeIdentifier:@"public.png"];
+    attachment.name = name;
+    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
+}
+- (void)testStoreNormalResultScreenshot {
+    self.executionTimeAllowance = 180;
+    [self storeLaunchPayload:@"https://example.com" reset:YES];
+    for (NSString *identifier in @[@"scan.open", @"scan.copy", @"scan.share", @"scan.again", @"scan.import"]) {
+        XCUIElement *button = self.app.buttons[identifier];
+        XCTAssertTrue(button.hittable);
+        XCTAssertTrue(CGRectContainsRect(self.app.frame, button.frame));
+    }
+    XCTAssertEqualObjects(self.app.buttons[@"scan.copy"].label, @"复制内容");
+    [self storeCapturePNG:@"qrcatcher-store-result"];
+}
+- (void)testStoreNormalHistoryScreenshot {
+    self.executionTimeAllowance = 240;
+    [self storeLaunchPayload:@"https://example.com" reset:YES];
+    [self.app terminate];
+    NSString *note = @"周末计划\n上午逛市集，下午喝咖啡";
+    [self storeLaunchPayload:note reset:NO];
+    XCUIElement *historyTab = self.app.tabBars.buttons[@"history.tab"];
+    BOOL phone = historyTab.exists;
+    if (phone) [historyTab tap];
+    XCUIElement *table = self.app.tables[@"history.table"];
+    XCTAssertTrue([table waitForExistenceWithTimeout:10]);
+    XCTAssertEqual(table.cells.count, 2);
+    XCTAssertTrue(table.cells.staticTexts[@"https://example.com"].exists);
+    XCTAssertTrue(table.cells.staticTexts[note].exists);
+    XCTAssertTrue(table.hittable);
+    if (!phone) {
+        [table.cells.staticTexts[note] tap];
+        XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, note);
+        XCTAssertTrue(CGRectContainsRect(self.app.frame, table.frame));
+    }
+    [self storeCapturePNG:@"qrcatcher-store-history"];
+}
+@end
+// END FIXED STORE PNG DISPLAY METHODS

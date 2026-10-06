@@ -1,0 +1,3198 @@
+{
+  "base_commit": "991af41dfdc01bc1332218cb8969f4ca40198304",
+  "base_tree": "d5357beefe435c278f7bfc793eae5059df5b0cfb",
+  "files": [
+    {
+      "path": ".github/workflows/apple-platforms.yml",
+      "mode": "100644",
+      "bytes": 34550,
+      "sha256": "1c3b0759c211b54ec30bd8d19cac9e7a4f03b77dea94ae81146910f10ff202d4",
+      "git_blob_sha": "730b9bcdc279866074b37c3a6b411421e2a82f78"
+    },
+    {
+      "path": ".github/workflows/ios-original-release.yml",
+      "mode": "100644",
+      "bytes": 18128,
+      "sha256": "f11c3a0b0282c597e9903cc0f45a47cad67e9cc005a895b6b51614fb15ed1698",
+      "git_blob_sha": "87b0a13e434bf1515b05cd9080a5629998fd3e40"
+    },
+    {
+      "path": ".github/workflows/ios-original-supplement.yml",
+      "mode": "100644",
+      "bytes": 17861,
+      "sha256": "ae91e834289f79b25b4176b11b1c4e109da7cfa354d7487069d3a62b88259284",
+      "git_blob_sha": "ba3de3e49cf657176d50b474afb9ccaf77d2dbda"
+    },
+    {
+      "path": ".github/workflows/ios.yml",
+      "mode": "100644",
+      "bytes": 9608,
+      "sha256": "ea383213e62f22f5fcc5d89506b9fa6d1ca831d54a89ac41b9b5f0458d233be7",
+      "git_blob_sha": "25f926c1f3f58e8df328eb5c897235627ab74945"
+    },
+    {
+      "path": ".github/workflows/mini-managed-full-row.yml",
+      "mode": "100644",
+      "bytes": 9142,
+      "sha256": "78505deae347d7dfb00a211f88478e6cf3a5f8977d2d64b3af4012fda0ba6332",
+      "git_blob_sha": "72aad27ee148c12ae2009539a438c3a4802a55c3"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "bytes": 877,
+      "sha256": "659fedf01e54903a09d14038fdbdc26679653f37403dd693105d9c825a64a975",
+      "git_blob_sha": "509f3b0dbc1d888b92c4b757719d111bbcb93b52"
+    },
+    {
+      "path": "QRCatcher-iOS-Only.xcodeproj/project.pbxproj",
+      "mode": "100644",
+      "bytes": 32871,
+      "sha256": "c0e1773e454e9f6888b1cdf16c294d616ac522be8d8322835e407b6685764eb3",
+      "git_blob_sha": "5a950e8b0a03820af08b5e9dcf974102915bcbca"
+    },
+    {
+      "path": "QRCatcher-iOS-Only.xcodeproj/xcshareddata/xcschemes/QRCatcher.xcscheme",
+      "mode": "100644",
+      "bytes": 2652,
+      "sha256": "06f6050f0d295af197d9302779c60bb339432cf91b37bd2f4cde86ee206860c3",
+      "git_blob_sha": "ba8eaea32bda040c9522212ed38d771c02a9625c"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/project.pbxproj",
+      "mode": "100644",
+      "bytes": 115206,
+      "sha256": "b88dfe4e98ee99dbab780abe14872fcafbfd88b3dfc02becbb084dc7e243bca0",
+      "git_blob_sha": "d2c047dbd9b4a851dd3b5e0bdf1864b35f10a045"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
+      "mode": "100644",
+      "bytes": 154,
+      "sha256": "93b069d114bdf36230448d47bc0b9e389eb2d3ff4c0d3c776cf2414b7d84f61c",
+      "git_blob_sha": "01f933c7c6261ee9386e2bc80ec40d63b8eabe9a"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcher.xcscheme",
+      "mode": "100644",
+      "bytes": 2607,
+      "sha256": "f6b948861890a2e24b07a0c6b084413ea634f075d9d42209fdbe171de4b23c98",
+      "git_blob_sha": "787c00cd116d4145663651574564abdfcd2c7a5a"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme",
+      "mode": "100644",
+      "bytes": 2637,
+      "sha256": "84b1f148d9581d1b5766bc0e684360eb3bbf9ba4b9d465491c3d37592ce9544e",
+      "git_blob_sha": "4911f14290baefb67d10345f45fe896644828c96"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMacSandbox.xcscheme",
+      "mode": "100644",
+      "bytes": 2360,
+      "sha256": "0742284b07729e93fb68923d642a5a4d4f6b82be9b1dab226536a564657ee008",
+      "git_blob_sha": "747d5be18373fdd589dfc76201dd196b6adb6bd4"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherTV.xcscheme",
+      "mode": "100644",
+      "bytes": 2627,
+      "sha256": "af5ba7c0872055ab6a1775efa63e60175394182bd3b3d2980722f36bb6a4a3ec",
+      "git_blob_sha": "6758d69fa34f2d14e906fe3231102aaf44885b36"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherVision.xcscheme",
+      "mode": "100644",
+      "bytes": 2667,
+      "sha256": "8ed2793f9f09c3de5d61f512d3ee283753d2cc0d6c0c216ff7a8a9dd387dd42e",
+      "git_blob_sha": "13b565fd4c395c94053e0ff6a46214ee8b68ed20"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherWatch.xcscheme",
+      "mode": "100644",
+      "bytes": 2657,
+      "sha256": "df9df2e65d8ae6768ce17a4b24013303bce9cacf21d44643796980863f6b6527",
+      "git_blob_sha": "ea83e394342e538a345f1752cfe12ea6bd9d7396"
+    },
+    {
+      "path": "QRCatcher.xcworkspace/contents.xcworkspacedata",
+      "mode": "100644",
+      "bytes": 123,
+      "sha256": "a4b059686f51f3f4372a4cc7a52b46997c9f645341ca79db6a76a8d2b310bfa3",
+      "git_blob_sha": "a956458fbe75efed39986115d36160ccd75288ce"
+    },
+    {
+      "path": "QRCatcher/AppDelegate.h",
+      "mode": "100644",
+      "bytes": 1161,
+      "sha256": "bb887ebaf0cab55d14815a38fa4de9b16ce393f8c80d4e4ec65fe40a2e8712ba",
+      "git_blob_sha": "1bd68c34701a4c6b43973d651e3b34dbca49ad09"
+    },
+    {
+      "path": "QRCatcher/AppDelegate.m",
+      "mode": "100644",
+      "bytes": 8266,
+      "sha256": "3c7b1dc60ca4ca9a4ac42ce735836593dd78f466419ca8a29cdcb611cd80ae21",
+      "git_blob_sha": "b59ede29155405fae7728be6230219bee7ce7429"
+    },
+    {
+      "path": "QRCatcher/Base.lproj/LaunchScreen.xib",
+      "mode": "100644",
+      "bytes": 1979,
+      "sha256": "09a509727f3efafd09179fe3e08362787eb917801c92dfdb724699b4646e69c9",
+      "git_blob_sha": "a165cf2fd6204db9968bbebf4a0c1e54f3d5e255"
+    },
+    {
+      "path": "QRCatcher/Base.lproj/Main.storyboard",
+      "mode": "100644",
+      "bytes": 18275,
+      "sha256": "679dec7e4b33c942a11789db969dca6a9e2e24f626e03389ef3776bd583852d4",
+      "git_blob_sha": "2a2f59cfbfa6d9fbbc27232f11bdc84a0956de77"
+    },
+    {
+      "path": "QRCatcher/Debug-Info.plist",
+      "mode": "100644",
+      "bytes": 2144,
+      "sha256": "b8f66f525ad71b1c70a38fd39ac1206830c5e9e07ede64ea3c84c042d7383867",
+      "git_blob_sha": "9062263236f7946cdc3caddff659cc040f22ede5"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/Contents.json",
+      "mode": "100644",
+      "bytes": 1975,
+      "sha256": "798b88cf22bcc397c6169776d4854b41388fa5e7f8d6a138d3d6b747281cec89",
+      "git_blob_sha": "c15f6745374aee8c3dc1f691c134867871902b94"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/icon2X.png",
+      "mode": "100644",
+      "bytes": 17656,
+      "sha256": "ea2cff23e8c0793bbe15ddd1cdbe97e6b4cc00dd62c3be1f5f2b770e8b336735",
+      "git_blob_sha": "9b4a6092b6bc3717a6089c48591e3a768d4dfd19"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/icon3X.png",
+      "mode": "100644",
+      "bytes": 28546,
+      "sha256": "8eeac42f8a658dc9c4c2d05500639c578c506a3e516828611efcee0323142598",
+      "git_blob_sha": "d62284aefcb6e204c2ba598d5fa0fb8cabcacc43"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png",
+      "mode": "100644",
+      "bytes": 323530,
+      "sha256": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4",
+      "git_blob_sha": "65ff7b81e3042130e09f8c7cb8a6627a85f1725a"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/settings2x.png",
+      "mode": "100644",
+      "bytes": 6808,
+      "sha256": "a7602fc6f1d2ddf62951802d03cd00c6fc4672f14b1a3244f3ce31bb64662c62",
+      "git_blob_sha": "308577835f82d8c8579742ed2b2fd2b0b49c17fc"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/settings3x.png",
+      "mode": "100644",
+      "bytes": 11434,
+      "sha256": "67558a1a632198637c6478364bea2bd47b7bc6faf5f0f9b4fce6fdbb1e52968a",
+      "git_blob_sha": "8242279af3671897446c03f636850867c0919c0c"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/spotlight2x.png",
+      "mode": "100644",
+      "bytes": 10362,
+      "sha256": "3d848004bb561bc17ff51502846a0fab777b2774dd9ed101a3e92f95a16b87b5",
+      "git_blob_sha": "d28b5b06a7601a7100b20ca10875148cfe82fda1"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/spotlight3x.png",
+      "mode": "100644",
+      "bytes": 17681,
+      "sha256": "8201e1d3295d337697379a366ae71cb015641fd04e11c798557358cba386df8b",
+      "git_blob_sha": "34fff39f42fcd8a977556abc1267d0771bfd330b"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/LaunchBackground.colorset/Contents.json",
+      "mode": "100644",
+      "bytes": 180,
+      "sha256": "7fd6fc1ffb23a079fc9101da451933ee09be59b7fad6ce320396525f3c8c3676",
+      "git_blob_sha": "14acc6dc700a24ffe6233ad6f9c0180393930d5a"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 379,
+      "sha256": "8f00a97226918a219ee02cb6c9c29769726e10387cdfa23c4550c5296c13607f",
+      "git_blob_sha": "8cf924cd994111a11204098c9ffc860fb7b1db05"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/catcher6_0000_scanning2x (1).png",
+      "mode": "100644",
+      "bytes": 46251,
+      "sha256": "637f2db1488dc01dc0aeecac0fb163449a68799fb4f2d8a395edbe13fdb71730",
+      "git_blob_sha": "a171c900e851fb2af8c5d5ca7304bf1b914de862"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/catcher6pls_0000_scanning3x.png",
+      "mode": "100644",
+      "bytes": 78408,
+      "sha256": "afda118a2180951f8d784c7d3964d1e02131112acf2620fece595fabcdbe7a3d",
+      "git_blob_sha": "e858f6ad1a915ff5ccc1eebc86c6d1581d46167e"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 372,
+      "sha256": "d771567da6687a1065a5f00536aea3018ba7048412eea715c2a5114f31b6a172",
+      "git_blob_sha": "de6b957eb8438f7f7a8f6bd4d2c6eddc6df63e90"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/catcher6_0001_history_white_2x.png",
+      "mode": "100644",
+      "bytes": 1351,
+      "sha256": "75646b4f8cef51095e2b9afc51ee97396a0beb9566e6ee9de83e82f0caeb1531",
+      "git_blob_sha": "80274cd0648a3976b73f56f727ca0a5cc45deb60"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/catcher_history_@3.png",
+      "mode": "100644",
+      "bytes": 1693,
+      "sha256": "b220bf6bfd1749e95adf70bbc18d46c47923e8587d06c7fa6fcac05dd96499f1",
+      "git_blob_sha": "a5c25d95311d66b653c51af40a2328d066700ece"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 368,
+      "sha256": "0a235df59f86700c43660986829fe7f9b05bf7582872b415f9d08f59b69bc734",
+      "git_blob_sha": "f02b9aa16d04af1d7a2bcc4cb6a894195a0739c9"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/catcher6_0002_history_blue_2x.png",
+      "mode": "100644",
+      "bytes": 1382,
+      "sha256": "2a092e425fa61bba03ed436a29b18aabfcf39ddf7a7a379fa835f959291328a5",
+      "git_blob_sha": "31a2369daa701d42bf954c658555bce5411b6a8a"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/history_blue_@3.png",
+      "mode": "100644",
+      "bytes": 1698,
+      "sha256": "21d46f699fde96d9698226675b7c51dea33c694619d095298fdc98ac3b24fa2f",
+      "git_blob_sha": "e9886f1238b0f8f8c9ed1622c0f7f25db6aafa15"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 367,
+      "sha256": "98a4423609f209c23a9dfbbfeccec0a345ce3776e05f772bab9487d6d554e379",
+      "git_blob_sha": "972318c651baea2084bd9ffaadf5ebeef7295ce4"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/catcher6_0003_scan_white_2x.png",
+      "mode": "100644",
+      "bytes": 1514,
+      "sha256": "20a536547dfcee11b8b3f2e0d990a8e9f9b9d9e8df9082eed4acb0f247f0222e",
+      "git_blob_sha": "168bf6f07a7c5bb8a1e6f706c34a4c4a80632875"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/catcher_white_@3.png",
+      "mode": "100644",
+      "bytes": 2056,
+      "sha256": "2cf2fd893ff3137bed932e65d9873f123e3994c9c397bf57f07d6dd623355af3",
+      "git_blob_sha": "9fd72e2a3953e0d0d7b66c6a7ebb4d40fcef4ec6"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 365,
+      "sha256": "f98400196bcad7a5e40ceaccadef97ac85c62fa590b3c1d301261a38fc9cf1b2",
+      "git_blob_sha": "991fd9e6960d645e80ada020ce43a1c65e1de204"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/catcher6_0004_scan_blue_2x.png",
+      "mode": "100644",
+      "bytes": 1664,
+      "sha256": "d4078d71a294e41f4ff13104fb7fcb7cae8073ebf32fc838fed77b2275f475d5",
+      "git_blob_sha": "1f1586438a3492ed3979f788332d6ed72bb1f5f3"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/catcher_blue_@3.png",
+      "mode": "100644",
+      "bytes": 2133,
+      "sha256": "70f50c42a12ab48ae77cc85bbf3392fd740d80f4e8f2b7c718d85a2095d8814f",
+      "git_blob_sha": "4d5aa2580f902a0d20da967016c1ac6dc0347f14"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 336,
+      "sha256": "e83f3a3cd11febbb13e5b70da983c1145329d4cc40de667a2c07ecb0d142aedf",
+      "git_blob_sha": "812095aa16cabb217db187a84572e9efb1be5829"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/text2x.png",
+      "mode": "100644",
+      "bytes": 1249,
+      "sha256": "12de18f1bc3d936cdc24d6371a2197df6442d1b283a0f76cd384369d90f1a1c5",
+      "git_blob_sha": "32b81677b4e11087e58642f5f614e37af1ac5b35"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/text3x.png",
+      "mode": "100644",
+      "bytes": 1368,
+      "sha256": "aba586b4a82d78d35c4fc633e77d5ec6e5c84fb5c2ee33e43ddc567752f59330",
+      "git_blob_sha": "b1222b5a28cf6cd181f9cf66f58a406f5763108e"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 342,
+      "sha256": "3272b293df41594e47a078a834713109104b80d0c9101c3c5faca7e97a3509a2",
+      "git_blob_sha": "279c73cbbcb54d54eff43f2a8f19a9ea7a1f0957"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/website2x.png",
+      "mode": "100644",
+      "bytes": 3037,
+      "sha256": "79e44b55fc81f86ba5040cda45869feb1880f2e0968fbb649c1d818fa7f22650",
+      "git_blob_sha": "5216262d7b1a05435130433d2f53022591ab195c"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/website3x.png",
+      "mode": "100644",
+      "bytes": 4159,
+      "sha256": "924938cce91206f6239de08ef369a7467ab4fb8803f8af6feeef5528ae86838e",
+      "git_blob_sha": "c9c156086d9a185a153e81c4846b8f0fc395ded2"
+    },
+    {
+      "path": "QRCatcher/Info.plist",
+      "mode": "100644",
+      "bytes": 2047,
+      "sha256": "5a734a2d89a266bc4e6c193762592ded3eafa4ea0f449579baec8311b6095dff",
+      "git_blob_sha": "3eeeddc908441c354292518dba57aa2efb73effb"
+    },
+    {
+      "path": "QRCatcher/NSObject+Macro.h",
+      "mode": "100644",
+      "bytes": 916,
+      "sha256": "5c33acc60425cf00664acded47fb7c0d39750d2310b171c97d4f43fb577c75d0",
+      "git_blob_sha": "e07110eaa0263b4fb23631b0ea3dbc30bad02a25"
+    },
+    {
+      "path": "QRCatcher/NSObject+Macro.m",
+      "mode": "100644",
+      "bytes": 200,
+      "sha256": "d3adedde2da654aa9cca6e3533f32ac6b879b7eafff6ffe3243006ec64771545",
+      "git_blob_sha": "173580849ad9feb75ecc9edcfd054f0723cc7a04"
+    },
+    {
+      "path": "QRCatcher/NSString+Tools.h",
+      "mode": "100644",
+      "bytes": 479,
+      "sha256": "cbdd3e56c973bfe94a4a6482963f0a67da1e49636fd4ca68d8b24522c6a15982",
+      "git_blob_sha": "729b338ef44a9abd43511fd1269bf06724dc6d53"
+    },
+    {
+      "path": "QRCatcher/NSString+Tools.m",
+      "mode": "100644",
+      "bytes": 2414,
+      "sha256": "c9672b170a188ccf46c80444e977a9d531798c026a95e920d051221db8e37c08",
+      "git_blob_sha": "19269fd2a399abeb718b9e111b218552515cc075"
+    },
+    {
+      "path": "QRCatcher/PrivacyInfo.xcprivacy",
+      "mode": "100644",
+      "bytes": 627,
+      "sha256": "a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58",
+      "git_blob_sha": "90c2fc267dc9c15e0eb4aed154067ae0ca557a9a"
+    },
+    {
+      "path": "QRCatcher/QR.xcdatamodeld/QR.xcdatamodel/contents",
+      "mode": "100644",
+      "bytes": 700,
+      "sha256": "c8e269bc9e85e00da9c1c0467870fe049fd18892054b978b1da8b8d94fba44e4",
+      "git_blob_sha": "19dc426fbc6c93219da1749adb8ab18e0a5c2c83"
+    },
+    {
+      "path": "QRCatcher/QRActionButton.h",
+      "mode": "100644",
+      "bytes": 149,
+      "sha256": "c5f9857bef214955ad00c64af5a5f6f7baf2c35f19e9834ac392d521497af050",
+      "git_blob_sha": "02f3783166144feeb52188f2e964678717ad26d4"
+    },
+    {
+      "path": "QRCatcher/QRActionButton.m",
+      "mode": "100644",
+      "bytes": 2461,
+      "sha256": "8c3456a5c73cff4d3f6dc985c7dab620eb84ee2afd904707ca52927b66ed0407",
+      "git_blob_sha": "ce85e595f0f0f9fb64fd9a48039f383f4f6442f8"
+    },
+    {
+      "path": "QRCatcher/QRCatchViewController.h",
+      "mode": "100644",
+      "bytes": 391,
+      "sha256": "654a697a3deb2b56f28a247ac12ce0f50b1c306d854f4d14a12e283aa46a037c",
+      "git_blob_sha": "5a12a99f15d4eec454186d893e74e9b142b38866"
+    },
+    {
+      "path": "QRCatcher/QRCatchViewController.m",
+      "mode": "100644",
+      "bytes": 30859,
+      "sha256": "ae66e51d08ccd51400be47f384b3992dab7e8eb19472908010f8ff997415c5ca",
+      "git_blob_sha": "886be15735b747e75a3c70042eb6902ae5d1da9e"
+    },
+    {
+      "path": "QRCatcher/QRCodeCodec.h",
+      "mode": "100644",
+      "bytes": 227,
+      "sha256": "0823bfcc937a148acc244aecbcad1c0352f860caa6725db7eef7d964b110837b",
+      "git_blob_sha": "f50ec23eb7118aac89578de2e62dc45d3634c930"
+    },
+    {
+      "path": "QRCatcher/QRCodeCodec.m",
+      "mode": "100644",
+      "bytes": 630,
+      "sha256": "7f17ac2ac34c4daff264c80d2dd59aa7b1d95b606c01b198b4795714193ef37d",
+      "git_blob_sha": "f07d457be34156142456b07e0e1f68f1c6f8c5f1"
+    },
+    {
+      "path": "QRCatcher/QRHistoryStore.h",
+      "mode": "100644",
+      "bytes": 654,
+      "sha256": "cdb7a20ba49f874b40f0639f32de29151a6ae847e68920450c0d284b47c68c41",
+      "git_blob_sha": "5bce40cc139bbda04af921bf0cf20053d28b9846"
+    },
+    {
+      "path": "QRCatcher/QRHistoryStore.m",
+      "mode": "100644",
+      "bytes": 2376,
+      "sha256": "18b0f9d0927bfb5d9ee48d517027071e7fcd20e3a1ada348d214cff5b95274c1",
+      "git_blob_sha": "47e4e9b032ecc17a03dee8823ace92c11d558737"
+    },
+    {
+      "path": "QRCatcher/QRPadSplitViewController.h",
+      "mode": "100644",
+      "bytes": 121,
+      "sha256": "9fa10eb1b8b7f3b116d140760fe1d13a3f9cbe986a1ffba1444061affd194ba9",
+      "git_blob_sha": "67848b772f213f5294c03b4c4e255b402519691f"
+    },
+    {
+      "path": "QRCatcher/QRPadSplitViewController.m",
+      "mode": "100644",
+      "bytes": 786,
+      "sha256": "2db259f59806d277d6b1c361b442702fb15c16fc41dfce53a4417a0508839a72",
+      "git_blob_sha": "50b2967125a804f26912293657ab445ba57fd513"
+    },
+    {
+      "path": "QRCatcher/QRPhoneResultViewController.h",
+      "mode": "100644",
+      "bytes": 715,
+      "sha256": "5d2b46b46ec84b629b6d57d162c68fca5d1a854050eca685ef86909232483a1f",
+      "git_blob_sha": "b2012d9e79ddb528ca8aa0072188c6f038889531"
+    },
+    {
+      "path": "QRCatcher/QRPhoneResultViewController.m",
+      "mode": "100644",
+      "bytes": 7827,
+      "sha256": "684a62d298f9d60813026c68e388cf2fa459a4a373841fcf9d712c68fd2acbd0",
+      "git_blob_sha": "60b4353cefed143212fbed6e39cde2e14dd69749"
+    },
+    {
+      "path": "QRCatcher/QRPrivacyViewController.h",
+      "mode": "100644",
+      "bytes": 233,
+      "sha256": "37d967751ebeecd14876bdff9bd32d0f14841fb82770fdfb2ea75d98c2e73ce6",
+      "git_blob_sha": "5042935526bc6895f386c613b2817b5f8ef8c5f3"
+    },
+    {
+      "path": "QRCatcher/QRPrivacyViewController.m",
+      "mode": "100644",
+      "bytes": 8480,
+      "sha256": "4303215922f7e1a72a1c535eb3d757d785601d296b54034717de7046936a1fe3",
+      "git_blob_sha": "a6e79c30b569ffd4a31a61e5daba23c6fb1104c3"
+    },
+    {
+      "path": "QRCatcher/QRTabBar.h",
+      "mode": "100644",
+      "bytes": 188,
+      "sha256": "fc93e3e7cfd2a9206fd5e4b1457e6266d5b04f808f045c5dd5d00ac647777706",
+      "git_blob_sha": "1123c329ea73f90a2f7285008fdc7ca41419b16d"
+    },
+    {
+      "path": "QRCatcher/QRTabBar.m",
+      "mode": "100644",
+      "bytes": 356,
+      "sha256": "f790e62117a6e6dcdc45feaa400b34039600e17d1530a4794de5e36e492a3c0f",
+      "git_blob_sha": "4474ee953e289668e25b46f83cfc3a84ade3f9c0"
+    },
+    {
+      "path": "QRCatcher/QRURLTableViewCell.h",
+      "mode": "100644",
+      "bytes": 214,
+      "sha256": "3e171d955313ae9287f52a343677c832172a26f2674f79bf9248538dc675408e",
+      "git_blob_sha": "d056ef05dcf2e99b7f493328ee68ccd2e73440fc"
+    },
+    {
+      "path": "QRCatcher/QRURLTableViewCell.m",
+      "mode": "100644",
+      "bytes": 426,
+      "sha256": "9a1a18974e56fd32cc6ff94d98b21fc578c25cab19faeb9c7a068d57418bc87c",
+      "git_blob_sha": "329ef67411a1c880f60beb3c7c17c7dcfab99c68"
+    },
+    {
+      "path": "QRCatcher/QRURLViewController.h",
+      "mode": "100644",
+      "bytes": 306,
+      "sha256": "c01b9d1674d3d431364d49fe00fa9f8b57d75e8e43d5e62633436e731df6134d",
+      "git_blob_sha": "aed1f7211c027d27b7d34e208122f922c2abb2b6"
+    },
+    {
+      "path": "QRCatcher/QRURLViewController.m",
+      "mode": "100644",
+      "bytes": 5892,
+      "sha256": "5d3d6965ef9a6874934fa5129eba4801dc16479d68ed134e40412387cdb1fc10",
+      "git_blob_sha": "270cc1d93df89073b3b7691f35cc9519f39b79d5"
+    },
+    {
+      "path": "QRCatcher/QRWatchPhoneService.h",
+      "mode": "100644",
+      "bytes": 471,
+      "sha256": "bf8e9b154cfa2d57f459965e6911bcbe078a7396e5b88fda136d48464716a9f3",
+      "git_blob_sha": "595ae1bdd37d7f8f244e7acb7ca8247d11fc5f87"
+    },
+    {
+      "path": "QRCatcher/QRWatchPhoneService.m",
+      "mode": "100644",
+      "bytes": 11336,
+      "sha256": "562bd1992fc7882eb3f4ca1c9766b2a143d1018f8f26e3abd43561d0eab3f978",
+      "git_blob_sha": "da9d045d285203cc700e4079a330b3c72c8c3bfb"
+    },
+    {
+      "path": "QRCatcher/QRWatchSessionGate.h",
+      "mode": "100644",
+      "bytes": 363,
+      "sha256": "22dce065f9e2f7c6e9f3581a37c3525246f82ab6a0c6440a3c3f2fcc2037afd5",
+      "git_blob_sha": "7331ab0e6024e9cf979f2043671a2c4a4a9f9fbe"
+    },
+    {
+      "path": "QRCatcher/QRWatchSessionGate.m",
+      "mode": "100644",
+      "bytes": 942,
+      "sha256": "a3a79c315905f13a631e08461bb6ca88b2902436473ca4b6c94848ba5d5f82e6",
+      "git_blob_sha": "59c383f35c7dfa3438fe7edab6d9aa60d4620fbb"
+    },
+    {
+      "path": "QRCatcher/SceneDelegate.h",
+      "mode": "100644",
+      "bytes": 140,
+      "sha256": "ad126411a23ea667c2aed792556163a561871dbbe746202ae8ad7e232b43e3f1",
+      "git_blob_sha": "e08cb9547d1a980e80696fd52f7e8ce3d2c53652"
+    },
+    {
+      "path": "QRCatcher/SceneDelegate.m",
+      "mode": "100644",
+      "bytes": 4083,
+      "sha256": "81fd539ae9321454a913ec74d4f3b932dd55e223ded5275acc7d311e5d1b4b2a",
+      "git_blob_sha": "1fa42db7f57abecb8272d45f230b3bd86170ff01"
+    },
+    {
+      "path": "QRCatcher/URLEntity.h",
+      "mode": "100644",
+      "bytes": 335,
+      "sha256": "dd715d5a1a707fd49ed1e226311ec9950f827ade8d613a860a60aafa4c23b9e0",
+      "git_blob_sha": "fead0d694709a4a2ce5e38cc610d2d725935dbed"
+    },
+    {
+      "path": "QRCatcher/URLEntity.m",
+      "mode": "100644",
+      "bytes": 218,
+      "sha256": "ffd035a42f2bbf9c374485880047730597ad6d993c6185a4896d40ab8ec204d3",
+      "git_blob_sha": "c516dbc77135d067ba6c0b2bdd20ced84c9e6404"
+    },
+    {
+      "path": "QRCatcher/main.m",
+      "mode": "100644",
+      "bytes": 459,
+      "sha256": "afa58b7faff8f74d1e427141cb6d6abaea824a6a4520ed9fff6c407331ce5ec3",
+      "git_blob_sha": "c75a742910d4cca920d0eb5ca238d58c45338e00"
+    },
+    {
+      "path": "QRCatcher/zh-Hans.lproj/InfoPlist.strings",
+      "mode": "100644",
+      "bytes": 118,
+      "sha256": "e7742e0adb2a9143f182ddf153fab68c9698bdf644ab6b9ff824b7788e3d52fa",
+      "git_blob_sha": "09f3a358fa6575d4a2a34135f86f77bcc9d24d0a"
+    },
+    {
+      "path": "QRCatcher/zh-Hans.lproj/Localizable.strings",
+      "mode": "100644",
+      "bytes": 3782,
+      "sha256": "cad93be6b4c063c8e2a57eda5ff2e793c07ddee62de06260a221e30192499f27",
+      "git_blob_sha": "bebf9b749b29f9b2cf0a3def1033302628671ca2"
+    },
+    {
+      "path": "QRCatcherMac/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "mode": "100644",
+      "bytes": 1272,
+      "sha256": "17c198d952ab3b60e0a7f5df980cd864b25c6a7e2b1a1d166dcb5f73171999a4",
+      "git_blob_sha": "70e19228266313a1e66f822db3b1cafda632fb03"
+    },
+    {
+      "path": "QRCatcherMac/Assets.xcassets/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "7b225591af0371e8fea9f152cab6dd13013bf49ed2b277380503c4501698cbb7",
+      "git_blob_sha": "97a8662ebdb4372c5a5153036a38645cb92d1892"
+    },
+    {
+      "path": "QRCatcherMac/Info.plist",
+      "mode": "100644",
+      "bytes": 1013,
+      "sha256": "704414e3dac7841a382c8be0bfe467ed7bb13936522a5d1c0ed47b64bd2109dc",
+      "git_blob_sha": "00c8864b91586a569bf917e2294f766032b14069"
+    },
+    {
+      "path": "QRCatcherMac/MacCamera.swift",
+      "mode": "100644",
+      "bytes": 9644,
+      "sha256": "73580ddd56426fc1a61f3be3270b9ebfd8572b10c7b18ba1d7b4e36d4875b18a",
+      "git_blob_sha": "3ab563d5c87dbc0425408605509edf78f975bb7f"
+    },
+    {
+      "path": "QRCatcherMac/MacHistory.swift",
+      "mode": "100644",
+      "bytes": 6919,
+      "sha256": "e127ce17fb8bc6ae450c0ad0cf3434640a064a9ea3b3d293f3fd5e8281bb1483",
+      "git_blob_sha": "d1de15b74146fea0e4afb1ada4f62e2a91c6f746"
+    },
+    {
+      "path": "QRCatcherMac/MacLocalization.swift",
+      "mode": "100644",
+      "bytes": 231,
+      "sha256": "b15c734f2c7ed0d9044457571a6d222822748e652674f100a726e992fc543666",
+      "git_blob_sha": "208e0a180c2a0e3ea72fa54539d20e8544e6147f"
+    },
+    {
+      "path": "QRCatcherMac/MacMainView.swift",
+      "mode": "100644",
+      "bytes": 9899,
+      "sha256": "032a2f6edc9306b85a9f704ac9345bae224801620e41ce44b37317fff93b2390",
+      "git_blob_sha": "40b5f16710f38968a1ddb3541a49b90bf4b67aa7"
+    },
+    {
+      "path": "QRCatcherMac/MacPaneAccessibility.swift",
+      "mode": "100644",
+      "bytes": 3845,
+      "sha256": "9ac62329df8c407d74b651025298f423aac58d3855b5df02a35daf083a8d2f54",
+      "git_blob_sha": "e0531c4b0dba534b325955fd7c184a4a9ffe71cd"
+    },
+    {
+      "path": "QRCatcherMac/MacSandboxDiagnostics.swift",
+      "mode": "100644",
+      "bytes": 4992,
+      "sha256": "56ca7372caed15532b52d87ba8142a5d3968b5f4b3f1c02a6d30151ad4d4db07",
+      "git_blob_sha": "2320ea7a7dfcb63a519ccbec6ca7a7ae3c830c92"
+    },
+    {
+      "path": "QRCatcherMac/MacWorkspace.swift",
+      "mode": "100644",
+      "bytes": 8554,
+      "sha256": "2b463d44aa016191d20346379441687ae551c8a2ab33b3c788e0f1d28fdad4e5",
+      "git_blob_sha": "f4e6393e0a331aed906142b34893047e8796b45a"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMac-Bridging-Header.h",
+      "mode": "100644",
+      "bytes": 133,
+      "sha256": "c8538e33ccdb4244f5d6a5ae777247bc53af11642eaee313f53ec1a32e97fbe1",
+      "git_blob_sha": "528792a0bedef08a5b80428140c7e9a28fc662fc"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMac.entitlements",
+      "mode": "100644",
+      "bytes": 360,
+      "sha256": "7872571b05e1a1f7732046fc9f4cb9d41937da05877b7c34684eefa0a68c739a",
+      "git_blob_sha": "4cf40c54dce1c50e268161e09f08a5a7ca9a368a"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMacApp.swift",
+      "mode": "100644",
+      "bytes": 3887,
+      "sha256": "c209b25a867fa21b47eebf55fd3746cd4c6fd816791a37bc33e696eae46a016d",
+      "git_blob_sha": "c33b9965d52d60c9dc86dd3ee0c7dfae95ad8ee6"
+    },
+    {
+      "path": "QRCatcherMac/zh-Hans.lproj/InfoPlist.strings",
+      "mode": "100644",
+      "bytes": 142,
+      "sha256": "02a31a89691ef3ec6e03e8ac18228d654a807b575e79a4f9e90d39b234f7f207",
+      "git_blob_sha": "c6a0be3fe32bf47b9d388955f2945adfeb4a7d9b"
+    },
+    {
+      "path": "QRCatcherMac/zh-Hans.lproj/Localizable.strings",
+      "mode": "100644",
+      "bytes": 11559,
+      "sha256": "5f1a43e1b9c268d78e82cc568f2e2e1f52eef05b54d52fe49a2318f9fe698ecb",
+      "git_blob_sha": "5252c603a20631f5b13facde1e85aee08182fc5f"
+    },
+    {
+      "path": "QRCatcherMacTests/PortableQRTests.swift",
+      "mode": "100644",
+      "bytes": 3414,
+      "sha256": "a1d401c378f45c45a8f9b6057d033228fbe06e029a5742f97c8d8fe896e77f14",
+      "git_blob_sha": "2664aa564bdc59c98cbe5ca6c5892fb1951bf70a"
+    },
+    {
+      "path": "QRCatcherMacTests/QRCatcherMacTests-Bridging-Header.h",
+      "mode": "100644",
+      "bytes": 30,
+      "sha256": "eee0ff8f9e376b5c34e4d24fdd9945705ff07061b5f9decafe95778d2ec3b6e4",
+      "git_blob_sha": "01da3ca62023618a598e12475728eb320491d5d6"
+    },
+    {
+      "path": "QRCatcherMacTests/QRCatcherMacTests.swift",
+      "mode": "100644",
+      "bytes": 25659,
+      "sha256": "4812c43c523ab07235f815c1eeb8459f974737ad61f01928d5d4e6baf8cb344a",
+      "git_blob_sha": "01b1e22de3caef676caf72bc7fed5731b15d8699"
+    },
+    {
+      "path": "QRCatcherMacUITests/QRCatcherMacUITests.swift",
+      "mode": "100644",
+      "bytes": 47245,
+      "sha256": "05ca4b9526a80ca592a8999578933ec7a367a23760f5ef7240fec1b94474fb07",
+      "git_blob_sha": "44b7390ff519e41c623309a809d6de193eca0bc3"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Contents.json",
+      "mode": "100644",
+      "bytes": 610,
+      "sha256": "88a6a39da9844fc472df86e69e03d6bcef09d7251340a4e177c7de102b341bdd",
+      "git_blob_sha": "ebed1f7c43f507b41ecadc50fd03019321d87d8a"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 165,
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134",
+      "git_blob_sha": "0d809e578fe6032c6f16883d41e72dc4cd77dd0b"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Contents.json",
+      "mode": "100644",
+      "bytes": 187,
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189",
+      "git_blob_sha": "761c276a6136d29a74b7b2b4dcd059ba4ea832a5"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 165,
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134",
+      "git_blob_sha": "0d809e578fe6032c6f16883d41e72dc4cd77dd0b"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 252,
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7",
+      "git_blob_sha": "eb71d27bc53c69914e116a1f3cd3bc555dfa0aab"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Contents.json",
+      "mode": "100644",
+      "bytes": 187,
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189",
+      "git_blob_sha": "761c276a6136d29a74b7b2b4dcd059ba4ea832a5"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 252,
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7",
+      "git_blob_sha": "eb71d27bc53c69914e116a1f3cd3bc555dfa0aab"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelf.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 162,
+      "sha256": "e62bc7df46ca2d902e2bdede6af20db66b1108a077e389c05ff0004d91231bb1",
+      "git_blob_sha": "30d773e1eb7a6b83be3d8456c5c3d12db5dcf2d5"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelfWide.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 162,
+      "sha256": "e62bc7df46ca2d902e2bdede6af20db66b1108a077e389c05ff0004d91231bb1",
+      "git_blob_sha": "30d773e1eb7a6b83be3d8456c5c3d12db5dcf2d5"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherTV/Info.plist",
+      "mode": "100644",
+      "bytes": 1103,
+      "sha256": "eb208b45de12d2f2524bff75558a8a912d73894296e6bfdf96722a8d0cf95bb8",
+      "git_blob_sha": "c8c6040894121811f1aa3749c1a2a8d675f97fb0"
+    },
+    {
+      "path": "QRCatcherTV/PrivacyInfo.xcprivacy",
+      "mode": "100644",
+      "bytes": 598,
+      "sha256": "3e4a93cbe86acef7dd7e063a28c849992f556e7f52cadc5f37c1e8b0e1b54686",
+      "git_blob_sha": "0a95d0932c919355cdd63f41c3a1f047cd27fe87"
+    },
+    {
+      "path": "QRCatcherTV/QRCatcherTV-Bridging-Header.h",
+      "mode": "100644",
+      "bytes": 47,
+      "sha256": "cfdc5511f3527d0c01090069bfce1a6c8c11af100a413c52a2d1498808879c0a",
+      "git_blob_sha": "3269e1746fc1bf7d2ac0f934241341c33f51457b"
+    },
+    {
+      "path": "QRCatcherTV/QRCatcherTVApp.swift",
+      "mode": "100644",
+      "bytes": 520,
+      "sha256": "c6ce797c2351f33f9561c55ac542d9e10ca870023a9b79215d8397a1275aa333",
+      "git_blob_sha": "3ea13b13294a2ea008c80ba815602be09d411081"
+    },
+    {
+      "path": "QRCatcherTV/TVHistory.swift",
+      "mode": "100644",
+      "bytes": 4284,
+      "sha256": "5b35d94ce9ea6b8caf9be0fd6d8f69bb8848a792c949c44d4925afc42f5a107b",
+      "git_blob_sha": "fa5567f4bc508d0dbbe191c6007ec48d36316771"
+    },
+    {
+      "path": "QRCatcherTV/TVMainView.swift",
+      "mode": "100644",
+      "bytes": 11146,
+      "sha256": "4fb5835f6c1cae83b9dba753d620ab62876519b87485c10f8f287d20f9f75f47",
+      "git_blob_sha": "d39f58310756a58a382e4700191f4b792624f3b7"
+    },
+    {
+      "path": "QRCatcherTV/TVPhotoLibrary.swift",
+      "mode": "100644",
+      "bytes": 8124,
+      "sha256": "a0b079bdd6d62be941866e29ee588743c801abd5feeb337c23a839ee4fc95f73",
+      "git_blob_sha": "01e4aa161befba85516436e05fe2264a38f96d70"
+    },
+    {
+      "path": "QRCatcherTV/TVReadSession.swift",
+      "mode": "100644",
+      "bytes": 3805,
+      "sha256": "b1b6b933ed66ecb780e4b313b5f6ba308fb903abe94071e888f2701fa64b88af",
+      "git_blob_sha": "9975aee1fe2b45da94749a62835580b835ad49b0"
+    },
+    {
+      "path": "QRCatcherTVTests/QRCatcherTVTests.swift",
+      "mode": "100644",
+      "bytes": 3954,
+      "sha256": "14d534ea6c520c049442f4380a3eb920928d2e4d0fb090d05e14107b04a86b4f",
+      "git_blob_sha": "beefe4ccd08f9b136a6f8793ea5a2b9199cc5cf2"
+    },
+    {
+      "path": "QRCatcherTVUITests/QRCatcherTVUITests.swift",
+      "mode": "100644",
+      "bytes": 43291,
+      "sha256": "dbdb363ebe8bf04e33f8f6f3c0148b0875873f6c1a5653a40db1722051648673",
+      "git_blob_sha": "2ba727f0bdc42d0e53221c39ec446030410176f4"
+    },
+    {
+      "path": "QRCatcherTests/Info.plist",
+      "mode": "100644",
+      "bytes": 742,
+      "sha256": "2dc79074180f6f746eec8a4cd7b30552b1474fc2ac8a0f05ea923020b8ca59b3",
+      "git_blob_sha": "38063a56836b2247d96855beb6a16591e7af356d"
+    },
+    {
+      "path": "QRCatcherTests/QRBoundedImageImportTests.m",
+      "mode": "100644",
+      "bytes": 9690,
+      "sha256": "8d103b5fcdd05f2abe69a05a0c3ed54799933825f7a9825412be11a89de06dbe",
+      "git_blob_sha": "6a8c78d4507a1d111b23216894ab0ee5dde96998"
+    },
+    {
+      "path": "QRCatcherTests/QRCatcherTests.m",
+      "mode": "100644",
+      "bytes": 25329,
+      "sha256": "9e1652724f61c04c18ce9f00907beb061ecc527be729d0b5c480bbd4b33acc33",
+      "git_blob_sha": "fd917bafe64969777f29dd217c158041dfa04882"
+    },
+    {
+      "path": "QRCatcherTests/QRPhoneResultTests.m",
+      "mode": "100644",
+      "bytes": 18676,
+      "sha256": "6150384ea1b9e5aa490481163bac895b47cd653735d11a426946c4f51dac0555",
+      "git_blob_sha": "bbe6c84b7cf0d03625117224dbf90c12fb937481"
+    },
+    {
+      "path": "QRCatcherTests/QRWatchPhoneServiceTests.m",
+      "mode": "100644",
+      "bytes": 3925,
+      "sha256": "010ce18be9d3991a142dbe1dca3fd167aaf10f371ad0417987895a71982c8c5f",
+      "git_blob_sha": "f087abf3abbf59ec75dcfa58c8cafa4fe1a1b077"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherImageImportUITests.m",
+      "mode": "100644",
+      "bytes": 14647,
+      "sha256": "a549e2360cc1245166f8bdbe568a557b05afa09a44f0b9d406720074614d81d5",
+      "git_blob_sha": "9790a3535a1d8f4720d42c2e6e011c74983959ec"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherPadUITests.m",
+      "mode": "100644",
+      "bytes": 29448,
+      "sha256": "9e0167e62bb348599e4311732065698be4084b51e094ec76aeb4fb2e36efea69",
+      "git_blob_sha": "9f24de01eb42ae0fd076317ed98e2079bcade938"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherUITests.m",
+      "mode": "100644",
+      "bytes": 37105,
+      "sha256": "a40fc8f0e9553f800bae8d2a137d2a447c5a1a939a77f9fcf5f9fa78d062fdef",
+      "git_blob_sha": "94c6ae53d19f2bd261d535a94a6dd9cb23dafd19"
+    },
+    {
+      "path": "QRCatcherUITests/QRFilesPickerSnapshot.h",
+      "mode": "100644",
+      "bytes": 3151,
+      "sha256": "e528124da18e90f8b86c1c2d49fc8dfc0f58c17349f8b011074aecb4273d18dd",
+      "git_blob_sha": "caafbe39fc9f4f3e0af369c855416c5490c938cf"
+    },
+    {
+      "path": "QRCatcherUITests/QRUIInterruptionSafety.h",
+      "mode": "100644",
+      "bytes": 2105,
+      "sha256": "1d527d7237b398aedc109cb4913104605ff45fa57bcfe2451e7cb4264de990bc",
+      "git_blob_sha": "ce7e8e466ed1fa0b9487a1221d635ad15c5cc470"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Back.solidimagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 169,
+      "sha256": "e798918e51266046f0a196a890b68d7fb19d2b164aca557b08c143946f4a17ce",
+      "git_blob_sha": "d3b03e3999fccc243f3fe7e6359b03a97529fe5c"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Back.solidimagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Contents.json",
+      "mode": "100644",
+      "bytes": 197,
+      "sha256": "90b27d2286998fff331dd81cf6c0d444f8698efab26436aab0512f5a5406012b",
+      "git_blob_sha": "5e3e5de1854c585b6b3821a6e25ca4013e30b1d3"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Front.solidimagestacklayer/Content.imageset/Contents.json",
+      "mode": "100644",
+      "bytes": 169,
+      "sha256": "e798918e51266046f0a196a890b68d7fb19d2b164aca557b08c143946f4a17ce",
+      "git_blob_sha": "d3b03e3999fccc243f3fe7e6359b03a97529fe5c"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Front.solidimagestacklayer/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherVision/Info.plist",
+      "mode": "100644",
+      "bytes": 922,
+      "sha256": "5a25cb698122c7ed6af65be3b1288b5307386cd9009a6fe1e09d33a3513fcf80",
+      "git_blob_sha": "86157594a9da6bcbbfa1e77bbf4c9c55f9fea68c"
+    },
+    {
+      "path": "QRCatcherVision/QRCatcherVision-Bridging-Header.h",
+      "mode": "100644",
+      "bytes": 133,
+      "sha256": "c8538e33ccdb4244f5d6a5ae777247bc53af11642eaee313f53ec1a32e97fbe1",
+      "git_blob_sha": "528792a0bedef08a5b80428140c7e9a28fc662fc"
+    },
+    {
+      "path": "QRCatcherVision/QRCatcherVisionApp.swift",
+      "mode": "100644",
+      "bytes": 405,
+      "sha256": "0b2706f8c1c36e3a41b1366b12038673731c6d00b6b96b61baa6ef8a66cee320",
+      "git_blob_sha": "2edf3d10baeab7310daf1a5509d4cc3e0d8319c5"
+    },
+    {
+      "path": "QRCatcherVision/QRExportDocument.swift",
+      "mode": "100644",
+      "bytes": 641,
+      "sha256": "b3a7846609994efc80509e784bef79ac4b23a01dec92a4ddb6cbc6fd96d27d1a",
+      "git_blob_sha": "474db7f212987bb8b8256fec65910e9ef5cb9510"
+    },
+    {
+      "path": "QRCatcherVision/VisionExportTestReceipt.swift",
+      "mode": "100644",
+      "bytes": 2387,
+      "sha256": "1be1c0e77d665e884a45f8470ee2e6bde2b7831ad93e165041800ba56047182b",
+      "git_blob_sha": "130e6c3808d5585e73d0fd411b6cd579598ddb00"
+    },
+    {
+      "path": "QRCatcherVision/VisionMainView.swift",
+      "mode": "100644",
+      "bytes": 9832,
+      "sha256": "25cd3b6f3c7a6a14c55b23bf91b58f724e83e07af86fe6d714d85a0e07105e18",
+      "git_blob_sha": "b5b8c3fbfa0ab6a2f12d3ed90a5ea534f5ca8609"
+    },
+    {
+      "path": "QRCatcherVision/VisionReadSession.swift",
+      "mode": "100644",
+      "bytes": 5328,
+      "sha256": "8800d4727a2c4074122cf68b9906f6b27e5a97d63ec72d218310578b615ee9c4",
+      "git_blob_sha": "bf941b119592695a9c4493f6fc567bfff2ef03a5"
+    },
+    {
+      "path": "QRCatcherVisionTests/QRCatcherVisionTests.swift",
+      "mode": "100644",
+      "bytes": 7935,
+      "sha256": "bc70b67ee95d1d35cb3ad873803c42e3d29a9478a9f56faa7cd24f8459d6825a",
+      "git_blob_sha": "74303983d6fbb1cb3c0aa3277e1ed8dc356f5e57"
+    },
+    {
+      "path": "QRCatcherVisionUITests/QRCatcherVisionUITests.swift",
+      "mode": "100644",
+      "bytes": 20271,
+      "sha256": "2ace7ff30090b9531558ecd753b5190d13b1f109adc4f3178e153839fd9ac78c",
+      "git_blob_sha": "bdb20f1584a7e7b23b7c8279c3c346b4a904012b"
+    },
+    {
+      "path": "QRCatcherWatch/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "mode": "100644",
+      "bytes": 209,
+      "sha256": "1b5863633f2718ee2d6e13ecfa061651e602bbed493761da215c985ec2a98a60",
+      "git_blob_sha": "2459789dd019099241f5f49d257414421efa64e9"
+    },
+    {
+      "path": "QRCatcherWatch/Assets.xcassets/Contents.json",
+      "mode": "100644",
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "git_blob_sha": "74d6a722cf39b2dd5bef11f166e6ac9b99568a01"
+    },
+    {
+      "path": "QRCatcherWatch/Info.plist",
+      "mode": "100644",
+      "bytes": 844,
+      "sha256": "de96778b1546a9687d6999a214612aefa34a74f5dacffb261e9438a8b7046add",
+      "git_blob_sha": "150e767f77bf8a389088d6847a34a0295dce4439"
+    },
+    {
+      "path": "QRCatcherWatch/QRCatcherWatch-Bridging-Header.h",
+      "mode": "100644",
+      "bytes": 30,
+      "sha256": "eee0ff8f9e376b5c34e4d24fdd9945705ff07061b5f9decafe95778d2ec3b6e4",
+      "git_blob_sha": "01da3ca62023618a598e12475728eb320491d5d6"
+    },
+    {
+      "path": "QRCatcherWatch/QRCatcherWatchApp.swift",
+      "mode": "100644",
+      "bytes": 10504,
+      "sha256": "01cc4448fb5e4544e8ecc32e70f0dc8265a637a70464179b3a42259e5433c72e",
+      "git_blob_sha": "8c9f3b3f7635be22674f2dbc59d3eeb70dd9ae9e"
+    },
+    {
+      "path": "QRCatcherWatch/WatchHistory.swift",
+      "mode": "100644",
+      "bytes": 4935,
+      "sha256": "6c31d783928385694f3ebb0fc5551ab84d13af72f30c64049963084f808ac29c",
+      "git_blob_sha": "c168e567ecb821811656fbf9420b045213b3227b"
+    },
+    {
+      "path": "QRCatcherWatch/WatchPhoneTransport.swift",
+      "mode": "100644",
+      "bytes": 10323,
+      "sha256": "a96241e51a666e24ebabf7ff4564b006f8b19a876d279616c3895a188d689f83",
+      "git_blob_sha": "7311641c8199357544618238f37a30ea14a4b29b"
+    },
+    {
+      "path": "QRCatcherWatch/WatchPhotoCodec.swift",
+      "mode": "100644",
+      "bytes": 4893,
+      "sha256": "cb172d1e74fa43c7f448bc6e7cf0c0d3d9fa4e59a1d9227b5d2ace9ff32eafd8",
+      "git_blob_sha": "26f554643ed7a2a7d70c30c6b134c57d9f75620b"
+    },
+    {
+      "path": "QRCatcherWatch/WatchReplyJournal.swift",
+      "mode": "100644",
+      "bytes": 5139,
+      "sha256": "bece516eabbfa2e82e6d8a0856e86be375531438b889beab731dbf5d2aec08fd",
+      "git_blob_sha": "31f61b525343f8810007c189b95a36ae18163e93"
+    },
+    {
+      "path": "QRCatcherWatch/zh-Hans.lproj/Localizable.strings",
+      "mode": "100644",
+      "bytes": 3164,
+      "sha256": "bf4a27d09d670821e33e86ba65cb0517ee3c273a34326bd0c5cb69f8244b4a81",
+      "git_blob_sha": "b6f14f369c225602d33ae52bc69bf326bad34361"
+    },
+    {
+      "path": "QRCatcherWatchTests/QRCatcherWatchTests.swift",
+      "mode": "100644",
+      "bytes": 22099,
+      "sha256": "f3f7b822f69442e05cb24b72d402794180b525c8a69da9fbdfbecf0652aa6c2a",
+      "git_blob_sha": "ae836a7558f6ac17b09a403e531ef7638a06a09f"
+    },
+    {
+      "path": "QRCatcherWatchUITests/QRCatcherWatchUITests.swift",
+      "mode": "100644",
+      "bytes": 40892,
+      "sha256": "de585795d6931dbab1ba4caf06e6a8df926f90be027df5f0c2c75a92f12d6675",
+      "git_blob_sha": "31cfec19b9a0e64619b9a4f0b88a0a25d95d5d3f"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "bytes": 1324,
+      "sha256": "5c35e657b4dfaa8fca918b3ff05d59eb08cbba67ec0c583d16551d5530c91b93",
+      "git_blob_sha": "f09dbbb373693968cd20d4d4500629d4d34e3765"
+    },
+    {
+      "path": "Shared/Domain/QRPayload.h",
+      "mode": "100644",
+      "bytes": 780,
+      "sha256": "091add214aa62110058334581623bb3d2bd0a0ef66200f48622faeaa53fae244",
+      "git_blob_sha": "7026e0e78980cae4793e4b55d11f89008bfca305"
+    },
+    {
+      "path": "Shared/Domain/QRPayload.m",
+      "mode": "100644",
+      "bytes": 1470,
+      "sha256": "c4d6dc8481631fcb8a00eb160f5f86370069483f51c8a1768a41732efffc97cc",
+      "git_blob_sha": "520dc5f28478a06b25c46646c94909baea6eb0dd"
+    },
+    {
+      "path": "Shared/FileImportResources/PrivacyInfo.xcprivacy",
+      "mode": "100644",
+      "bytes": 627,
+      "sha256": "a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58",
+      "git_blob_sha": "90c2fc267dc9c15e0eb4aed154067ae0ca557a9a"
+    },
+    {
+      "path": "Shared/Image/QRBoundedImageFileReader.h",
+      "mode": "100644",
+      "bytes": 422,
+      "sha256": "f7454065aea882f36f48d8bde281eaf9fe0dcb9ee1b9a599a4f1d03483526b01",
+      "git_blob_sha": "0d23862f261d22a59ecacbf3005ccc3dc1b46326"
+    },
+    {
+      "path": "Shared/Image/QRBoundedImageFileReader.m",
+      "mode": "100644",
+      "bytes": 3570,
+      "sha256": "c9262c920be320f34708a53e594af4e9555f5f1f1542cde57e77d64392fb6ee2",
+      "git_blob_sha": "41d3c655642ffcb5c9d867b6dbdd0250f7205081"
+    },
+    {
+      "path": "Shared/Image/QRImageCodec.h",
+      "mode": "100644",
+      "bytes": 715,
+      "sha256": "042caf2c633574c08d05b2515e24c12a158013a41a4790717f0e9ae6b6d2b4a3",
+      "git_blob_sha": "dc464a28afcf8e2d0681139096237fc3d708a7d0"
+    },
+    {
+      "path": "Shared/Image/QRImageCodec.m",
+      "mode": "100644",
+      "bytes": 4832,
+      "sha256": "d7a42240835ea5ee7c83a583b8d696826c39b8bb372a6c2cff374c249f54468f",
+      "git_blob_sha": "4d0cfacc14c6e4da3fe041c7fef933297b2af8f4"
+    },
+    {
+      "path": "Shared/Image/QRImageImportQueue.h",
+      "mode": "100644",
+      "bytes": 390,
+      "sha256": "b8a7a905cbe4d8989cc296876b98c1b7c0a12f7a2a1894c61b52d5ec0f0db000",
+      "git_blob_sha": "2cc6471255143b5b4f965662024d8b7c5602f789"
+    },
+    {
+      "path": "Shared/Image/QRImageImportQueue.m",
+      "mode": "100644",
+      "bytes": 1275,
+      "sha256": "f1c0f56753218e89a218661369cb8eddb7fe59abaae2048e901183d17224b590",
+      "git_blob_sha": "59904a37b508a3353c7d579347e5c7f7c611e165"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableDecoder.cpp",
+      "mode": "100644",
+      "bytes": 1330,
+      "sha256": "b6a059c87753fa0217376988db9724342ff5d482434c43db33dcc9f8c78f5192",
+      "git_blob_sha": "74f20698a30ec5ded6163cddb3d177b79ce1772d"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableDecoder.h",
+      "mode": "100644",
+      "bytes": 672,
+      "sha256": "0fa8af912a43cc6a40f165302ba540922180de260bffef67fb6ea2aa599dd098",
+      "git_blob_sha": "d247a8209c45466d6f4cba1aecc0529777b19f9c"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableImageDecoder.swift",
+      "mode": "100644",
+      "bytes": 2458,
+      "sha256": "707039b2bd4914f3aad837ccc6424313c84151d02f050d6c5074c91aed11bc49",
+      "git_blob_sha": "4cc9b35117d63c434f7a9d715f2ea31b3b6e25be"
+    },
+    {
+      "path": "Shared/Resources/PrivacyInfo.xcprivacy",
+      "mode": "100644",
+      "bytes": 373,
+      "sha256": "74b0cd72fc23c1ef302f22ee2753f61817cdc5af0ff7a7f2d0632b524fb8acea",
+      "git_blob_sha": "5397adcb7b45c70c4026ec2910a508b0d448fba9"
+    },
+    {
+      "path": "Shared/Services/QRBoundedPhotoFile.swift",
+      "mode": "100644",
+      "bytes": 1523,
+      "sha256": "79f7dc809d22fb388147c7656873d1d0ebad32607ff754c505083fab064ac526",
+      "git_blob_sha": "3ccb6d94b6e67f4abb17c2b0a7138b9142367e65"
+    },
+    {
+      "path": "Shared/Services/QRDecodeWorker.swift",
+      "mode": "100644",
+      "bytes": 976,
+      "sha256": "1be93ed2917ed04a4b637130e55a9fc3ddac5b4dbae10e0f8a8fc95ee828aa45",
+      "git_blob_sha": "4dcf9d36897078d29f4bd3228ec97ffb572ebfaf"
+    },
+    {
+      "path": "Shared/Services/QRHistoryLocations.swift",
+      "mode": "100644",
+      "bytes": 6735,
+      "sha256": "437450c79c34bd30ac121eb61cfab64a5c8f5316b55e09e5557b0ce7d897044d",
+      "git_blob_sha": "4bbbf708dea6b511a7f00fd91eb8fcc288d4787e"
+    },
+    {
+      "path": "Shared/Services/QRPrivacyText.swift",
+      "mode": "100644",
+      "bytes": 1246,
+      "sha256": "975179af10b8dffc0e167944ee2038c4b863fb377891c8baaea0a90ac23b6c68",
+      "git_blob_sha": "855bfac1073a6b9c4d1af29b14f5d1497f51d74c"
+    },
+    {
+      "path": "Shared/Services/QRSelectionCoordinator.swift",
+      "mode": "100644",
+      "bytes": 692,
+      "sha256": "1c115abc914e4d78a41d0fec88cfa7ff915aa655c455b7db8c1d22d32fa194e0",
+      "git_blob_sha": "6fd0b20a653baa7e3a0c10d9ecd354b1ff9b27fb"
+    },
+    {
+      "path": "Tests/Fixtures/ascii.png.base64",
+      "mode": "100644",
+      "bytes": 1933,
+      "sha256": "082da4cee2edcd0705f112f15c753eac178f9e16217031ccd50946ba0472e115",
+      "git_blob_sha": "c35c1842ad4f98ae4e9bbe9ee69457648140227a"
+    },
+    {
+      "path": "Tests/Fixtures/eci-latin1.png.base64",
+      "mode": "100644",
+      "bytes": 861,
+      "sha256": "399e710f2b6477a4779184c488b4b9411fffd37ee9a4d3c20bbcbbd55ea0cd76",
+      "git_blob_sha": "090538bb6c3d4f5637516b5bfd253e1d0b63e7b3"
+    },
+    {
+      "path": "Tests/Fixtures/eci-mixed.png.base64",
+      "mode": "100644",
+      "bytes": 853,
+      "sha256": "630b36c333da2e53179042526aa74d1c0f3a5cb75e936b42aa9cb8266216a997",
+      "git_blob_sha": "4847affda8a164e55734963325d9dc7c3ecb84b0"
+    },
+    {
+      "path": "Tests/Fixtures/eci-shiftjis.png.base64",
+      "mode": "100644",
+      "bytes": 849,
+      "sha256": "23065a7a60fca62f058513f9bef3d1b863c05e198de586909f6e26c860f6485e",
+      "git_blob_sha": "f0354f17c4e579c82f9609a08c8fe86de241d004"
+    },
+    {
+      "path": "Tests/Fixtures/eci-utf8.png.base64",
+      "mode": "100644",
+      "bytes": 841,
+      "sha256": "de5447c8b05d9037936bfd34c23e18a298c005f65d8f103a4bd3927f3d391d96",
+      "git_blob_sha": "a669e79a01e9bc5bc30dbceb78ee5704acf01688"
+    },
+    {
+      "path": "Tests/Fixtures/invalid.png.base64",
+      "mode": "100644",
+      "bytes": 1013,
+      "sha256": "63a59fa56a004e8b433a96e9c1c5c243ef246e6f301708afc294d37920eb2f77",
+      "git_blob_sha": "d79d0a3daf93fe09eede6846611992f426f81f07"
+    },
+    {
+      "path": "Tests/Fixtures/manifest.json",
+      "mode": "100644",
+      "bytes": 2314,
+      "sha256": "a8f42e81869445fa805b25db6d8fb73db5f1e8fb6394d0905764953692b9f78d",
+      "git_blob_sha": "3666851a548449c289c4e68e24d9f7e444eac5f2"
+    },
+    {
+      "path": "Tests/Fixtures/multiple.png.base64",
+      "mode": "100644",
+      "bytes": 3325,
+      "sha256": "e0131583a6a13156f603d259c79c579f1b911e168e251010bda8ee80170a2b9d",
+      "git_blob_sha": "3b7095681cfcfb4929212d33c9f391970fb9b96f"
+    },
+    {
+      "path": "Tests/Fixtures/oversized-area.png.base64",
+      "mode": "100644",
+      "bytes": 19545,
+      "sha256": "debd0f4193388d1b3baf9a705472d77cbeb7415ab965a81862ec12ead40bd1c0",
+      "git_blob_sha": "3358851f89adc84d74fe918553e7e8584549a82f"
+    },
+    {
+      "path": "Tests/Fixtures/oversized-edge.png.base64",
+      "mode": "100644",
+      "bytes": 125,
+      "sha256": "4514253278a63c6da380855968bcbb20085cacecdffd1453ab4cff95caf35ef8",
+      "git_blob_sha": "ae7270a8779f3f04b8700f54d9b02e86ea722104"
+    },
+    {
+      "path": "Tests/Fixtures/rotated.png.base64",
+      "mode": "100644",
+      "bytes": 1605,
+      "sha256": "023b282a77e548eb197e96c8e4977eb9259dc2ce53431719841c065e734e23b4",
+      "git_blob_sha": "344dc54a2cd18a6d9b14f5a25cf09897a18252e9"
+    },
+    {
+      "path": "Tests/Fixtures/unicode.png.base64",
+      "mode": "100644",
+      "bytes": 1597,
+      "sha256": "d6bbb3cd75fe888a01b0ecb639d7ed37435b8c0a85683e792f4f551dbcb27bea",
+      "git_blob_sha": "f9b801eee663761eec244eaf7dd1d782bf034b8c"
+    },
+    {
+      "path": "Tests/Harness/test_alert_evidence.py",
+      "mode": "100644",
+      "bytes": 2891,
+      "sha256": "dcabd7c57c664beaa12e48f18e4ffbbc70a0927a61b88e73510419b726e58b94",
+      "git_blob_sha": "26524bdaa822513dcb49714e09ed615a3bd9a105"
+    },
+    {
+      "path": "Tests/Harness/test_atomic_json.py",
+      "mode": "100644",
+      "bytes": 2650,
+      "sha256": "73ab0b1124c82b2468f00b82910f7ebc766165b5934bd2054734658c3a867da8",
+      "git_blob_sha": "53420e6ecabb639c755690306c868f892006b233"
+    },
+    {
+      "path": "Tests/Harness/test_camera_resume_contract.py",
+      "mode": "100644",
+      "bytes": 6526,
+      "sha256": "79c2ac10f48d3355fa66528b0bb684bdccbce9880266a2249e471f475e394f1f",
+      "git_blob_sha": "07f486ad188f1957eb2062c53806303a016eaab6"
+    },
+    {
+      "path": "Tests/Harness/test_compile_ios_original_preflight.py",
+      "mode": "100644",
+      "bytes": 30914,
+      "sha256": "60da3e167e564c0fd3df0d52f8687829c6cf427a36165a53fa1769043d2d8037",
+      "git_blob_sha": "f3c74b66e48815495427effbe096ec3167f8f775"
+    },
+    {
+      "path": "Tests/Harness/test_diagnostic_mini_managed_route.py",
+      "mode": "100644",
+      "bytes": 23379,
+      "sha256": "5e6c4cd211da179c2b9caab6b5fc47a550cb5492e1926a783ead8e706b385984",
+      "git_blob_sha": "d7585693ac4ae4b58340016060d92f8cb821e118"
+    },
+    {
+      "path": "Tests/Harness/test_embedded_watch_gate.py",
+      "mode": "100644",
+      "bytes": 6193,
+      "sha256": "4fe52594567a599d9e8427be41e0629ecf0ccc6f98752595cff891eb1f5568af",
+      "git_blob_sha": "ce9a70bb33def1f26667fec6cad8d51e63e5f22e"
+    },
+    {
+      "path": "Tests/Harness/test_fixture_timeout_guard.py",
+      "mode": "100644",
+      "bytes": 7505,
+      "sha256": "576eb666f0e3e612afc1fd40cb53d0f2360242cb3aa279dd5edc250fb842b0bf",
+      "git_blob_sha": "7e0aa212e0021cdb25852238c29eca75aa5b31db"
+    },
+    {
+      "path": "Tests/Harness/test_import_audit_pair.py",
+      "mode": "100644",
+      "bytes": 3786,
+      "sha256": "b3e45602098554d271855c1fcbf148c079dd73fb937d7ebafbf356810e76d75a",
+      "git_blob_sha": "049839f5dacbdfa5019ca612635a7f9aadc76adf"
+    },
+    {
+      "path": "Tests/Harness/test_ios_import_continuation.py",
+      "mode": "100644",
+      "bytes": 16752,
+      "sha256": "050bb0ff0c83e53f177ff8a9c981a12134866bd946622e7717e853574b7c06a4",
+      "git_blob_sha": "276871913aa813befb558b41ced5551b68a3b0b4"
+    },
+    {
+      "path": "Tests/Harness/test_ios_launcher.py",
+      "mode": "100644",
+      "bytes": 10191,
+      "sha256": "5e39d1075e15b0e3c57a3394bd5bb4ef89f0fbb25cd935fa4911250967c6722a",
+      "git_blob_sha": "0b499e4e12206bd3a10417be9dabffa53dde401e"
+    },
+    {
+      "path": "Tests/Harness/test_ios_launcher_inventory.py",
+      "mode": "100644",
+      "bytes": 2922,
+      "sha256": "ae916ee817144759812af629cb1366a2b7eb2211ae353b89f9d56a566c35ec0e",
+      "git_blob_sha": "4296877cb0182918794f591f09fd801c5ee7d3f9"
+    },
+    {
+      "path": "Tests/Harness/test_ios_offline_privacy.py",
+      "mode": "100644",
+      "bytes": 66359,
+      "sha256": "8dc3bd4dd427a65822f44b7c09ede199fc1b934f1b9cc8ad7b2911fc068f82b2",
+      "git_blob_sha": "bed4f8b9dd8bbeb2d34482ed5f5b736f7f1b0c88"
+    },
+    {
+      "path": "Tests/Harness/test_ios_only_project.py",
+      "mode": "100644",
+      "bytes": 18512,
+      "sha256": "a4c98355b7d8f4c602b88f05109abd38abc7148f1d0c19a82715e693094c11f7",
+      "git_blob_sha": "6a77515d562e494c879d3328495cb62f7959c993"
+    },
+    {
+      "path": "Tests/Harness/test_ios_only_release_package.py",
+      "mode": "100644",
+      "bytes": 138896,
+      "sha256": "c7e5940db9ae49fe6da013559d656caedc372004b997515e201633f6ead5aba2",
+      "git_blob_sha": "1c706f29ea7a5bf215237eb4b19c1dd272f6eff9"
+    },
+    {
+      "path": "Tests/Harness/test_ios_original_release_route.py",
+      "mode": "100644",
+      "bytes": 23724,
+      "sha256": "830363ef7edcd61c64820f2796fe247bea12153683df61e4eba3c321bac31b4a",
+      "git_blob_sha": "cb233216df11d473b686e435e56af45af3b57c30"
+    },
+    {
+      "path": "Tests/Harness/test_ios_original_supplement_route.py",
+      "mode": "100644",
+      "bytes": 28710,
+      "sha256": "244aade1ba9f5244c0d504ed927f6d81540131c666fd3a7d45a1dbff1a724293",
+      "git_blob_sha": "692ca8a987fff2e0989eb22804da624d4811e59b"
+    },
+    {
+      "path": "Tests/Harness/test_ios_supplement_executor.py",
+      "mode": "100644",
+      "bytes": 37796,
+      "sha256": "3af033b9ad2173010f27813b1b73e5fe252ec440b912b389c74bedcc1e5357d4",
+      "git_blob_sha": "51df90a73b80f24e0a4854325762753d1dd105ec"
+    },
+    {
+      "path": "Tests/Harness/test_ios_supplement_export.py",
+      "mode": "100644",
+      "bytes": 29572,
+      "sha256": "08e0817b6e94a723f6f2633c5a51016b2eec2dbd86e9832f5ecf302f158c8ca3",
+      "git_blob_sha": "a7e173e407803ed7399a8313178ddc91c5cae165"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_mini_ledger.py",
+      "mode": "100644",
+      "bytes": 23927,
+      "sha256": "5b07f8515e9f610441f3e5dff88762fdd85752fc7a575117a9512792313c9475",
+      "git_blob_sha": "8e5cbc57e8cc87ce41c3bf0cbd45b8ba6085e5c2"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_mini_setup.py",
+      "mode": "100644",
+      "bytes": 42278,
+      "sha256": "7eb86e8354c85bc4522293202c848ee54795ae9781df48466ac40edc3e07e867",
+      "git_blob_sha": "d843ea32322277ae63d3df0dfb462b6197efe3a0"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_mini_state_handoff.py",
+      "mode": "100644",
+      "bytes": 40089,
+      "sha256": "d6454e6f6433867e0c6b0f24b17dc1d85ca8b15c32557f11d8cb245f37bbc60d",
+      "git_blob_sha": "f5b9c029824e89ef71790b0dd7ef1a9c4aafa63b"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_mini_summary_allowance.py",
+      "mode": "100644",
+      "bytes": 8321,
+      "sha256": "2bef8b12db5bd247eacfb6285118e2c162f5c54bc9a8bb3d78a0397220cbb9f4",
+      "git_blob_sha": "e2612320572690ad12b3e40d0dc66440ee43c324"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_share_readiness.py",
+      "mode": "100644",
+      "bytes": 16399,
+      "sha256": "ca018fe2a32cb8f8ef1df2b0585efed96a2b464e432fd1373534a924f66de665",
+      "git_blob_sha": "63298a76dafe4eaaa17c81d2e055b3417f6be668"
+    },
+    {
+      "path": "Tests/Harness/test_mac_evidence_export.py",
+      "mode": "100644",
+      "bytes": 10696,
+      "sha256": "0837e96769ead76cdfb14ceaf743cc15704be4c46a2e8248e99a43ac5716c67d",
+      "git_blob_sha": "4765ef2627b7fc971457a5bf2c1e81d4ab0d4f47"
+    },
+    {
+      "path": "Tests/Harness/test_mac_supporting_typography.py",
+      "mode": "100644",
+      "bytes": 8850,
+      "sha256": "9cad6449121542e67c716b5777c0e93c471f301e7adb1a99c4fc23664fae286a",
+      "git_blob_sha": "7b839a9cc06087902959e5c7501a33eb15f38d06"
+    },
+    {
+      "path": "Tests/Harness/test_mini_startup_observation.py",
+      "mode": "100644",
+      "bytes": 41775,
+      "sha256": "46d4bad5c2013472cea0a30f629f7b8bcd73fdad3655663c9bd6ccb6f2e14045",
+      "git_blob_sha": "32f7650fb2c1d586a26f59dc0cc8c91772680312"
+    },
+    {
+      "path": "Tests/Harness/test_native_size_case.py",
+      "mode": "100644",
+      "bytes": 6500,
+      "sha256": "9d607bbe0a0c57d464c2d0474811b40d4bfea08394e548afa2fdaa6150d6b909",
+      "git_blob_sha": "bc8c5d9af176a1f028a06c6694734b9e5b17c000"
+    },
+    {
+      "path": "Tests/Harness/test_owned_process_barrier.py",
+      "mode": "100644",
+      "bytes": 11077,
+      "sha256": "ceed12156a20fe989feb78c4a58c71e57d2e8889dc8389bf0d95e1f0faf98b57",
+      "git_blob_sha": "ec12a758c0264f4ffc3b277c64e902b9a26e1e06"
+    },
+    {
+      "path": "Tests/Harness/test_phone_files_readiness.py",
+      "mode": "100644",
+      "bytes": 5481,
+      "sha256": "e1d39d00c4d0a930ef2afbc464363c2e289a14e8dcee69d18f3959a1d5024db5",
+      "git_blob_sha": "7191a43c80ae2523c6295da895e19685953958d7"
+    },
+    {
+      "path": "Tests/Harness/test_phone_result_contract.py",
+      "mode": "100644",
+      "bytes": 27162,
+      "sha256": "ae59a69d2ff7e59b0dc228950f631c11e68a11141a69ddf9637c51cecb17530c",
+      "git_blob_sha": "85e5b1e996166d6c5edc8ee42208d5a6ce66001b"
+    },
+    {
+      "path": "Tests/Harness/test_platform_preflight.py",
+      "mode": "100644",
+      "bytes": 5496,
+      "sha256": "612f0792006635cd8640a9fbfa88d152ffad509ae3580a993a980fed72d40cd3",
+      "git_blob_sha": "87ce13424f68e413cbeb05afa1e8d1aea306bcdd"
+    },
+    {
+      "path": "Tests/Harness/test_required_reason_symbols.py",
+      "mode": "100644",
+      "bytes": 719,
+      "sha256": "30f619caf051479683b51b585662eb877c174741bd2ceff9201c9ffee895c6ce",
+      "git_blob_sha": "ff3781eb7a8fcfc5a11a10a0cbade039e1fd6042"
+    },
+    {
+      "path": "Tests/Harness/test_settings_discovery.py",
+      "mode": "100644",
+      "bytes": 10739,
+      "sha256": "db4fc5c5f629f3bdada87bec0caeb66ddeec42c6a0eba23c0f3015c48d9cdd01",
+      "git_blob_sha": "a13f9bbc8ae99bc4b9f4667467e79b5e5e78feff"
+    },
+    {
+      "path": "Tests/Harness/test_settings_discovery_fence.py",
+      "mode": "100644",
+      "bytes": 19105,
+      "sha256": "7573c6457e86e5eb5d2f8b3eff995d6b81bf255412453e61b49a05675e8f1240",
+      "git_blob_sha": "fd3ef8f44c150983705df607d3f3d8f24eae54c3"
+    },
+    {
+      "path": "Tests/Harness/test_settings_integration.py",
+      "mode": "100644",
+      "bytes": 19501,
+      "sha256": "9a51a894446244ed16f1d51c14659e399f47e9a79d48f4f8430e136f32dd1ad1",
+      "git_blob_sha": "f966cb7be5fae8c08fb183702e679ba898f29409"
+    },
+    {
+      "path": "Tests/Harness/test_settings_navigation.py",
+      "mode": "100644",
+      "bytes": 11446,
+      "sha256": "ff127caadeb61cdcb9434a6c8a5de5b28b0bb6c18275f1f59894937f5d14ec6e",
+      "git_blob_sha": "cacddf4f31b3d90c5a3afe3d8340a49d3472a7ed"
+    },
+    {
+      "path": "Tests/Harness/test_simulator_content_size.py",
+      "mode": "100644",
+      "bytes": 11067,
+      "sha256": "4eee53d979efae8ca7f7949fb285a847ede7d761af2c4e0d33e88ad704366940",
+      "git_blob_sha": "93708a9b27c2c828a6630e5d393c54e86020c022"
+    },
+    {
+      "path": "Tests/Harness/test_tv_focus_contract.py",
+      "mode": "100644",
+      "bytes": 6208,
+      "sha256": "c2270d11a5f72e2f999639ff38f5e8a317dd6916b7b788a0a37e8c325699c51d",
+      "git_blob_sha": "1533e8d3ae242133f9db7592fd4a7122343dd2b5"
+    },
+    {
+      "path": "Tests/Harness/test_vision_async_contract.py",
+      "mode": "100644",
+      "bytes": 4721,
+      "sha256": "59a4201b66c0ce26d1a85fdd78bee6df38d36a22f8690ff041a3c21e58ba9d34",
+      "git_blob_sha": "01853fde4d943f3ec8777be38a7909995eb6bea4"
+    },
+    {
+      "path": "Tests/Harness/test_vision_bootstrap_fence.py",
+      "mode": "100644",
+      "bytes": 12645,
+      "sha256": "6436794cad96b0b18b356473f1570fe8f742678ac1fd1086bed85873ab03fb01",
+      "git_blob_sha": "6d13f48a154e8ed3aa8ba82102f90b992ebf203b"
+    },
+    {
+      "path": "Tests/Harness/test_vision_capture_collector.py",
+      "mode": "100644",
+      "bytes": 11597,
+      "sha256": "2f14eb6b9f3bdef72cf4d809f8535418ccb02805509e9afe775979f52da867c4",
+      "git_blob_sha": "f5f6399946f97733eeabd4ec52defdb744d874e5"
+    },
+    {
+      "path": "Tests/Harness/test_vision_command_fence.py",
+      "mode": "100644",
+      "bytes": 26866,
+      "sha256": "5f99bd0580eb5a0b4262d82cc606f927dd2c3961f8212cd59b90ad2e326854bc",
+      "git_blob_sha": "52a641acf6e2465f0a32155e99224bffc2a0d208"
+    },
+    {
+      "path": "Tests/Harness/test_vision_failure_diagnostic.py",
+      "mode": "100644",
+      "bytes": 11050,
+      "sha256": "9367931b25b583aa7ca11d12cfb004cc694c6ce53535d80c9475221b610aafbc",
+      "git_blob_sha": "c1dc0a2c7501bafd67a2b0c577a432d187cec2d8"
+    },
+    {
+      "path": "Tests/Harness/test_vision_fresh_vm_contract.py",
+      "mode": "100644",
+      "bytes": 20723,
+      "sha256": "f0c8ed8b1e293abfea609dfa212922fc82daf8921ff4d2cb96da8aec85a1093e",
+      "git_blob_sha": "5c9da59e550e0377b04202b576f5a2ab7398fe10"
+    },
+    {
+      "path": "Tests/Harness/test_vision_photos_readiness.py",
+      "mode": "100644",
+      "bytes": 3254,
+      "sha256": "bd563abb75d12e772758fc096ca3600d1b76257b4e94a391454a790d93c439f8",
+      "git_blob_sha": "4beca3b2e4332e0c9800a609e6ec3fa3bf2f9669"
+    },
+    {
+      "path": "Tests/Harness/test_vision_runner_binding.py",
+      "mode": "100644",
+      "bytes": 14451,
+      "sha256": "e79d0df2e3263f9410c33c8ec6ffab30e4c4f290f86899edd60537a1bc334383",
+      "git_blob_sha": "2b7845f07a9eedca89f3b16087620f18748dac9b"
+    },
+    {
+      "path": "Tests/Harness/test_vision_ui_cases.py",
+      "mode": "100644",
+      "bytes": 6568,
+      "sha256": "17ff1d54ae5595518b16c982abe2a910d4f8946ddc57fd8a4894651bef8168c8",
+      "git_blob_sha": "3ee6ee2bb9fac94499fd24a97856c3431e7de3af"
+    },
+    {
+      "path": "Tests/Harness/test_watch_process.py",
+      "mode": "100644",
+      "bytes": 5114,
+      "sha256": "c24935fab8cc151c0cb0cd327e9f6df8b3f4decf6fe1d554396fdaa931197633",
+      "git_blob_sha": "6210e0a3a1d26847d471fbba1418262b5a244671"
+    },
+    {
+      "path": "Tests/Harness/test_watch_settings_scroll.py",
+      "mode": "100644",
+      "bytes": 6261,
+      "sha256": "6b0256054c308539fe43d5bd109be800f0fe1a00f573ecfa59a6dbe3f15a2a69",
+      "git_blob_sha": "9d74fc880d585d6e867442d607006c11e484d17b"
+    },
+    {
+      "path": "Tests/PortableQR/evaluation-2026-10-03.json",
+      "mode": "100644",
+      "bytes": 1786,
+      "sha256": "a466418cf7e4fdba27f340bb86d3992117f357ddb5f641740b0f1f57dfd9f851",
+      "git_blob_sha": "0a0763d424f027ace53d79ade06b7eaa3e3b8f56"
+    },
+    {
+      "path": "Tests/PortableQR/generate_corpus.py",
+      "mode": "100644",
+      "bytes": 3188,
+      "sha256": "1d19783dcbbba24e4971bcf7d950bf156017f5e8ed7ef4e5802888181a296445",
+      "git_blob_sha": "e9cf7c7af8a274524ae260045aa24a150ca861c1"
+    },
+    {
+      "path": "Tests/PortableQR/harness.cpp",
+      "mode": "100644",
+      "bytes": 1080,
+      "sha256": "65217d8ae60478e1d36099a0966cdde9c4099e5802b0d341cc7c180f1949ccb6",
+      "git_blob_sha": "e1a412389cb48019fba8d130ff9dc610dd444f93"
+    },
+    {
+      "path": "Tests/PortableQR/run_sanitizers.py",
+      "mode": "100644",
+      "bytes": 3068,
+      "sha256": "eee1138a52fbb8230e24133b976f41552f3cf6e71aff39ad15e32b5d1cc92639",
+      "git_blob_sha": "8639f118d1e279cc3cbd4c472ab41eaad35c0e51"
+    },
+    {
+      "path": "Tests/Support/QRBoundedImportReadTests.swift",
+      "mode": "100644",
+      "bytes": 2543,
+      "sha256": "7ef31f56f96df61baec24b09fcd024496bfbd4898c1ae37e8d70efdb098f5a25",
+      "git_blob_sha": "5f023729503e6c55a1fa4e3a9b97043d0b9c862a"
+    },
+    {
+      "path": "Tests/Support/QRManagedStoreTestCase.swift",
+      "mode": "100644",
+      "bytes": 1658,
+      "sha256": "c8fb97a7b03b71854e8118f2505d480c41726763a3936de70393e99e94a03790",
+      "git_blob_sha": "9c25566960cd8c0a8df182e2c617e6281d04cb73"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/Config/Version.h",
+      "mode": "100644",
+      "bytes": 598,
+      "sha256": "0b9398c5dadaa5fc04dc5f53e4cc4e345053e42bc3c6aaeba95e809cf5402414",
+      "git_blob_sha": "9f039ba003eaaac6caff3d108fea1a7a50bfeb83"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/LICENSE",
+      "mode": "100644",
+      "bytes": 11358,
+      "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+      "git_blob_sha": "8f71f43fee3f78649d238238cbde51e6d7055c82"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/README.md",
+      "mode": "100644",
+      "bytes": 1180,
+      "sha256": "b62ce8e5e998f3a88290b466f16e6125ba5658c37fdd7608ceaf5d310b7fc2d9",
+      "git_blob_sha": "c56efde4275173993936306af9b05c2ff7ed7a5a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/ThirdPartyNotices.txt",
+      "mode": "100644",
+      "bytes": 14672,
+      "sha256": "8ebb3cc247bf2677c38cd455b1141bd43ec50915c75e22757c752ee8187ea0b7",
+      "git_blob_sha": "fc6f19e464ceeb3421e2ddb635f964405f842b30"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/source-manifest.json",
+      "mode": "100644",
+      "bytes": 27635,
+      "sha256": "59d9d69bbd18c2f897b36c3f2e72ad7f7f033e212e4a44873b66c314d6c25b69",
+      "git_blob_sha": "e25ab5deb91f5660e265de83ef3483821c11df78"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Barcode.cpp",
+      "mode": "100644",
+      "bytes": 6672,
+      "sha256": "5889d8d5144f2036774a8e6a1c8c9f9b37c461ccf0e1bc1af6246e315af0e6d4",
+      "git_blob_sha": "688f85b89549247389d2cdb652058098695f1054"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Barcode.h",
+      "mode": "100644",
+      "bytes": 7513,
+      "sha256": "8916a74f1aa8af164162080c770843b022d51f577af2744e309d9f358db8e103",
+      "git_blob_sha": "d87cf8070f23151ba58a14eb1061a334eafe6990"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeData.h",
+      "mode": "100644",
+      "bytes": 3132,
+      "sha256": "cf699d2efddc168be67cbc9eff0c149c2d0b485622b805902bae1f71ef40248d",
+      "git_blob_sha": "f8ebdaec92ea33899cc82cea4377c40560020884"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeFormat.cpp",
+      "mode": "100644",
+      "bytes": 7744,
+      "sha256": "eb063fe97ffb46995b61613c864ff2cdb515ebfbbc40aad2c528fc59010c26eb",
+      "git_blob_sha": "2b0e2fbec6a726e01501f4a42b5fc49d1fb5d5b9"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeFormat.h",
+      "mode": "100644",
+      "bytes": 12165,
+      "sha256": "24885f95c22b5828e948e99e97a9cee604cf69b5f73d3bf48630762c539ef647",
+      "git_blob_sha": "bb2865708dc8481f74bf3668d3444bad6cb6cb3b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BinaryBitmap.cpp",
+      "mode": "100644",
+      "bytes": 2975,
+      "sha256": "e767145caced3aa67ed2911dc69b3142e69b79a88d239eb56ad6ef0bae09ea43",
+      "git_blob_sha": "533e229e7c22c21f6fc2c16f3580d2ec5d52722e"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BinaryBitmap.h",
+      "mode": "100644",
+      "bytes": 1446,
+      "sha256": "f5c47f0e7c2fe2e8d2256f4fc38d80e92c3ef017f9695f2192f0be6c71e4bb8d",
+      "git_blob_sha": "e8889c3bb7fb27f03c0ae748a96ac9795a54da8c"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitArray.cpp",
+      "mode": "100644",
+      "bytes": 888,
+      "sha256": "0a850051db3b4a82d9db7a258cf3959675ff390779bdc6ea0b00f8cdc447951e",
+      "git_blob_sha": "78a6487ff92d9d7b65416bb5d76792050a1fc7f4"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitArray.h",
+      "mode": "100644",
+      "bytes": 4594,
+      "sha256": "20b139ddf6c5a19eb668042f50e719245294a1c3b51359fb50710915c0e0f6f7",
+      "git_blob_sha": "b5ccca15342252d0affb1eb2bfbacb9a469c7308"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrix.cpp",
+      "mode": "100644",
+      "bytes": 4324,
+      "sha256": "d009bac5522e5b82d36e54af5f6dc6fb2deb1845d0d6232740e20ceb824a707f",
+      "git_blob_sha": "f03cde747130d7feed3cee923b8e91880150bb9b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrix.h",
+      "mode": "100644",
+      "bytes": 5583,
+      "sha256": "efb519f41f3f045e39836887067f0a9bbe31a608ce40cb1efb00b0bee0dcf4c4",
+      "git_blob_sha": "ceb110a0252e241885e8d3fd6b268fff14fb18d4"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixCursor.h",
+      "mode": "100644",
+      "bytes": 6541,
+      "sha256": "c437866f1986eb631af8bf0b6349c2b1044f7b11bcdae5a8079045548682bfdc",
+      "git_blob_sha": "ef8f7c614cb4e8fb9e25d13c139268c5d06c3650"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixIO.cpp",
+      "mode": "100644",
+      "bytes": 2713,
+      "sha256": "1e4ad4333f4843386680958d345529391557cf8e02cf6f11f6c0f7fcb0ad27aa",
+      "git_blob_sha": "9d5d72fec0cc75749f591647b1714bb6ac8b525b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixIO.h",
+      "mode": "100644",
+      "bytes": 623,
+      "sha256": "bc6af4e9dd29f1da356c85da80351f26ef688b896f22bc8f7a1f67989dc80541",
+      "git_blob_sha": "c44e105a0645d18adca531605b2e3e7945702cff"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitSource.cpp",
+      "mode": "100644",
+      "bytes": 1753,
+      "sha256": "4119652bdc7c33fb1d644f55663753ab83f33c0d0c7d66faa574414f7a97f797",
+      "git_blob_sha": "ae4965698ac215c5eb8100e79b8bb67dd6793263"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitSource.h",
+      "mode": "100644",
+      "bytes": 1876,
+      "sha256": "966a8b8bc9d6d057ce151b72489fd493a0342fd803fa9d762ccab6a6c9b8622e",
+      "git_blob_sha": "a78a758f14ee7da1cbb2c9e7c6fc345c864ab1e4"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ByteArray.h",
+      "mode": "100644",
+      "bytes": 1075,
+      "sha256": "defb8570859b5059d6deb95bdb0f01ff406442d0b03d8a20784f2d6c727f3e51",
+      "git_blob_sha": "3906da0499f33c33f02f07087c8ec185a29e243b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CharacterSet.cpp",
+      "mode": "100644",
+      "bytes": 2422,
+      "sha256": "faf3682702be01cdcce8a881c7c1850a2fe1d670ffb843ac85be267919b0cba3",
+      "git_blob_sha": "00e5f24f2c30370f3b948f427e90b8ef52d86e90"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CharacterSet.h",
+      "mode": "100644",
+      "bytes": 685,
+      "sha256": "bae98d565f072aed5ea3683e01473f400f056f2ec904d5dbff921008a5c04985",
+      "git_blob_sha": "0a291a8041f1312c252441a6b5ef2895287a3a7e"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ConcentricFinder.cpp",
+      "mode": "100644",
+      "bytes": 11089,
+      "sha256": "9fa1bd889ddb8c62171f1c60037b1dbf89fcbf008e79b03928b07ee97cc3e5c5",
+      "git_blob_sha": "23efa001e02312889adf61b88b58054827ce5f00"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ConcentricFinder.h",
+      "mode": "100644",
+      "bytes": 4618,
+      "sha256": "8fe845c10f7d3975a883fef7a551247596beaf849e47fe79de594ca61557f642",
+      "git_blob_sha": "f2bb5c53e74709f4608448442a65f5332003e860"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Content.cpp",
+      "mode": "100644",
+      "bytes": 12975,
+      "sha256": "d4acd0734b7f9cb156ebe241542a2082dd8c9a9742ed4f284fb93fd16c62b8d8",
+      "git_blob_sha": "1d9ad518352230c6c53c838ceaf34e33a319e7f5"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Content.h",
+      "mode": "100644",
+      "bytes": 2145,
+      "sha256": "c57a1c91fa4411281737f85f97ca64250d0853c16046719b63f698de759e1bd1",
+      "git_blob_sha": "e5a4764283135b5116022d6fe2579d31967edea1"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ContentType.h",
+      "mode": "100644",
+      "bytes": 373,
+      "sha256": "3810d441db8cafe44454a6f710553fbb43078c7a861aae3845b0f1154ca4653d",
+      "git_blob_sha": "a5739dca4bd28c68ffc79c93b09432c2814cda8b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CreateBarcode.cpp",
+      "mode": "100644",
+      "bytes": 16317,
+      "sha256": "bf05467eb6d58d69774875d36d813297f9b38af998b36a247575c191cc6dc5c6",
+      "git_blob_sha": "c3e442b34f72a7816705819a51a3664684a9d863"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CreateBarcode.h",
+      "mode": "100644",
+      "bytes": 3971,
+      "sha256": "ba686c710324b2b03f042d340b46633cdd7bd37a0f52eb6ae811a7993c7cddd7",
+      "git_blob_sha": "5d3d61c4f4f228fb84d8db0a5f7a2036687702c6"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/DecoderResult.h",
+      "mode": "100644",
+      "bytes": 3009,
+      "sha256": "114abf6ebca9dd08977228f5226e0c8c8ed24d1739e4357aba79c58a73f2fc41",
+      "git_blob_sha": "f7cb5d2db89236af56017dd646ce88bb7046efd4"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/DetectorResult.h",
+      "mode": "100644",
+      "bytes": 1168,
+      "sha256": "596243d0174cc0dd883b1165b60c58ca95dcb719f3f4698aceb4258111c9f3d6",
+      "git_blob_sha": "99c4d2ea572bebb2c317c63c6af3619043e75524"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ECI.cpp",
+      "mode": "100644",
+      "bytes": 2406,
+      "sha256": "c14487e66504a17874753e05371e8ff5f5241be4fdc96c20558bb669d81f9b00",
+      "git_blob_sha": "83afb88b16ed8516be9d34717165314a00a24361"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ECI.h",
+      "mode": "100644",
+      "bytes": 1404,
+      "sha256": "9d3ef62a6d1ffb252802191253e117ba81f4b1e84a36215f7b271bae3c50e9aa",
+      "git_blob_sha": "691f478007f7ba97c20ed49e772ef3d760b55487"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Error.cpp",
+      "mode": "100644",
+      "bytes": 621,
+      "sha256": "8446e0b0544162d779758dc942566d0acfd7ed5b717066aa4b79c919a11395a4",
+      "git_blob_sha": "c46a6c62323986a770db36b06e2e1b756ae20cfb"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Error.h",
+      "mode": "100644",
+      "bytes": 3033,
+      "sha256": "946dd7acb4d71b632e9577337c2cdb1f656fe063640097ab743beff891bd064d",
+      "git_blob_sha": "f1070a45dec59606dc20bc465db442b9e5eb8a9f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Flags.h",
+      "mode": "100644",
+      "bytes": 5262,
+      "sha256": "a6a6c3521a4d9cdeebc46ef9c8cd4a622a353439720473a1528abd0d8ca9a95b",
+      "git_blob_sha": "8cc61fe0dfbb665492123fdaa49b46d749548332"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GTIN.cpp",
+      "mode": "100644",
+      "bytes": 7815,
+      "sha256": "bacc84fc2eceadaa7d20205646b1cbffd79882450d38090944b7f1f53daac67e",
+      "git_blob_sha": "2b3fd1dfdaada4777be7a84e38d53e9aee9125cd"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GTIN.h",
+      "mode": "100644",
+      "bytes": 1507,
+      "sha256": "f5508d046247ced2a4fce30ffd00eb699ca1792ce3b59132c5e3b7ebd2b322ef",
+      "git_blob_sha": "1cc467068c5c55e988ccc4871fd2de71cc958887"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GlobalHistogramBinarizer.cpp",
+      "mode": "100644",
+      "bytes": 6349,
+      "sha256": "f92ec3aef8bc0970172b6ed620dad67e1ae660385e2bc7c03c4baedce8e1a46b",
+      "git_blob_sha": "d57bc281c00a063be5c4bbaf6301fd3cea498c23"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GlobalHistogramBinarizer.h",
+      "mode": "100644",
+      "bytes": 966,
+      "sha256": "2bd8becc4349d458a609cc8b5ffe6cf89b3def4fa2ad430b3eedae04453c0cc3",
+      "git_blob_sha": "8a0bcfa4e9e136ff99561be0bba50446ecccd270"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GridSampler.cpp",
+      "mode": "100644",
+      "bytes": 4188,
+      "sha256": "184d09ed1eb591479a723c5a07ad6f0fd9086bbade298218b546b78c38997dda",
+      "git_blob_sha": "6a5c05a1d3b4f7f60138fea136df4f6deb3a7699"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GridSampler.h",
+      "mode": "100644",
+      "bytes": 1793,
+      "sha256": "9de93e81ba9ca81fee1bc9611fbbcb1e1f3cff00a75df9d08eca1fa78c62f053",
+      "git_blob_sha": "00ba6b284ab6b5b7c3b87187e41eb0ed7626750f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HRI.cpp",
+      "mode": "100644",
+      "bytes": 6565,
+      "sha256": "cd9a8647c0f10bfee609d84bad0b5314c1d5d8528f148bd158f73cea96766a10",
+      "git_blob_sha": "a7d2978da47fe0481f1f31afa5de8e5fa2c821ba"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HRI.h",
+      "mode": "100644",
+      "bytes": 278,
+      "sha256": "ebcf247d44cb7606f826fc1d84119e8c1017e88dca756e4b17c89825a4925ddc",
+      "git_blob_sha": "0929af0c02427f11923e996cd3fe6adbf0392255"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HybridBinarizer.cpp",
+      "mode": "100644",
+      "bytes": 10665,
+      "sha256": "fc626a1b201e6b6438fcd6e6d436098dfac32c8317345eee0b95dc64b65ef228",
+      "git_blob_sha": "4e20df7790daa97e5bc3d8b20bffaeae61901d98"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HybridBinarizer.h",
+      "mode": "100644",
+      "bytes": 1486,
+      "sha256": "3c96c7f700b4298487e5ac62953b0b0f3d3c3a20feb43bd47df7cdf05b252e27",
+      "git_blob_sha": "3175fa63c9d873172d236a092bdd48307c251a4f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ImageView.h",
+      "mode": "100644",
+      "bytes": 6039,
+      "sha256": "b5c63ad64174bb5175283bccd31eea691fadf3cd3ebe76e414a28555236b875c",
+      "git_blob_sha": "2b109f01dc40e326c1007922f1927a7df701e0ec"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/JSON.cpp",
+      "mode": "100644",
+      "bytes": 4138,
+      "sha256": "658cdf0c2c7bc66239ebf559b8b3c0cecd6d11b3f13fb4375c221e82a06f7abf",
+      "git_blob_sha": "1417015f3886c6f73aa31cccbe77825358846236"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/JSON.h",
+      "mode": "100644",
+      "bytes": 2181,
+      "sha256": "41b6d77465eccc85f109eb676e1cb641854d9ad22bf51aa47fa86c50e8578871",
+      "git_blob_sha": "6f978720ac7fe7eb4e9dc96363be404da0a28eba"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LocalGrid.cpp",
+      "mode": "100644",
+      "bytes": 8198,
+      "sha256": "88ccba00ee5d11873e015497ccb9bc76d720473507951e8d2d9799f0f8b5ab77",
+      "git_blob_sha": "ea437651f91e714ed83774463928bcaaebf65867"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LocalGrid.h",
+      "mode": "100644",
+      "bytes": 3577,
+      "sha256": "32167127e7ca21baa8ca8bb3f83fa390820ce1c5f60081c6cf790c9ce292417d",
+      "git_blob_sha": "299475c754626491429f5077d19d14434ad39f76"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LogMatrix.h",
+      "mode": "100644",
+      "bytes": 2269,
+      "sha256": "478a23dcde69077755e074202bcbef63badc11bb12621c46fdf3edb080cbd6a6",
+      "git_blob_sha": "53a2b9d1c2398f1b4c58218c4dd063fb92bf001c"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Matrix.h",
+      "mode": "100644",
+      "bytes": 2370,
+      "sha256": "41dd7ef04072476fefecc2e1c9a855190254e4f53adbd19c26daa14c52909933",
+      "git_blob_sha": "4990e719f3b04cbbf83978a0d4ba98ee6852b9c2"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatReader.cpp",
+      "mode": "100644",
+      "bytes": 2691,
+      "sha256": "207b7287dcfaecd47ff13fd657e728e633a22c3942b171f6843caadaa027e879",
+      "git_blob_sha": "4c3f80efbc95378d481db9e7f3d80850098c9131"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatReader.h",
+      "mode": "100644",
+      "bytes": 603,
+      "sha256": "a0496ff7583dabdc6297739f52e87ce328f444a0330eeac2be392043a6acd4dc",
+      "git_blob_sha": "54309d429378989b80d56eee78dfca9bc22064fe"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatWriter.h",
+      "mode": "100644",
+      "bytes": 1358,
+      "sha256": "3654ca27a75a9246f1852e06c5b191f14ede5d670b348c34e86df40f4e2b392f",
+      "git_blob_sha": "2eb47feb412c76f735999566f380b704d26b5730"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Pattern.h",
+      "mode": "100644",
+      "bytes": 13625,
+      "sha256": "3fcdec686ff17123cbbb45237415f60922329807ba94ebfb681e1dc90fa14764",
+      "git_blob_sha": "3a61bd5c5154bfc8659a3e24e719fe96876aef4f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/PerspectiveTransform.cpp",
+      "mode": "100644",
+      "bytes": 2305,
+      "sha256": "9118262c97b28acd038643b58e457c98ec297c3f29e7dec7bca88b780f87f098",
+      "git_blob_sha": "f3d1aaa2e90b70dc7136f34808f8a935d7ea441e"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/PerspectiveTransform.h",
+      "mode": "100644",
+      "bytes": 1434,
+      "sha256": "2246fbbc55e505e580c75518ec40b89e76efb68e5101f3b87a49b998ffc02f12",
+      "git_blob_sha": "3ac66998289fe8b4eef1686dd51d6adbaab63a07"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Point.h",
+      "mode": "100644",
+      "bytes": 3654,
+      "sha256": "2c943cade7cde38d9a74505657f92deda4fe04d4cb43eb29daacad9576c49ab2",
+      "git_blob_sha": "631dd57999eb2e1e425a6d71398f61a466a9704a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Quadrilateral.h",
+      "mode": "100644",
+      "bytes": 6636,
+      "sha256": "6b91915c958a12adb5a53722ebd3efd45556a011198a98672d6c407e6d6a8fc5",
+      "git_blob_sha": "484767ede250cdc471da661d5abfc6418f6d6f03"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Range.h",
+      "mode": "100644",
+      "bytes": 3682,
+      "sha256": "736b2b85c608ce76e8c11ade6cbc543d0feeceb50be98789f292ad1a7430a409",
+      "git_blob_sha": "9f025736666fd42d1e5c619546f945b8e80538aa"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReadBarcode.cpp",
+      "mode": "100644",
+      "bytes": 11710,
+      "sha256": "3ebcb0d930512323dd9558653346d267c869c2acd255d922384529e6b9b852b6",
+      "git_blob_sha": "9d213934b2eb4be75fc3c5466054fc3edca43c3f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReadBarcode.h",
+      "mode": "100644",
+      "bytes": 906,
+      "sha256": "6462e3bf5bd5925ec0d8f12b0273330f1507dfa6fb0b92c505663f0e33039cd9",
+      "git_blob_sha": "45fe97f9253e68146763d8e40b6337b79a7beef2"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Reader.h",
+      "mode": "100644",
+      "bytes": 638,
+      "sha256": "802958bd4cf16896e11927ecb0b2961f6bb9a0de28c74c2489d6fc1808ca0980",
+      "git_blob_sha": "ffd1be880bb6c66aa2a6f231a4cbe2f4e7df16a2"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReaderOptions.h",
+      "mode": "100644",
+      "bytes": 9141,
+      "sha256": "b02f422ace401fcde9ffaabf4aefdc9532b7b61a846cc92705e55a89431d609e",
+      "git_blob_sha": "b3849e4d50b757a8aca0649676508623121e9de3"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReedSolomon.cpp",
+      "mode": "100644",
+      "bytes": 3004,
+      "sha256": "0b2272203b71da553ea0c41d665c90f475fae01f9a9d642e893d345d4d27f05e",
+      "git_blob_sha": "20d8e43a7c3455b2b63dd39105ccf3bf56ed505a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReedSolomon.h",
+      "mode": "100644",
+      "bytes": 2042,
+      "sha256": "7e928326110c484bb932ee2e807f0d3857ce13559f270cb49edc9f2a2177dc1e",
+      "git_blob_sha": "225dae8039396133265290c60d0c377b84471c6d"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/RegressionLine.h",
+      "mode": "100644",
+      "bytes": 4607,
+      "sha256": "83831678f2147a9fdbb98047aec668cb4db58c100645178dce16824f0f5cf399",
+      "git_blob_sha": "7a53efce133381bf684ff8b7a7f19aaedc54694b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ResultPoint.cpp",
+      "mode": "100644",
+      "bytes": 364,
+      "sha256": "e5438cf75727f5668044daefae5af9752de647c6de88858a6691a3a7dae31a26",
+      "git_blob_sha": "134216aa0128c768e1949d00ac838854ad9139e0"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ResultPoint.h",
+      "mode": "100644",
+      "bytes": 841,
+      "sha256": "c9b2aa66d849fe3aadc275eee8c0d76b3b7a0d20cf8e34b8a7b7dc544262cb67",
+      "git_blob_sha": "067b648f11778a923ecef0fab5fdb8062e382fc3"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdGenerator.h",
+      "mode": "100644",
+      "bytes": 2240,
+      "sha256": "34c8d5d71ff9ff48916b7a633a567141b453227e5ef2d0779bd093182c9deb2d",
+      "git_blob_sha": "68a9ec28d4cf8def3e3bc7d4d0f1c99f81ece940"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdPrint.h",
+      "mode": "100644",
+      "bytes": 675,
+      "sha256": "f7bfc4ffbe0d59c2679fc4aad512ecf8142aaa8f0acc60a8cdd4a791ac456003",
+      "git_blob_sha": "1b4fa64a903683e0b68b7283ddcee3c5dbfddf84"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdScope.h",
+      "mode": "100644",
+      "bytes": 1273,
+      "sha256": "7529fc93b4d3881ade4b86921bbe8d1495ddd327072bee10e68664b33d5832bd",
+      "git_blob_sha": "4cad25764afba421416e5b3710dabafde586e0ae"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StructuredAppend.h",
+      "mode": "100644",
+      "bytes": 230,
+      "sha256": "01eb512c3eeca00f7538455fc51e27c0c60794fc071e155b395d27d4195bbc2f",
+      "git_blob_sha": "105d5ebd6568abf25bc1ceb39602a2287ac86420"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/SymbologyIdentifier.h",
+      "mode": "100644",
+      "bytes": 618,
+      "sha256": "15b8a924ae3e5daa8d1302582f84c93ca2c6669c36874d3c3f384d792c0edc76",
+      "git_blob_sha": "d05d495be9bba2beb1c2e1fb938ae3f0816bf5d2"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextDecoder.cpp",
+      "mode": "100644",
+      "bytes": 1376,
+      "sha256": "b4b001cb334ce93d4cc18b063002d32cfe3aba9be22ca6f3943c89949aea6547",
+      "git_blob_sha": "f8ebb3a0cfcbca147be797f5fa8464d66b78c193"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextDecoder.h",
+      "mode": "100644",
+      "bytes": 367,
+      "sha256": "cfd64c09e600dda8ba345e21b9593723e719a66461425051234f5d5c507ac7fa",
+      "git_blob_sha": "0117a42269429b4828314500e0eb82b00753f78a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextEncoder.h",
+      "mode": "100644",
+      "bytes": 660,
+      "sha256": "774cef2fead5bd07e9738910bf008884974767462ee2cec632ba0fc53c9b5ccb",
+      "git_blob_sha": "15c8567158686f1c6083507a46a0ebceb50ae700"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ThresholdBinarizer.h",
+      "mode": "100644",
+      "bytes": 1357,
+      "sha256": "253e0e3c04e1110a61cc9115b022ce75b8f9d50e8431be7846f4ba464d773d94",
+      "git_blob_sha": "c24636aa9b58de68b905364967217206e7c89231"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TritMatrix.h",
+      "mode": "100644",
+      "bytes": 528,
+      "sha256": "147dae578b479c1e3da563d3f37af501b2579843121c5e774320ecce943ac41e",
+      "git_blob_sha": "8e70ff9fb160dd60e4f22444a20efe3bd77bc988"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Utf.cpp",
+      "mode": "100644",
+      "bytes": 7681,
+      "sha256": "4fec257e836269803c38a2dffc5dc81b1f00e82d6edec51b4f00d089a4cf1941",
+      "git_blob_sha": "c9ae58bd8b54875bf709e933271588feeb9cfafb"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Utf.h",
+      "mode": "100644",
+      "bytes": 515,
+      "sha256": "90c83f8ae0f93ccd6289808f77e081140e2923ff9868e239f8e5933781594306",
+      "git_blob_sha": "9c8946ad5db0bbe17971553db41c46afa0ddbefc"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WhiteRectDetector.cpp",
+      "mode": "100644",
+      "bytes": 6798,
+      "sha256": "598b57de7dff4598948330878c074bcefdace3b4c71fdaab5c99a0de5a0909f3",
+      "git_blob_sha": "9644a271a90365fe5edd0064f5199971df395861"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WhiteRectDetector.h",
+      "mode": "100644",
+      "bytes": 1264,
+      "sha256": "aa65ad3939e03074d3bc0c0ef6d98bfb1af093248010c292534768178075d820",
+      "git_blob_sha": "db4d11f0c5d6debc6dda79ec936a4185537a4673"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WriteBarcode.cpp",
+      "mode": "100644",
+      "bytes": 6401,
+      "sha256": "1e820cbdd08306ad1892ff49b1d0dfc8b926638157be288f0bd50b007bbeabb6",
+      "git_blob_sha": "49528d22b18a6160d02866f0dacd9389f2017e9f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WriteBarcode.h",
+      "mode": "100644",
+      "bytes": 1869,
+      "sha256": "8e6716da9d72a342f84c386dfd560d696c8a807bf6b8dc2ea358561e0ee640ab",
+      "git_blob_sha": "9514452c4112e8ef5c92cdc7d67b8f54abaed913"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXAlgorithms.h",
+      "mode": "100644",
+      "bytes": 9613,
+      "sha256": "b87f474b65d9e2008ca05a8d5c15fbbf6bf2a31337161df565493407652f41a9",
+      "git_blob_sha": "1718fc37a7bc195c821b27d0d5f27a18ac24ca50"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXConfig.h",
+      "mode": "100644",
+      "bytes": 1011,
+      "sha256": "bac5941a128fc4fb0d5d656860019cae2f20bf279de232a380bf8889e56e3539",
+      "git_blob_sha": "dfcd5a80beb90a78b4888eda1e394991f4a2445d"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXTestSupport.h",
+      "mode": "100644",
+      "bytes": 184,
+      "sha256": "94490d6d447733bc05a07ec58e75cc5624dccf85845d528ba83caf98455178ba",
+      "git_blob_sha": "b42a5121b9c3579edf44f7f909841ac4fd975598"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXVersion.h",
+      "mode": "100644",
+      "bytes": 323,
+      "sha256": "3fe35610e086da8c85d7bc4271e9d3eca3999e29f7f0cb849c11905aafab2f49",
+      "git_blob_sha": "b6458c971e14820b8cab51815ba6fff1f9bf006c"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingC.h",
+      "mode": "100644",
+      "bytes": 11401,
+      "sha256": "921c43e4df2d20a43dbf055a82fcb06ff24b0e8df59a0e04b22967c2c880b0cd",
+      "git_blob_sha": "fdca58ca5e4467e27086a8b31b5efdb294121ad8"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingCpp.cpp",
+      "mode": "100644",
+      "bytes": 259,
+      "sha256": "d76c6373b73f81a4fa031d308a8b64c0ea6950f396df350b580afcaabbe64529",
+      "git_blob_sha": "b5f094d50459a48ff172afc5e283e15c9a135e97"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingCpp.h",
+      "mode": "100644",
+      "bytes": 2117,
+      "sha256": "2904fca89efda71d4e67f3ba6b60162f236cb8a2ed33453957b3272a0114e6b9",
+      "git_blob_sha": "16e3addf15af65a9d62a10159d8bc13bc4887f9a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingQt.h",
+      "mode": "100644",
+      "bytes": 18994,
+      "sha256": "6fdf0cf1dda0a0782dda3c791a16e02fe46b97d6b810088824c73dd40433109b",
+      "git_blob_sha": "f7fec4ff97abd3774ecbd022b8584fa4cb14ab91"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/decode.h",
+      "mode": "100644",
+      "bytes": 9030,
+      "sha256": "fe31fbb1d5acef3e38096f4cc5b11450f7e097ededc8e93a6579437ec2112552",
+      "git_blob_sha": "1a2b936ae1bc6ce70f95175ec68e3ad9a8d8495b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/encode.h",
+      "mode": "100644",
+      "bytes": 4381,
+      "sha256": "d12183522c02d24e5bf15f889d0f6a6c01241eb8b2108720919a25e2df858e55",
+      "git_blob_sha": "4c0342b7b61f244c04cabd5b817b670a323874d6"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/field.h",
+      "mode": "100644",
+      "bytes": 5050,
+      "sha256": "c54b47efb4b1a1d382489aa671db51187dc2af6d1d59d79fa49152a1e02988f7",
+      "git_blob_sha": "081e3e99efb4afa4320aa0fe13ac155b75ed04fa"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/poly.h",
+      "mode": "100644",
+      "bytes": 5371,
+      "sha256": "2a06bb4da7ef5183232322d3f5d4db91c7287661f54e8087c4a11a8c67cde6b2",
+      "git_blob_sha": "4beb5ff5f41dd6c18e03ab870f57b1a9e69809b4"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci.c",
+      "mode": "100644",
+      "bytes": 56583,
+      "sha256": "55871f5d8f1fedf2422912515f01223b404833bcd9c7cbaedfd890fc05aedd12",
+      "git_blob_sha": "26fd7ff9e37c10c2957d389f7cc2dd61c2ece696"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci.h",
+      "mode": "100644",
+      "bytes": 7758,
+      "sha256": "1239d7c775caf1b2ad707633d7908fcfdb5b4ddeb2ad83e48ebed27154733cfd",
+      "git_blob_sha": "79cf6d6f0a4fef8f0cb8d6ac108551509a6b2f40"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_big5.h",
+      "mode": "100644",
+      "bytes": 261105,
+      "sha256": "08d2a1473479a5984427b22b64008167c9444433e7b07d0a709088fad1c221ac",
+      "git_blob_sha": "e8d7e10f00343d5980389f80f7849beffa174831"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_common.h",
+      "mode": "100644",
+      "bytes": 1037,
+      "sha256": "9c386b54cef02a9e8ab22c464ec75f0b9e9c453ac1c5184a8f2de1afb8c24924",
+      "git_blob_sha": "577569e8267eb3e5675ff7a48a05d4c0d67b7217"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gb18030.h",
+      "mode": "100644",
+      "bytes": 16519,
+      "sha256": "aefe7ea3579280e86917e6cd739de4928d5f0f20df87b91739620417f0be6795",
+      "git_blob_sha": "a1b7be050a605d32f6b6739050b0482222837d32"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gb2312.h",
+      "mode": "100644",
+      "bytes": 158530,
+      "sha256": "552d8c7233a9c07d364ff26605ab83ae368ffa944316ff21d7ff544bf13c261d",
+      "git_blob_sha": "755de60bba5fd9600125eb6e4e3f6b9a6664788f"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gbk.h",
+      "mode": "100644",
+      "bytes": 271655,
+      "sha256": "287ec92bc9ee140ea373c33147a179dd95cc8f51def276ba02b74e68a1aa564e",
+      "git_blob_sha": "47edf147c94391de97ed7687614f0507da5b3264"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_ksx1001.h",
+      "mode": "100644",
+      "bytes": 195926,
+      "sha256": "459a61917026b003d08506a56a5f04213c79932991a8d4fb3db6c551e7e53c76",
+      "git_blob_sha": "e7d0e001cdca967cbfeb8254a57c133dd9d0c166"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_sb.h",
+      "mode": "100644",
+      "bytes": 57278,
+      "sha256": "44c9a6dfaf49acf37386d05b372f238d682771b1bc9579f1bce0611ac3e79cde",
+      "git_blob_sha": "73b50fb40272335a09fccb25740896ac6cf9907d"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_sjis.h",
+      "mode": "100644",
+      "bytes": 152478,
+      "sha256": "2fe418441588c051b51f04accce7d88188c7376bbaaadea92493741dfd2ff6e7",
+      "git_blob_sha": "d56cf27d1bddbd875c55380c295b9c53a337be5b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRBitMatrixParser.cpp",
+      "mode": "100644",
+      "bytes": 10072,
+      "sha256": "468e8cce0b15d07b8cc2c65b256f1baee48051e5c603693093d8a18318bf0132",
+      "git_blob_sha": "3cf4ee11dd1e6e0f25c6a9293c79b48dce5cbcf1"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRBitMatrixParser.h",
+      "mode": "100644",
+      "bytes": 1174,
+      "sha256": "222e74a44490b5c9dc6408ded0a94a8b3725edc6d68fd6bf3b66204300ab37ab",
+      "git_blob_sha": "e695472b84d6c07979e92bd90b5b436b64d55227"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRCodecMode.cpp",
+      "mode": "100644",
+      "bytes": 3197,
+      "sha256": "408d36a267e47acc6a118b4531ee65aac769c5bc9fb186473d30f1da18785124",
+      "git_blob_sha": "b0e546a01363db3999e7209146609266490e1c1d"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRCodecMode.h",
+      "mode": "100644",
+      "bytes": 1652,
+      "sha256": "b3c27148ff4391f092b16d2e6754e980bdbeda9a328b24340005efeab0c2363d",
+      "git_blob_sha": "eff1e18b4297c691ac8fd759029716fba86e8085"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataBlock.cpp",
+      "mode": "100644",
+      "bytes": 3251,
+      "sha256": "08842f9055653fcfbacd8dab4a9e23fef00389d3721ac357b83522824d9a9ca8",
+      "git_blob_sha": "9eb23d04d0677fa8e5032013ecdefb052c3c9d7e"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataBlock.h",
+      "mode": "100644",
+      "bytes": 1434,
+      "sha256": "9fbaa644ae7d43af2dd17a2b640c0998615eff32bc12e0974eeeb83c5abdb42b",
+      "git_blob_sha": "1e7c8e990809a221d12be1559f28cff61b4cb314"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataMask.h",
+      "mode": "100644",
+      "bytes": 1392,
+      "sha256": "c21108e571113373894a64fa82b77871c9d7c65fd552f44204ac4f6cd35a23db",
+      "git_blob_sha": "d8f057a897a6bd298d70f375b30a7cc9f60cdee6"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDecoder.cpp",
+      "mode": "100644",
+      "bytes": 11996,
+      "sha256": "cfad57b89f75bcfa7ccfcd3a1712a63575c9f5d949964dde9de8401862633960",
+      "git_blob_sha": "1b9bbed07569a59ddb5eadc6d63a4224be368dba"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDecoder.h",
+      "mode": "100644",
+      "bytes": 268,
+      "sha256": "041d2fcad9f07e1b27e90c8d1f6f35112cbdaa940c874ddddf8ba0172d482b42",
+      "git_blob_sha": "2b724fc17295d7d155aa63a1775fd9db098e4739"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDetector.cpp",
+      "mode": "100644",
+      "bytes": 33618,
+      "sha256": "9c88563c8cf831cdef8006e86eaa71c098b051f1e9ce30961c8e517812f3813e",
+      "git_blob_sha": "5a26285d7e72c89c56e41b3507b8b46396facb1b"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDetector.h",
+      "mode": "100644",
+      "bytes": 1142,
+      "sha256": "bfef855fb2aee3cbdfbc7b4e2adef1dff2719017892cb5469035a95ebea4286d",
+      "git_blob_sha": "916cc4c1ccb661dfb3a70f03d119adae7b318f3a"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRECB.h",
+      "mode": "100644",
+      "bytes": 1361,
+      "sha256": "82d1ce15c3f9b54640b2136c9a0954cdd14097acd9455a28270a312ba6e7cf52",
+      "git_blob_sha": "6829e695b242e726dbb5afdb18ac50e0cfea0921"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRErrorCorrectionLevel.cpp",
+      "mode": "100644",
+      "bytes": 1550,
+      "sha256": "4b41ba643e3b341f020273242d57946c3138a54c5a7f18f84905dde9f264d207",
+      "git_blob_sha": "0c66b2263c138cb739456ca9bb988f7120b04553"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRErrorCorrectionLevel.h",
+      "mode": "100644",
+      "bytes": 823,
+      "sha256": "25e76c47e9894f37ea76a2a68303d6479534b83253b1d1c5505e6ca13c447ff3",
+      "git_blob_sha": "eeb05bbb28c53fadf06fc9ebf129c8120cfd0010"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRFormatInformation.cpp",
+      "mode": "100644",
+      "bytes": 6665,
+      "sha256": "ec2f2047b1356a6585607d63a97c9031bbf2a02640ac20c193f852f59f3b345e",
+      "git_blob_sha": "8e7c079655cadcce5721ae70204279c544613ba5"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRFormatInformation.h",
+      "mode": "100644",
+      "bytes": 1801,
+      "sha256": "0684b3f2fcce8f4e3046f104460f7b66b292e64d1f368ef4e02af10e182d794e",
+      "git_blob_sha": "803eb5bf098dd2e98e7be76bd9adcee7658390fc"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRReader.cpp",
+      "mode": "100644",
+      "bytes": 4512,
+      "sha256": "fd546ef3f46d218e8010846d755b914f6ff47fd8cb6bb3285b870581f3930045",
+      "git_blob_sha": "df1af067437ee47113e1e038a1b19e09792d33bb"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRReader.h",
+      "mode": "100644",
+      "bytes": 357,
+      "sha256": "e269f370978ca123bc75fb1138efc5ec653292c2dd0367f4a3595303f85529a8",
+      "git_blob_sha": "c43578186782fff2c178d859a299dbf901c9fd11"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRVersion.cpp",
+      "mode": "100644",
+      "bytes": 17345,
+      "sha256": "91db28908925a96ea3286d9cb2d5b7f722cc4efc34604ca35f92f9fef0cc20aa",
+      "git_blob_sha": "20127d418aa98b536c0865a2f31dc929b416b5c0"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRVersion.h",
+      "mode": "100644",
+      "bytes": 4009,
+      "sha256": "db72389749ddfb43caa089595831e19718d61c12990e0399e76dcb1a17fb83ae",
+      "git_blob_sha": "f2229465c8be714973b4b0709ee6f2485259594b"
+    },
+    {
+      "path": "docs/IOS_ONLY_PROFILE.md",
+      "mode": "100644",
+      "bytes": 5914,
+      "sha256": "e67ae406afaf2a96c38d05a7f23bae91b62fc432a14f7439c49fc5cd115be652",
+      "git_blob_sha": "315323e4bbcea1046406d666b6072ba9fa4b2260"
+    },
+    {
+      "path": "docs/MINI_STARTUP_OBSERVATION.md",
+      "mode": "100644",
+      "bytes": 9528,
+      "sha256": "e9713866e730741341d3f720332d7604f4a718268a2702dd5c676a74cacc5d48",
+      "git_blob_sha": "154e237bef9f41165bc4b5b392b21a1b901b399c"
+    },
+    {
+      "path": "docs/NATIVE_APPLE_PLATFORMS.md",
+      "mode": "100644",
+      "bytes": 37595,
+      "sha256": "485201a2cc3b8c6d90841d7d477934d400a44505b534fd7380a2b08cc569e752",
+      "git_blob_sha": "c261f341eefa844d8ce0b54205fc9adb682e73aa"
+    },
+    {
+      "path": "docs/RELEASE_READINESS.md",
+      "mode": "100644",
+      "bytes": 13519,
+      "sha256": "0a17f29c889468b86cbd24d6a706ae27c7a0b45f6d3f725585c6a527ec50d4f3",
+      "git_blob_sha": "47f88514bee0c3cbfc60edaaf4f3a048afe49522"
+    },
+    {
+      "path": "docs/VISION_FRESH_VM_CASES.md",
+      "mode": "100644",
+      "bytes": 4023,
+      "sha256": "340aae9b5fb2f741494e242ef36a6aa642b7db2216eb75469bfdcfed51f67918",
+      "git_blob_sha": "33761c504e80c61488b54237b06affe27d928875"
+    },
+    {
+      "path": "scripts/atomic_json.py",
+      "mode": "100644",
+      "bytes": 826,
+      "sha256": "748f5cb832ef41a6a0027be8c797b6d2484e4b80a7759df104307cbe06f7e0fb",
+      "git_blob_sha": "dbf35bdf064faa698d04efcdf9a2962142d53c11"
+    },
+    {
+      "path": "scripts/capture_vision_checkpoints.py",
+      "mode": "100644",
+      "bytes": 7351,
+      "sha256": "deb4e4a4ffc1f1aa05f927e480f294faf708f9256f1cc04464913899bb9ce5de",
+      "git_blob_sha": "e7b28efe61937b086a9eb72c77972e5f76dae6ae"
+    },
+    {
+      "path": "scripts/collect_watch_startup_diagnostics.py",
+      "mode": "100644",
+      "bytes": 3052,
+      "sha256": "112ab084aad74bacf31a873c8e197a6fffdb8f1ed9136edc84f6b531d7e9be46",
+      "git_blob_sha": "5424990edf6a2e0e759e44954f6f93ea320d7e60"
+    },
+    {
+      "path": "scripts/compile_ios_original_preflight.py",
+      "mode": "100644",
+      "bytes": 15021,
+      "sha256": "f25e90816489180c29baad0aab6fe64aa51bc04e4de0a5894b71be568122ce6c",
+      "git_blob_sha": "7cf27281a277b0491f551fa47074138dbe9bc42c"
+    },
+    {
+      "path": "scripts/compile_platform_preflight.py",
+      "mode": "100644",
+      "bytes": 2873,
+      "sha256": "4e8f71e1c1ec2833d1cb022d2c051782d388d0b3ff5ac1873ca6ca5411aead46",
+      "git_blob_sha": "20799eb0c441e2a11daa6e8eb076034efb95039f"
+    },
+    {
+      "path": "scripts/diagnostic_mini_managed_route.py",
+      "mode": "100644",
+      "bytes": 14231,
+      "sha256": "a9944fff240355c6d0b2b2346dc8f7b4cf7c8f34475ba7a6b94d2765421c5c4a",
+      "git_blob_sha": "3b0bbc6f4583c377b3d271f939533ea386bbe210"
+    },
+    {
+      "path": "scripts/discover_native_settings.py",
+      "mode": "100644",
+      "bytes": 21789,
+      "sha256": "26724498a53b5ebd4c18b2699fc2cda13bca8f707dd5bc7faaaa0051511ffe7f",
+      "git_blob_sha": "7874260726a1a42474f89fa7b7191781eb8fd097"
+    },
+    {
+      "path": "scripts/evidence-allocation.json",
+      "mode": "100644",
+      "bytes": 421,
+      "sha256": "208e38ed01bfecb0d0ee56bc1ec75ebebd8b03bca318491be8481587ebcb999a",
+      "git_blob_sha": "6655f07a1c0c2cbbabaea649a264a4d8b6e80e30"
+    },
+    {
+      "path": "scripts/export_ios_platform_screenshots.py",
+      "mode": "100644",
+      "bytes": 42431,
+      "sha256": "1f2e3ac29fc76f9dff7a61b6d7865bd9b210a58245b8e6f45daa848968897f9a",
+      "git_blob_sha": "093c3e377e0d663f70064693beeabcccc2935071"
+    },
+    {
+      "path": "scripts/export_mac_screenshots.py",
+      "mode": "100644",
+      "bytes": 14103,
+      "sha256": "a50212ad6e43cf931e8410bf707c455d90e5a754016e4f889365ea883879c737",
+      "git_blob_sha": "23797ed097911910b31395b977d91c42b98b5a83"
+    },
+    {
+      "path": "scripts/export_settings_discovery.py",
+      "mode": "100644",
+      "bytes": 7007,
+      "sha256": "26a24cbe29fae93d730cd0e20fa57385b206e6cb34f31cc013f7013b84e5f3f6",
+      "git_blob_sha": "bee7c6177cc900c87abc3aabd51f32fb36a776a6"
+    },
+    {
+      "path": "scripts/export_test_screenshots.py",
+      "mode": "100644",
+      "bytes": 2370,
+      "sha256": "d70741afd08785e360dd484341bae7cb815bb3bfd89a65e289efc003ddb9625b",
+      "git_blob_sha": "0521795336ecafce048c415ccd9606368855cbfa"
+    },
+    {
+      "path": "scripts/export_vision_case_evidence.py",
+      "mode": "100644",
+      "bytes": 18340,
+      "sha256": "b7982831dd9dbf0e72a23600dc0db86ce751cf8102ebead42e3410a0f14efcc1",
+      "git_blob_sha": "b05036571015a0d39e2ad6b108220cf0784a8493"
+    },
+    {
+      "path": "scripts/fixture_query_guard.py",
+      "mode": "100644",
+      "bytes": 3444,
+      "sha256": "e5641b387ff1dd54435cc3352e2c04b5f1b40fa7eb9ee5f362271ce46776fc4d",
+      "git_blob_sha": "f65e05784d2360c3c973058f671ea2127c2be72e"
+    },
+    {
+      "path": "scripts/generate_project.py",
+      "mode": "100644",
+      "bytes": 31871,
+      "sha256": "ac40902668a3c036e58e0e9c3897314bca8de71af8b03849cbd5ebcf4144c8d0",
+      "git_blob_sha": "7fd266a545ba7fa1624df5b925b19da01f573a4c"
+    },
+    {
+      "path": "scripts/generate_qr_fixtures.py",
+      "mode": "100644",
+      "bytes": 1552,
+      "sha256": "279d1f8d32870ad5c350dd9f60dfe888f4b567fa57d804cb54ea65d1dd80b36d",
+      "git_blob_sha": "d95e0b5e6e53dab0b91b095ec3e844c31dee9cca"
+    },
+    {
+      "path": "scripts/inspect_watch_cpp_compat.py",
+      "mode": "100644",
+      "bytes": 2725,
+      "sha256": "7e76a96a2ecddeea67957a1b27b07b86b3ef217a0900a371a97025d7ff7d7b6b",
+      "git_blob_sha": "fd2ef72d8576a95b76d255750bc212a0c3f2c57b"
+    },
+    {
+      "path": "scripts/ios_import_continuation.py",
+      "mode": "100644",
+      "bytes": 11121,
+      "sha256": "bb764b4682b655fc09e51a10e08075c5ccdd97b6c6443c0e15b0d3efd251cf51",
+      "git_blob_sha": "1dfe079f380215832cd9f9d3616fb9e862b05bbf"
+    },
+    {
+      "path": "scripts/ios_original_release_route.py",
+      "mode": "100755",
+      "bytes": 20056,
+      "sha256": "e79c7d895893fb4f5c2fbc4ec921a75a3bb9e7e2e98976d1e965ffbda2ad04b3",
+      "git_blob_sha": "cb2e277af69ee8ebf4c7f638ff24e25b051855f0"
+    },
+    {
+      "path": "scripts/ios_original_supplement_route.py",
+      "mode": "100644",
+      "bytes": 20076,
+      "sha256": "a506065b1d6d7c52a5a2431455c7a72bd58f52661279c0116e5b04003f9eb056",
+      "git_blob_sha": "3ca390299ce6b8ae7c66e88c1e8f04a5a5e7fbe4"
+    },
+    {
+      "path": "scripts/ipad_mini_final.sh",
+      "mode": "100644",
+      "bytes": 213,
+      "sha256": "934829270f205a367dbc29781e38f1da9d227fe223dbdda7fe75dfdc18d9db67",
+      "git_blob_sha": "0cb9950f5e081936170015169f8b3924fb4af1e0"
+    },
+    {
+      "path": "scripts/ipad_mini_prepare.sh",
+      "mode": "100644",
+      "bytes": 2099,
+      "sha256": "ecd5e5678efd6ec6f3cd6591ee99315179009da8f339fab18cd079444601c152",
+      "git_blob_sha": "9ad89301f04f74bd42db1b013ceed6bfb133ffc9"
+    },
+    {
+      "path": "scripts/ipad_mini_setup.py",
+      "mode": "100644",
+      "bytes": 44827,
+      "sha256": "244823faa6f7f6b0b4d24cb813e512998e7916debbddc75b6954a2e298add5ec",
+      "git_blob_sha": "440182a84e11738b37d782fe448bf5051dfa2e1e"
+    },
+    {
+      "path": "scripts/ipad_mini_state_handoff.py",
+      "mode": "100644",
+      "bytes": 21786,
+      "sha256": "260d2b20f8b5ad75f88fb18fcd6c546744e6cdbc5c960ecd10ee584026b84e6e",
+      "git_blob_sha": "8275057c072e4fb97c4243d5eccf9437d5afed97"
+    },
+    {
+      "path": "scripts/launch_optional_simulator.py",
+      "mode": "100644",
+      "bytes": 2241,
+      "sha256": "c4074cd39b88ebabad56da471f5ca17592fbe3b3a79b96baca713a9c68fe5f10",
+      "git_blob_sha": "974cdc5536e94411a3b77d0d12f256c182e45405"
+    },
+    {
+      "path": "scripts/materialize_ipad_icons.py",
+      "mode": "100644",
+      "bytes": 796,
+      "sha256": "dbc111bd7b150a3ae9716c00b3eaf7be807d6b0e99857c51d5194f03e117cdd2",
+      "git_blob_sha": "1e8b13c50c5542bbfe920844b6f6ad99ce922475"
+    },
+    {
+      "path": "scripts/materialize_mac_icons.py",
+      "mode": "100644",
+      "bytes": 1102,
+      "sha256": "3db348e592b55328336eb82e87069daf18c062ca7167acfd6fa191e66c3b3f64",
+      "git_blob_sha": "421cef62a4c5a98a44c951d2043deafe8dbef200"
+    },
+    {
+      "path": "scripts/materialize_native_icons.swift",
+      "mode": "100644",
+      "bytes": 2824,
+      "sha256": "431fc1225f49fdb37ef63f9f510475d460d29dbcd115414b7164c6b5c8446872",
+      "git_blob_sha": "c58b991182933e577e7ba462fe9347931f454a5e"
+    },
+    {
+      "path": "scripts/materialize_qr_fixtures.py",
+      "mode": "100644",
+      "bytes": 399,
+      "sha256": "da154b7bd83186849c08d5932af45d2b066fb4212a27ae62e0cbc1171fc09d51",
+      "git_blob_sha": "535d8bf07389593045fae9d718f602a45c2c0421"
+    },
+    {
+      "path": "scripts/owned_process_barrier.py",
+      "mode": "100644",
+      "bytes": 3734,
+      "sha256": "fe905ca6b524e00aa2e134979b7b9d5ef47e158836ab4faf8759ab1e7a81f474",
+      "git_blob_sha": "8a078d4b429381b425b52cf8c1c956ed81f1989f"
+    },
+    {
+      "path": "scripts/owned_process_group.py",
+      "mode": "100644",
+      "bytes": 1099,
+      "sha256": "eb406d2fe4c928d6438875761d596e3415ab9330593fd1b5a678ae6f99cb535e",
+      "git_blob_sha": "d023dd53912105560ac95e965954b9cb1d0c15f1"
+    },
+    {
+      "path": "scripts/prepare_sandbox_boundary.swift",
+      "mode": "100644",
+      "bytes": 1459,
+      "sha256": "b502e8c231352b5fa5e96f25818369d623c09359b6093129aadaaf4b9849e0fc",
+      "git_blob_sha": "f8354e7d6be24d02817066ca04192d94c4f9d575"
+    },
+    {
+      "path": "scripts/probe_vision_runtime.py",
+      "mode": "100644",
+      "bytes": 7960,
+      "sha256": "27661ba288044865d82ad4fcddbcd5dcbed8c1a90f8df2c3db5b83434740a689",
+      "git_blob_sha": "8ee04ba965dd908c2cd067bf47a926df71d9f4b8"
+    },
+    {
+      "path": "scripts/required_reason_symbols.py",
+      "mode": "100644",
+      "bytes": 1064,
+      "sha256": "ac932750382d01fdebf59b43bfdaf368105049c97c1f9eb1ce4059f01017f4e4",
+      "git_blob_sha": "1226e915da57e3504f1805387a0ee7b41b662b00"
+    },
+    {
+      "path": "scripts/run_bounded.py",
+      "mode": "100644",
+      "bytes": 715,
+      "sha256": "6f766ede451cda68e369386ce35c8e3b1ee0adc2c2b7063bcf0b196d2b1fd8c8",
+      "git_blob_sha": "60679d9b751fc7a1713b8abaed18074231896169"
+    },
+    {
+      "path": "scripts/run_ios_platform_ui.sh",
+      "mode": "100644",
+      "bytes": 19524,
+      "sha256": "966f8993caf06f32e36a36251e98ba9fbff95cf2f893c2d561df4e683db89a58",
+      "git_blob_sha": "d7685b49fcef0ed9c9e9dd6f43d05a8082a4bb14"
+    },
+    {
+      "path": "scripts/run_mac_sandbox.sh",
+      "mode": "100644",
+      "bytes": 3310,
+      "sha256": "79468a33261c598b17f147c4812c32e7664852bd13cb720385632814356d412e",
+      "git_blob_sha": "6d1e88700c13ba21331ebe29086d2239704cb2b5"
+    },
+    {
+      "path": "scripts/run_native_size_case.py",
+      "mode": "100644",
+      "bytes": 5624,
+      "sha256": "4a29a153e4e2612d5c3cf0facd4a2d9f5defcd1c4a3080e22cb64587d16b64c8",
+      "git_blob_sha": "a9c0cd09b18a45dc77e143b6a5c87ec2b59c6b25"
+    },
+    {
+      "path": "scripts/run_settings_discovery_fenced.py",
+      "mode": "100644",
+      "bytes": 1091,
+      "sha256": "b7d77a39049ae78375d95b4aa60688a32b71f5bdd4703cedb2442638b81fe32f",
+      "git_blob_sha": "26e232290f1e94e1b7b20889fec93d34eb3349a6"
+    },
+    {
+      "path": "scripts/run_settings_discovery_fenced.sh",
+      "mode": "100644",
+      "bytes": 2400,
+      "sha256": "92ef4352de87ed50c3404498fb6ee10d1056fa408cbe042a8175438faab6877c",
+      "git_blob_sha": "5374d64bd6e9a513255963ed48cf2bc8b32da4db"
+    },
+    {
+      "path": "scripts/run_tv_platform_tests.sh",
+      "mode": "100644",
+      "bytes": 4959,
+      "sha256": "f3203857ddbeb08b716217871a332dce693c0721f5577342a7ed7f71301d5063",
+      "git_blob_sha": "0a6ff9b4c976b66ece531e7a7f3fa09fb6b92895"
+    },
+    {
+      "path": "scripts/run_vision_fenced_command.py",
+      "mode": "100644",
+      "bytes": 4264,
+      "sha256": "203e6ea7f9cb7c6fc1ae0482fdf1bd2c89b134dc95570b0af55d81a92f21a57d",
+      "git_blob_sha": "93bc45027c08cb347613929ebbf47f80655a6fb2"
+    },
+    {
+      "path": "scripts/run_vision_fenced_command.sh",
+      "mode": "100644",
+      "bytes": 2367,
+      "sha256": "a4d90dac81fac8912bbf2efd43c20d387c13130d1214d7fcecfeebeb12cb725d",
+      "git_blob_sha": "771e28ec8ec37bfbdd5afb1ed889c83250c8c5ee"
+    },
+    {
+      "path": "scripts/run_vision_ui_cases.py",
+      "mode": "100644",
+      "bytes": 5243,
+      "sha256": "033ec2675fcbd3420aa3a79f158e63212f9d2a36fdc129f06db880b710f7a36a",
+      "git_blob_sha": "8e9057ace1ef6f95927cba9631db95ac908f784e"
+    },
+    {
+      "path": "scripts/run_watch_platform_tests.py",
+      "mode": "100644",
+      "bytes": 7551,
+      "sha256": "8536bb8025d79fab31c95c057c0fa2f31a78191c60b382fc94f0627e5ca218b8",
+      "git_blob_sha": "819a174fae23bc53466620ce1711b04ea7b6eebb"
+    },
+    {
+      "path": "scripts/select_ios_platform_matrix.py",
+      "mode": "100644",
+      "bytes": 1561,
+      "sha256": "4f80d105f5bd9474e46ea2e908ae517a03a23a30278769d9f27b501344c65036",
+      "git_blob_sha": "6e1b984a75eabf0848aefe6a527e32a20c7286c1"
+    },
+    {
+      "path": "scripts/settings_build_provenance.py",
+      "mode": "100644",
+      "bytes": 8421,
+      "sha256": "1c6d4c0eabe566c5d9d83cc8197e12bb5fe330da2cb901bd1a3a8a6a1645950d",
+      "git_blob_sha": "55ff2ad08b34bea7b77042bc022f46ff4dea42bc"
+    },
+    {
+      "path": "scripts/settings_discovery_fence.py",
+      "mode": "100644",
+      "bytes": 14422,
+      "sha256": "97b4683242e3da525fa54f7d3e45c3f1ce9ff4b89fe0b14d1772ffb6f453f73a",
+      "git_blob_sha": "0cd2d7e123a5304da4316acfee2994f63951708b"
+    },
+    {
+      "path": "scripts/simulator_content_size.py",
+      "mode": "100644",
+      "bytes": 11524,
+      "sha256": "8c475c2e96b13d548bb660e8a1ed0f4b4c71fc11054c81e46819cb707aebda1d",
+      "git_blob_sha": "2192d2685ce77401fa4c4e9f6a2686dbf244ec5d"
+    },
+    {
+      "path": "scripts/stage_owned_import_fixture.py",
+      "mode": "100644",
+      "bytes": 1903,
+      "sha256": "44d6f5b937b367b7490b1b7a0cec5befd96d3bf6f6b868f5fa5134784fa02564",
+      "git_blob_sha": "1b10ea08d38dafcf79bd72dce3520f507757ad60"
+    },
+    {
+      "path": "scripts/summarize_vision_runtime_crash.py",
+      "mode": "100644",
+      "bytes": 1691,
+      "sha256": "288505405e117d3fc34033a536b5d303c6304fd71a506b099f6ab628e9c6654f",
+      "git_blob_sha": "04a535fb891abcca44f0eb6a75fefe77e432b47d"
+    },
+    {
+      "path": "scripts/validate_evidence_budget.py",
+      "mode": "100644",
+      "bytes": 3838,
+      "sha256": "2cc09c7cb570ac4501bc3694a33c9b302c70b17075f6b1c74b2fc3fa61c0b898",
+      "git_blob_sha": "00514de753fbaf4dca3f8d707fc7485ff747aa45"
+    },
+    {
+      "path": "scripts/verify_embedded_watch.py",
+      "mode": "100644",
+      "bytes": 5817,
+      "sha256": "88197cbd7dff8ed1c765bdae512cbe21314502b08125a4e8b9f4803c9cc548ee",
+      "git_blob_sha": "e55d6ab6bde96dcd85553d6c78456b894febdc94"
+    },
+    {
+      "path": "scripts/verify_ios_only_release.py",
+      "mode": "100644",
+      "bytes": 93794,
+      "sha256": "84c17737f8e50450417f5ead9f7018bd68838ea60c6e0e4174b07768d7d07bfb",
+      "git_blob_sha": "e7b8ef41a781246eeebca54e78396ad42e723cea"
+    },
+    {
+      "path": "scripts/verify_mac_icon.swift",
+      "mode": "100644",
+      "bytes": 1775,
+      "sha256": "3b7b6e9cba4f7af79af27b69fe588355680bef24d72d1901ae208486ff72d456",
+      "git_blob_sha": "4725de22c0098037a1d670b7ff15462b34d00255"
+    },
+    {
+      "path": "scripts/verify_mac_release.py",
+      "mode": "100644",
+      "bytes": 1906,
+      "sha256": "b11c3127cc676034c6aed56e222065ca8b075ff70b9ff93e5c5727eabd0c378e",
+      "git_blob_sha": "9a06c4b169a7f807f3cc6d250dd1b5db47e55f91"
+    },
+    {
+      "path": "scripts/verify_native_release.py",
+      "mode": "100644",
+      "bytes": 5624,
+      "sha256": "b8d2f057810b3f04922648699e421f4fc921054716cdcd786d8f00513eb864a7",
+      "git_blob_sha": "a5dcf10f2b87293dc61f1f8f27f543b2c335b3c6"
+    },
+    {
+      "path": "scripts/verify_portable_source.py",
+      "mode": "100644",
+      "bytes": 1379,
+      "sha256": "ea924f64eb312907d368823313f3107915d57e37695e07b262702b5c3b544e84",
+      "git_blob_sha": "9046d902c4107ea20ceaaac83dafe0aeb370618c"
+    },
+    {
+      "path": "scripts/verify_vision_export_pixels.swift",
+      "mode": "100644",
+      "bytes": 1160,
+      "sha256": "b38042e4fc30cbd763fd1076e3a1625badcef126a6f779ce804da9a4df61aaf6",
+      "git_blob_sha": "6b4cdd7293eb1269a12a29b5b819058c16f8ba04"
+    },
+    {
+      "path": "scripts/vision_case_contract.py",
+      "mode": "100644",
+      "bytes": 2490,
+      "sha256": "1f4608a3fb0ea648201f7d7d6833c9c0eb5ee94f16ae90eb16efd9aacb6586c1",
+      "git_blob_sha": "fa52720d5a3b2453048f215a630a6acbf6927456"
+    },
+    {
+      "path": "scripts/vision_command_fence.py",
+      "mode": "100644",
+      "bytes": 8898,
+      "sha256": "2cd5df0857da33502ba671aa217d8ef60796fe52badbfb9749b168782bfce722",
+      "git_blob_sha": "12c97ef1d3de92a67bbf9d69f9709c97ca14f283"
+    },
+    {
+      "path": "scripts/vision_failure_diagnostic.py",
+      "mode": "100644",
+      "bytes": 10915,
+      "sha256": "4e137246525d890de93428ef3a3f360823e7cde4741ea2ca4e1be714597d0729",
+      "git_blob_sha": "750b7c9b7914d35fc4b1c3a575e272efc64df7bb"
+    },
+    {
+      "path": "scripts/vision_runner_binding.py",
+      "mode": "100644",
+      "bytes": 10429,
+      "sha256": "d5d4bc53faa82a486bd169acb3c00ed0767914d023aa1c83ecab368507a273fe",
+      "git_blob_sha": "aa649c2272a76eaa785f7887981dab2a41562df3"
+    },
+    {
+      "path": "scripts/watch_process.py",
+      "mode": "100644",
+      "bytes": 2538,
+      "sha256": "607cabe0a86031e1e895422ae16c85c59efd4cee14171feef2a11509844f79a3",
+      "git_blob_sha": "684279bf4f568a0a3aba5496076d08d00120c134"
+    }
+  ]
+}

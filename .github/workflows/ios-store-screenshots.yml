@@ -1,0 +1,58 @@
+name: QRCatcher original native Store PNG candidates
+on:
+  push:
+    branches: [codex/store-screenshots]
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-store-screenshots
+  cancel-in-progress: false
+jobs:
+  capture:
+    name: Serial iPhone 17 Pro and 13-inch iPad original PNG capture
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+    steps:
+    - name: Start one source-bound shared clock
+      timeout-minutes: 1
+      shell: bash
+      run: |
+        python3 - <<'PYCLOCK'
+        import json, os, time
+        from pathlib import Path
+        value = {key: os.environ[key] for key in ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')}
+        value['started'] = time.monotonic()
+        with (Path(os.environ['RUNNER_TEMP']) / 'qrcatcher-store-clock.json').open('x') as out:
+            json.dump(value, out)
+            out.flush()
+            os.fsync(out.fileno())
+        PYCLOCK
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      timeout-minutes: 2
+      with:
+        persist-credentials: false
+        ref: ${{ github.sha }}
+        fetch-depth: 2
+    - name: Capture and retain each original PNG before proceeding
+      id: capture
+      timeout-minutes: 52
+      shell: bash
+      run: python3 -u scripts/store_capture.py run
+    - name: Verify bounded existing evidence without further native work
+      id: evidence
+      if: always()
+      timeout-minutes: 1
+      shell: bash
+      run: python3 scripts/store_capture.py upload-admission
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: ${{ always() && steps.evidence.outcome == 'success' }}
+      timeout-minutes: 1
+      with:
+        name: qrcatcher-store-native-png-${{ github.sha }}
+        path: ${{ runner.temp }}/qrcatcher-store-evidence/
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
