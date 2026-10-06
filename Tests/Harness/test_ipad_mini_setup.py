@@ -60,7 +60,7 @@ class Fixture:
         self.root=Path(self.tmp.name).resolve();(self.root/'build').mkdir();self.temp=self.root/'temp';self.temp.mkdir()
         self.clock=Clock(now);self.cwd=Path.cwd();self.environment=dict(os.environ)
         os.chdir(self.root)
-        for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','QRCATCHER_IOS_SUPPLEMENT_ONLY','MINI_SIMULATOR_ID']:os.environ.pop(key,None)
+        for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','QRCATCHER_IOS_SUPPLEMENT_ONLY','PHONE_COMPLETION_ONLY','MINI_SIMULATOR_ID']:os.environ.pop(key,None)
         os.environ.update(GITHUB_WORKSPACE=str(self.root),GITHUB_SHA=SHA,GITHUB_WORKFLOW_SHA=SHA,
             GITHUB_REPOSITORY='100mango/QRCatcher',GITHUB_REF='refs/heads/codex/apple-platforms',
             GITHUB_EVENT_NAME='push',EVIDENCE_SCOPE='ipad_mini',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',

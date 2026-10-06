@@ -15,7 +15,7 @@ import ios_original_release_route as ios_route
 def diagnostic(f):
     # This fixture owns the old diagnostic profile even when discovery runs
     # inside the new iOS-first CI job. Do not inherit its compiler-double input.
-    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','SYNTHETIC_IOS_PRODUCTS',ios_route.INITIAL_HASH_KEY):
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','PHONE_COMPLETION_ONLY','SYNTHETIC_IOS_PRODUCTS',ios_route.INITIAL_HASH_KEY):
         os.environ.pop(key,None)
     for name in [route.CANONICAL,route.WORKFLOW]:
         path=f.root/name;path.parent.mkdir(parents=True,exist_ok=True)

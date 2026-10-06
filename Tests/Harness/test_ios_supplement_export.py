@@ -44,7 +44,8 @@ class SupplementExportTests(unittest.TestCase):
    root=Path(name).resolve();before=Path.cwd()
    (root/'build').mkdir();(root/'scripts').mkdir()
    canonical=(ROOT/original.CANONICAL).read_text()
-   for path,text in ((original.CANONICAL,canonical),(original.WORKFLOW,original.render_workflow(canonical)),(route.WORKFLOW,route.render_workflow(canonical))):
+   workflow=route.render_workflow(canonical) if scope in route.PHONE_SCOPES else route.render_legacy_workflow(canonical)
+   for path,text in ((original.CANONICAL,canonical),(original.WORKFLOW,original.render_workflow(canonical)),(route.WORKFLOW,workflow)):
     target=root/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(text)
    shutil.copyfile(ROOT/'scripts/evidence-allocation.json',root/'scripts/evidence-allocation.json')
    env={'GITHUB_REPOSITORY':original.REPOSITORY,'GITHUB_SHA':SHA,'GITHUB_WORKFLOW_SHA':SHA,
@@ -54,6 +55,7 @@ class SupplementExportTests(unittest.TestCase):
     'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_WORKSPACE':str(root),'GITHUB_ENV':str(root/'env'),
     'QRCATCHER_OWNED_PROCESS_BARRIER':str(root/'build/owned-process-cleanup.json'),
     'SIMULATOR_ID':DEVICE,'COMPACT_SIMULATOR_ID':DEVICE,'IPAD_SIMULATOR_ID':DEVICE,'MINI_SIMULATOR_ID':DEVICE}
+   if scope in route.PHONE_SCOPES:env['PHONE_COMPLETION_ONLY']='true'
    with patch.dict(os.environ,env,clear=True):
     os.chdir(root)
     try:
@@ -128,6 +130,19 @@ class SupplementExportTests(unittest.TestCase):
    raw=json.dumps(value).encode();(root/original.RECEIPT).write_bytes(raw)
    os.environ[original.INITIAL_HASH_KEY]=hashlib.sha256(raw).hexdigest()
    with self.assertRaises(ValueError):self.run_exporter()
+
+ def test_current_phone_fixture_and_historical_four_scope_fixture_are_explicit(self):
+  for scope in route.SCOPES:
+   with self.subTest(scope=scope),self.fixture(scope) as root:
+    current=route.current_identity()
+    self.assertEqual(current['scope'],scope)
+    expected=list(route.PHONE_SCOPES) if scope in route.PHONE_SCOPES else list(route.SCOPES)
+    self.assertEqual(current['selected_scopes'],expected)
+    if scope in route.PHONE_SCOPES:
+     self.assertEqual(os.environ['PHONE_COMPLETION_ONLY'],'true')
+     with patch.dict(os.environ,{'PHONE_COMPLETION_ONLY':'false'}):
+      with self.assertRaises(ValueError):identity()
+    else:self.assertNotIn('PHONE_COMPLETION_ONLY',os.environ)
 
  def test_later_failed_seed_keeps_earlier_receipts_summaries_logs_and_no_requery(self):
   with self.fixture() as root:
@@ -295,6 +310,56 @@ class SupplementExportTests(unittest.TestCase):
    value=classify('ipad_mini','MiniUIResults-warmup',records,raw)
    self.assertTrue(value['acceptance']);self.assertEqual(value['native_outcome'],'Failed')
    self.assertFalse(value['full_original_row_qualification'])
+
+ def test_manual_browser_image_keeps_original_bytes_without_conversion_or_page_qualification(self):
+  for scope,stem,label in (('iphone_pro','PhoneUIResults','pro-max'),('iphone_se3','CompactPhoneUIResults','SE3')):
+   with self.subTest(scope=scope),self.fixture(scope) as root:
+    self.produce(root,stem,scope)
+    native=b'\xff\xd8'+b'original native full-screen pixels'*100
+    def runner(command,**kwargs):
+     self.assertEqual(command[:3],['xcrun','xcresulttool','export'])
+     folder=root/command[-1]
+     (folder/'manual.jpg').write_bytes(native)
+     (folder/'manifest.json').write_text(json.dumps([{'name':'privacy-browser-manual-review','exportedFileName':'manual.jpg'}]))
+     return subprocess.CompletedProcess(command,0,'','')
+    self.run_exporter(runner)
+    value=json.loads((root/'build/ios-platform-evidence/manifest.json').read_text())
+    image=value['screenshots'][0]
+    self.assertEqual((root/'build/ios-platform-evidence'/image['name']).read_bytes(),native)
+    self.assertEqual(image['result_label'],label);self.assertEqual(image['bytes'],len(native))
+    self.assertTrue(image['source_bytes_preserved']);self.assertTrue(image['manual_review_required'])
+    self.assertFalse(image['automatic_page_qualification']);self.assertEqual(image['runtime_precise_url'],'UNKNOWN')
+
+ def test_fresh_vm_first_summary_mapping_keeps_later_ten_and_rejects_historical_timed_out_bytes(self):
+  inventory={'iphone_pro':{'iOSUnitResults':30,'PhoneUIResults':10,'PhoneUIResults-files':10,'PhoneUIResults-imports':10},
+             'iphone_se3':{'CompactPhoneUIResults':30,'CompactPhoneUIResults-files':10,'CompactPhoneUIResults-imports':10},
+             'ipad_pro':{'PadUIResults-layout':30,'PadUIResults-files':10,'PadUIResults':10},
+             'ipad_mini':{'MiniUIResults-warmup':30,'MiniUIResults':10}}
+  for scope,stems in inventory.items():
+   with self.subTest(scope=scope),self.fixture(scope) as root:
+    for stem,cap in stems.items():self.assertEqual(contract(scope,stem)['summary_cap'],cap)
+  with self.fixture('iphone_se3') as root:
+   records,raw=self.produce(root,'CompactPhoneUIResults','iphone_se3')
+   records['CompactPhoneUIResults-summary-command.json'].update(timeout_seconds=10,state='timed_out',exit=124,elapsed_seconds=10.05)
+   value=classify('iphone_se3','CompactPhoneUIResults',records,raw)
+   self.assertFalse(value['acceptance']);self.assertEqual(value['summary_command'],'unqualified')
+   self.assertEqual(value['native_summary'],'retained_unqualified')
+
+ def test_manual_browser_image_rejects_wrong_stage_scope_type_and_source_cap(self):
+  variants=(('iphone_se3','CompactPhoneUIResults-files',b'\xff\xd8valid'),
+            ('ipad_mini','MiniUIResults-warmup',b'\xff\xd8valid'),
+            ('iphone_se3','CompactPhoneUIResults',b'not JPEG'),
+            ('iphone_se3','CompactPhoneUIResults',b'\xff\xd8'+b'x'*(500*1024)))
+  for scope,stem,data in variants:
+   with self.subTest(scope=scope,stem=stem,size=len(data)),self.fixture(scope) as root:
+    self.produce(root,stem,scope)
+    def runner(command,**kwargs):
+     self.assertEqual(command[:3],['xcrun','xcresulttool','export'])
+     folder=root/command[-1];(folder/'manual.jpg').write_bytes(data)
+     (folder/'manifest.json').write_text(json.dumps([{'name':'privacy-browser-manual-review','exportedFileName':'manual.jpg'}]))
+     return subprocess.CompletedProcess(command,0,'','')
+    with self.assertRaises(ValueError):self.run_exporter(runner)
+    self.assertFalse(list((root/'build/ios-platform-evidence').glob('*privacy-browser-manual-review*.jpg')))
 
  def test_exact_healthy_mini_host_export_lease_permits_only_its_bounded_read_only_export(self):
   with self.fixture() as root:

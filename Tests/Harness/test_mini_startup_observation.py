@@ -411,8 +411,12 @@ __weak id releaseValue; __block BOOL releaseFlag;
                     # closed selected-case extension separately. The existing
                     # source restorer proves every old branch byte-for-byte.
                     self.assertEqual(expected, 'f9f20c8973db08820fe2d366f3d72ffa3618fb373fe606a2a6ecdbbc4d562f06')
+                    # Public15f parent:90b9dd6ac52b28363cfda844f25501b68713b438581ea9d84d9e4b3d719ee60b.
+                    # The reviewed first-reader component changes only the
+                    # stripped supplemental helper; every old branch is still
+                    # restored to the exact historical hash below.
                     self.assertEqual(hashlib.sha256(data).hexdigest(),
-                        '90b9dd6ac52b28363cfda844f25501b68713b438581ea9d84d9e4b3d719ee60b')
+                        '966f8993caf06f32e36a36251e98ba9fbff95cf2f893c2d561df4e683db89a58')
                     from test_ipad_mini_setup import MiniSetupTests
                     MiniSetupTests('test_nonmini_selector_and_launcher_body_byte_equivalence').test_nonmini_selector_and_launcher_body_byte_equivalence()
                 else:

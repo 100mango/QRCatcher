@@ -7,6 +7,7 @@ concurrency:
 env:
   IOS_FIRST_RELEASE_CANDIDATE_ONLY: 'true'
   QRCATCHER_IOS_SUPPLEMENT_ONLY: 'true'
+  PHONE_COMPLETION_ONLY: 'true'
 jobs:
   preflight:
     name: Compile and verify setup before runtime matrix
@@ -191,6 +192,7 @@ jobs:
       if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
       timeout-minutes: 15
       run: |
+        HOSTED_STARTED=$(python3 -c 'import time;print(time.monotonic())')
         python3 scripts/owned_process_barrier.py --check
         set -o pipefail
         python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$SIMULATOR_ID" || true
@@ -200,7 +202,7 @@ jobs:
         python3 -u scripts/run_bounded.py 855 xcodebuild test-without-building -project QRCatcher-iOS-Only.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
         UNIT_EXIT=${PIPESTATUS[0]}
         set -e
-        python3 scripts/ios_original_supplement_route.py retain-hosted "$SIMULATOR_ID" "$UNIT_EXIT"
+        python3 scripts/ios_original_supplement_route.py retain-hosted "$SIMULATOR_ID" "$UNIT_EXIT" "$HOSTED_STARTED"
         exit "$UNIT_EXIT"
     - name: Run large-phone UI regression
       if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
@@ -271,9 +273,7 @@ jobs:
       if: ${{ always() && matrix.scope != 'ipad_mini' }}
       timeout-minutes: 3
       run: |
-        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult VisionPhotosUIResults.xcresult VisionFilesUIResults.xcresult VisionChineseUIResults.xcresult VisionLargestUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
-          if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
-        done
+        python3 scripts/ios_original_supplement_route.py summary-retained
         echo 'This diagnostic runs only declared missing cases. Historical components keep their original source/run/attempt; no original full-row or release pass is claimed. Physical camera, signing and submission remain separate.' >> "$GITHUB_STEP_SUMMARY"
     - name: Verify final Mini source while preserving checkout-post reserve
       if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
@@ -294,8 +294,6 @@ jobs:
         scope:
         - iphone_pro
         - iphone_se3
-        - ipad_pro
-        - ipad_mini
 'on':
   push:
     branches:

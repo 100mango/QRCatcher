@@ -26,11 +26,15 @@ static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, B
     return browserState == XCUIApplicationStateRunningForeground && exists &&
         QRPrivacyFiniteNonemptyRect(frame) && hittable;
 }
+static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInteger bytes) {
+    return width > 0 && height > 0 && bytes > 0 && bytes <= 500 * 1024;
+}
 @interface QRCatcherUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, strong) id cameraMonitor;
 @property (nonatomic) BOOL privacyBrowserObservationLate;
+@property (nonatomic) BOOL privacyBrowserCaptureUnknown;
 - (void)assertChineseHistoryResultKeepsCompletePayloadAndRepeatedCancel;
 - (void)assertOfflinePrivacyForChinese:(BOOL)Chinese;
 @end
@@ -41,10 +45,11 @@ static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, B
     self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
     self.app = [XCUIApplication new];
     self.privacyBrowserObservationLate = NO;
+    self.privacyBrowserCaptureUnknown = NO;
 }
 - (void)tearDown {
-    if (self.privacyBrowserObservationLate) {
-        // A late public AX return leaves the handoff UNKNOWN. Stop all further
+    if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {
+        // A late observation or unavailable capture leaves the handoff UNKNOWN. Stop all further
         // test-authored AX reads/device actions while preserving XCTest cleanup.
         [super tearDown];
         if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];
@@ -240,10 +245,13 @@ static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, B
     XCTAssertTrue(externalPolicy.hittable);
     [self.app.buttons[@"privacy.externalPolicy"] tap];
     NSTimeInterval handoffStarted = NSProcessInfo.processInfo.systemUptime;
-    NSMutableDictionary *windowReceipt = [@{@"version": @1, @"owner": @"com.apple.mobilesafari",
-        @"query": @"windows.firstMatch", @"status": @"UNKNOWN", @"runtime_precise_url": @"UNKNOWN",
-        @"browser_raw": NSNull.null, @"window_exists": NSNull.null,
-        @"window_frame": NSNull.null, @"window_hittable": NSNull.null} mutableCopy];
+    NSMutableDictionary *manualReceipt = [@{@"version": @1, @"owner": @"com.apple.mobilesafari",
+        @"source": @"XCUIScreen.mainScreen", @"status": @"UNKNOWN", @"runtime_precise_url": @"UNKNOWN",
+        @"manual_review_required": [NSNumber numberWithBool:YES],
+        @"automatic_page_qualification": [NSNumber numberWithBool:NO],
+        @"browser_raw": NSNull.null, @"capture_attempts": @0,
+        @"native_width": NSNull.null, @"native_height": NSNull.null,
+        @"source_bytes": NSNull.null, @"attachment_name": @"privacy-browser-manual-review"} mutableCopy];
     BOOL (^timely)(void) = ^BOOL {
         if (self.privacyBrowserObservationLate) return NO;
         BOOL valid = QRPrivacyObservationTimely(handoffStarted, NSProcessInfo.processInfo.systemUptime);
@@ -255,41 +263,45 @@ static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, B
         if (!timely()) return NO;
         XCUIApplicationState browserState = browser.state;
         if (!timely()) return NO;
-        XCUIApplicationState appState = self.app.state;
-        if (!timely()) return NO;
         if (statePairs.count < 12) {
-            [statePairs addObject:@{@"browser_raw": @(browserState), @"qr_raw": @(appState),
-                @"browser_kind": QRObservedApplicationStateName(browserState),
-                @"qr_kind": QRObservedApplicationStateName(appState)}];
+            [statePairs addObject:@{@"browser_raw": @(browserState),
+                @"browser_kind": QRObservedApplicationStateName(browserState)}];
         } else {
             samplesOmitted = YES;
         }
-        windowReceipt[@"browser_raw"] = @(browserState);
-        windowReceipt[@"window_exists"] = NSNull.null;
-        windowReceipt[@"window_frame"] = NSNull.null;
-        windowReceipt[@"window_hittable"] = NSNull.null;
-        if (browserState != XCUIApplicationStateRunningForeground) return NO;
-        XCUIElementQuery *windows = browser.windows;
-        if (!timely()) return NO;
-        XCUIElement *window = windows.firstMatch;
-        if (!timely()) return NO;
-        BOOL windowExists = window.exists;
-        windowReceipt[@"window_exists"] = [NSNumber numberWithBool:windowExists];
-        if (!timely() || !windowExists) return NO;
-        CGRect windowFrame = window.frame;
-        BOOL finiteFrame = QRPrivacyFiniteNonemptyRect(windowFrame);
-        windowReceipt[@"window_frame"] = finiteFrame ? (id)@[@(windowFrame.origin.x), @(windowFrame.origin.y),
-            @(windowFrame.size.width), @(windowFrame.size.height)] : (id)NSNull.null;
-        if (!timely() || !finiteFrame) return NO;
-        BOOL windowHittable = window.hittable;
-        windowReceipt[@"window_hittable"] = [NSNumber numberWithBool:windowHittable];
-        if (!timely()) return NO;
-        // Public hittable proves current on-screen visibility and lack of
-        // occlusion. QR state pairs remain diagnostics and never require background.
-        return QRPrivacyBrowserWindowQualifies(browserState, windowExists, windowFrame, windowHittable);
+        manualReceipt[@"browser_raw"] = @(browserState);
+        return browserState == XCUIApplicationStateRunningForeground;
     }];
     XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];
     XCTWaiterResult handoff = [XCTWaiter waitForExpectations:@[openedOutside] timeout:10];
+    if (!timely()) handoff = XCTWaiterResultTimedOut;
+    BOOL captureRetained = NO;
+    if (handoff == XCTWaiterResultCompleted && timely()) {
+        manualReceipt[@"capture_attempts"] = @1;
+        // The sole native full-screen acquisition shares the original deadline.
+        // Its pixels require manual page review; no Safari AX selector follows.
+        @try {
+            UIImage *image = XCUIScreen.mainScreen.screenshot.image;
+            if (timely() && image.CGImage) {
+                size_t width = CGImageGetWidth(image.CGImage);
+                size_t height = CGImageGetHeight(image.CGImage);
+                NSData *JPEG = UIImageJPEGRepresentation(image, 0.55);
+                if (timely() && QRPrivacyManualCaptureRetainable(width, height, JPEG.length)) {
+                    manualReceipt[@"native_width"] = @(width);
+                    manualReceipt[@"native_height"] = @(height);
+                    manualReceipt[@"source_bytes"] = @(JPEG.length);
+                    XCTAttachment *attachment = [XCTAttachment attachmentWithData:JPEG uniformTypeIdentifier:@"public.jpeg"];
+                    attachment.name = @"privacy-browser-manual-review";
+                    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+                    [self addAttachment:attachment];
+                    captureRetained = timely();
+                }
+            }
+        } @catch (NSException *exception) {
+            (void)exception;
+        }
+    }
+    if (!captureRetained) self.privacyBrowserCaptureUnknown = YES;
     if (!timely()) handoff = XCTWaiterResultTimedOut;
     NSDictionary *stateTrace = @{@"version": @1, @"samples": statePairs,
         @"samples_omitted": [NSNumber numberWithBool:samplesOmitted],
@@ -300,16 +312,18 @@ static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, B
     } else {
         NSLog(@"PRIVACY_BROWSER_STATE_PAIRS:UNKNOWN bounded serialization unavailable");
     }
-    windowReceipt[@"status"] = handoff == XCTWaiterResultCompleted ? @"visible_hittable_window" : @"UNKNOWN";
-    windowReceipt[@"late_return"] = [NSNumber numberWithBool:self.privacyBrowserObservationLate];
-    NSData *windowData = [NSJSONSerialization dataWithJSONObject:windowReceipt options:0 error:nil];
-    if (windowData && windowData.length <= 1024) {
-        NSLog(@"PRIVACY_BROWSER_WINDOW_RECEIPT:%@", [[NSString alloc] initWithData:windowData encoding:NSUTF8StringEncoding]);
+    manualReceipt[@"status"] = handoff == XCTWaiterResultCompleted && captureRetained ? @"manual_review_required" : @"UNKNOWN";
+    manualReceipt[@"late_return"] = [NSNumber numberWithBool:self.privacyBrowserObservationLate];
+    manualReceipt[@"capture_unknown"] = [NSNumber numberWithBool:self.privacyBrowserCaptureUnknown];
+    NSData *manualData = [NSJSONSerialization dataWithJSONObject:manualReceipt options:0 error:nil];
+    if (manualData && manualData.length <= 1024) {
+        NSLog(@"PRIVACY_BROWSER_MANUAL_RECEIPT:%@", [[NSString alloc] initWithData:manualData encoding:NSUTF8StringEncoding]);
     } else {
-        NSLog(@"PRIVACY_BROWSER_WINDOW_RECEIPT:UNKNOWN bounded serialization unavailable");
+        NSLog(@"PRIVACY_BROWSER_MANUAL_RECEIPT:UNKNOWN bounded serialization unavailable");
     }
     XCTAssertEqual(handoff, XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");
-    if (handoff != XCTWaiterResultCompleted) return;
+    XCTAssertTrue(captureRetained, @"The native browser screenshot must be retained within the same deadline for manual page review.");
+    if (handoff != XCTWaiterResultCompleted || !captureRetained) return;
     [self.app activate];
     XCTAssertTrue([done waitForExistenceWithTimeout:10]);
     [self assertOfflinePrivacyForChinese:NO];

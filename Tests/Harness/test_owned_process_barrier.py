@@ -14,7 +14,7 @@ class OwnedBarrierTests(unittest.TestCase):
         # canonical owned root for both values; the production guard stays exact.
         folder=folder.resolve()
         fixture=dict(os.environ,GITHUB_WORKSPACE=str(folder),GITHUB_ENV=str(folder/'github-env'),QRCATCHER_OWNED_PROCESS_BARRIER=str(folder/'build/owned-process-cleanup.json'),GITHUB_REF='refs/heads/codex/apple-platforms')
-        for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','EVIDENCE_SCOPE'):
+        for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','PHONE_COMPLETION_ONLY','EVIDENCE_SCOPE'):
             fixture.pop(key,None)
         return fixture
     def test_fixture_root_canonicalizes_system_temp_directory_aliases(self):

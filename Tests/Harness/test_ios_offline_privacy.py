@@ -89,52 +89,68 @@ def browser_observation_contract(source):
     start = case.index('NSPredicate *browserForeground =')
     end = case.index('    }];', start)
     predicate = case[start:end]
-    getters = ('browser.state', 'self.app.state', 'browser.windows', 'windows.firstMatch',
-               'window.exists', 'window.frame', 'window.hittable')
-    positions = []
-    for getter in getters:
-        if predicate.count(getter) != 1:
-            raise ValueError('Each poll must read the same Safari owner and single public getters')
-        positions.append(predicate.index(getter))
-    if positions != sorted(positions):
-        raise ValueError('Changed browser/window observation order')
-    boundaries = [0] + positions + [len(predicate)]
-    for begin, finish in zip(boundaries, boundaries[1:]):
-        if 'if (!timely()' not in predicate[begin:finish]:
-            raise ValueError('Missing shared deadline between or after returned public getters')
+    getter = 'browser.state'
+    if predicate.count(getter) != 1:
+        raise ValueError('Each poll must read only the same public Safari state once')
+    before, after = predicate.split(getter)
+    if 'if (!timely()) return NO;' not in before or 'if (!timely()) return NO;' not in after:
+        raise ValueError('Missing shared deadline around the returned public state')
     required = ('XCUIApplicationState browserState = browser.state;',
-                'XCUIApplicationState appState = self.app.state;',
                 'if (statePairs.count < 12)', 'samplesOmitted = YES;',
-                'if (browserState != XCUIApplicationStateRunningForeground) return NO;',
-                'XCUIElementQuery *windows = browser.windows;',
-                'XCUIElement *window = windows.firstMatch;',
-                'if (!timely() || !windowExists) return NO;',
-                'if (!timely() || !finiteFrame) return NO;',
-                'return QRPrivacyBrowserWindowQualifies(browserState, windowExists, windowFrame, windowHittable);')
+                'return browserState == XCUIApplicationStateRunningForeground;')
     if any(token not in predicate for token in required):
-        raise ValueError('Missing Safari foreground and visible hittable owned window')
-    if (re.search(r'appState\s*(?:==|!=)', predicate) or
-            any(token in predicate for token in ('debugDescription', 'waitForExistence', 'screenshot',
-                                                  'matchingIdentifier:', 'matchingPredicate:', 'activate', 'launch'))):
-        raise ValueError('QR state cannot qualify handoff or an unobserved identifier define its window')
+        raise ValueError('Missing Safari foreground observation and bounded state diagnostics')
+    observation = case[case.index('    NSTimeInterval handoffStarted ='):case.index('    [self.app activate];')]
+    if any(token in observation for token in ('self.app.state', 'browser.windows', 'window.',
+                                              'debugDescription', 'waitForExistence', 'matchingIdentifier:',
+                                              'matchingPredicate:', '[browser activate]', '[browser launch]')):
+        raise ValueError('Manual review cannot add Safari AX selectors or another app state requirement')
+    if case.count('XCUIScreen.mainScreen.screenshot.image') != 1:
+        raise ValueError('Manual browser review requires exactly one native full-screen acquisition')
+    capture_start = case.index('    BOOL captureRetained = NO;')
+    capture_end = case.index('    NSDictionary *stateTrace =', capture_start)
+    capture = case[capture_start:capture_end]
+    for token in ('if (handoff == XCTWaiterResultCompleted && timely())',
+                  'manualReceipt[@"capture_attempts"] = @1;',
+                  'UIImage *image = XCUIScreen.mainScreen.screenshot.image;',
+                  'if (timely() && image.CGImage)',
+                  'size_t width = CGImageGetWidth(image.CGImage);',
+                  'size_t height = CGImageGetHeight(image.CGImage);',
+                  'NSData *JPEG = UIImageJPEGRepresentation(image, 0.55);',
+                  'if (timely() && QRPrivacyManualCaptureRetainable(width, height, JPEG.length))',
+                  'manualReceipt[@"native_width"] = @(width);',
+                  'manualReceipt[@"native_height"] = @(height);',
+                  'manualReceipt[@"source_bytes"] = @(JPEG.length);',
+                  '[XCTAttachment attachmentWithData:JPEG uniformTypeIdentifier:@"public.jpeg"]',
+                  'attachment.name = @"privacy-browser-manual-review";',
+                  'attachment.lifetime = XCTAttachmentLifetimeKeepAlways;',
+                  '[self addAttachment:attachment];', 'captureRetained = timely();',
+                  '@catch (NSException *exception)',
+                  'if (!captureRetained) self.privacyBrowserCaptureUnknown = YES;',
+                  'if (!timely()) handoff = XCTWaiterResultTimedOut;'):
+        if token not in capture:
+            raise ValueError('Missing native unscaled bounded capture or fail-closed deadline clause')
     for token in ('NSTimeInterval handoffStarted = NSProcessInfo.processInfo.systemUptime;',
                   'QRPrivacyObservationTimely(handoffStarted, NSProcessInfo.processInfo.systemUptime)',
                   'if (self.privacyBrowserObservationLate) return NO;',
                   'if (!valid) self.privacyBrowserObservationLate = YES;',
                   'XCTWaiterResult handoff = [XCTWaiter waitForExpectations:@[openedOutside] timeout:10];',
-                  'if (!timely()) handoff = XCTWaiterResultTimedOut;',
                   'XCTAssertEqual(handoff, XCTWaiterResultCompleted,',
-                  'if (handoff != XCTWaiterResultCompleted) return;',
-                  'stateTraceData.length <= 2048', 'windowData.length <= 1024',
+                  'XCTAssertTrue(captureRetained,',
+                  'if (handoff != XCTWaiterResultCompleted || !captureRetained) return;',
+                  'stateTraceData.length <= 2048', 'manualData.length <= 1024',
                   '@"samples_omitted": [NSNumber numberWithBool:samplesOmitted]',
                   '@"observations_qualify_pass": [NSNumber numberWithBool:NO]',
+                  '@"manual_review_required": [NSNumber numberWithBool:YES]',
+                  '@"automatic_page_qualification": [NSNumber numberWithBool:NO]',
                   '@"runtime_precise_url": @"UNKNOWN"',
+                  'manualReceipt[@"status"] = handoff == XCTWaiterResultCompleted && captureRetained ? @"manual_review_required" : @"UNKNOWN";',
                   'PRIVACY_BROWSER_STATE_PAIRS:UNKNOWN bounded serialization unavailable',
-                  'PRIVACY_BROWSER_WINDOW_RECEIPT:UNKNOWN bounded serialization unavailable'):
+                  'PRIVACY_BROWSER_MANUAL_RECEIPT:UNKNOWN bounded serialization unavailable'):
         if token not in case:
-            raise ValueError('Missing unchanged deadline, failure guard or bounded honest diagnostic')
+            raise ValueError('Missing unchanged deadline, failure guard or bounded honest manual receipt')
     if (case.index('PRIVACY_BROWSER_STATE_PAIRS:%@') >= case.index('XCTAssertEqual(handoff,') or
-            case.index('PRIVACY_BROWSER_WINDOW_RECEIPT:%@') >= case.index('XCTAssertEqual(handoff,')):
+            case.index('PRIVACY_BROWSER_MANUAL_RECEIPT:%@') >= case.index('XCTAssertEqual(handoff,')):
         raise ValueError('Failed assertion must retain the bounded observations')
     tail = case[case.index('    [self.app activate];'):]
     if hashlib.sha256(tail.encode()).hexdigest() != '9c787ede9aa255b2536f03c0097c7c56d9e7d01e47d7ea7278790736d0c76752':
@@ -143,9 +159,9 @@ def browser_observation_contract(source):
 
 
 
-PHONE_READINESS_HELPER_SHA256 = 'fcee58209cfbcaa5a160e9bfb611a39d437e55c96957faf5f3937b35662db871'
-PHONE_READINESS_METHOD_REPLACEMENTS = [{'selector': 'assertOfflinePrivacyForChinese:', 'new_sha256': '34c1011eedb5350d313dcbf599840f2559b70275e962f09d0032c6ecb951db43', 'old': '- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese {\n    XCUIElementQuery *bodies = [self.app.staticTexts matchingIdentifier:@"privacy.body"];\n    XCUIElement *body = bodies.firstMatch;\n    XCTAssertTrue([body waitForExistenceWithTimeout:5]);\n    XCTAssertEqual(bodies.count, 1);\n    NSString *approved = Chinese ? @"Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片、相机画面、二维码或颜色数据，开发者不收集或上传这些数据。用户主动分享、打开链接，以及系统 iCloud 同步等行为由相应服务处理。如有隐私问题，请联系 100mango@gmail.com。本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。" : @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";\n    XCTAssertEqualObjects(body.label, approved);\n    XCTAssertEqual(self.app.webViews.count, 0, @"The default local policy must not create a web document.");\n    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);\n    XCUIElement *content = self.app.scrollViews[@"privacy.content"];\n    XCUIElement *actions = self.app.scrollViews[@"privacy.actionScroll"];\n    CGRect viewport = CGRectIntersection(self.app.frame, content.frame);\n    XCTAssertFalse(CGRectIsEmpty(viewport));\n    XCTAssertGreaterThan(CGRectGetHeight(body.frame), 0);\n    XCTAssertGreaterThan(CGRectGetWidth(body.frame), 0);\n    XCTAssertGreaterThanOrEqual(CGRectGetMinX(body.frame), CGRectGetMinX(viewport));\n    XCTAssertLessThanOrEqual(CGRectGetMaxX(body.frame), CGRectGetMaxX(viewport));\n    CGRect beginning = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMinY(body.frame), CGRectGetWidth(body.frame), MIN(20, CGRectGetHeight(body.frame)));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"The approved text must begin visibly in the real scroll pane.");\n    XCUIElement *external = self.app.buttons[@"privacy.externalPolicy"];\n    XCTAssertEqualObjects(external.label, Chinese ? @"在浏览器打开" : @"Open in Browser");\n    for (NSUInteger attempt = 0; attempt < 2; attempt++) {\n        if (external.hittable && CGRectContainsRect(actions.frame, external.frame)) break;\n        [actions swipeUp];\n    }\n    XCTAssertTrue(external.hittable);\n    XCTAssertTrue(CGRectContainsRect(actions.frame, external.frame));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"Action scrolling must preserve the visible local text.");\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.close"].hittable);\n    NSError *error = nil;\n    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"Offline privacy accessibility audit: %@", error);\n}\n'}, {'selector': 'testDeniedCameraAndEmptyHistory', 'new_sha256': '37044d3c5156766fd0e64cd43276248aae2071de4226fd3a34c619539d5cea16', 'old': '- (void)testDeniedCameraAndEmptyHistory {\n    [self launch:@[@"-reset-history", @"-camera-denied"]];\n    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);\n    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);\n    XCUIElement *privacy = self.app.navigationBars.buttons[@"privacy.policy"];\n    XCTAssertTrue(privacy.hittable);\n    XCTAssertEqualObjects(privacy.label, @"Privacy Policy");\n    [privacy tap];\n    XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];\n    XCTAssertTrue([done waitForExistenceWithTimeout:15]);\n    [self assertOfflinePrivacyForChinese:NO];\n    NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);\n    [self logSyntheticScreenshot:@"privacy-open-diagnostic"];\n    [self.app.buttons[@"privacy.externalPolicy"] tap];\n    XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];\n    NSPredicate *browserForeground = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {\n        (void)object; (void)bindings;\n        return browser.state == XCUIApplicationStateRunningForeground &&\n            (self.app.state == XCUIApplicationStateRunningBackground || self.app.state == XCUIApplicationStateRunningBackgroundSuspended);\n    }];\n    XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];\n    XCTAssertEqual([XCTWaiter waitForExpectations:@[openedOutside] timeout:10], XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");\n    [self.app activate];\n    XCTAssertTrue([done waitForExistenceWithTimeout:10]);\n    [self assertOfflinePrivacyForChinese:NO];\n    [done tap];\n    BOOL returnedToScanner = [self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5];\n    if (!returnedToScanner) {\n        NSLog(@"PRIVACY_RETURN_UI:%@", self.app.debugDescription);\n        [self logSyntheticScreenshot:@"privacy-return-diagnostic"];\n    }\n    XCTAssertTrue(returnedToScanner);\n    [self.app.tabBars.buttons[@"history.tab"] tap];\n    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);\n    [self.app.tabBars.buttons[@"scan.tab"] tap];\n    XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);\n}\n'}]
-PHONE_BROWSER_WINDOW_BLOCKS = [{'name': 'import', 'new': '#import <math.h>\n', 'sha256': '96a4cc35888f13a108e3f9ca0c7b42699961ebd9910b2ffac58b8fb3485840a2'}, {'name': 'property', 'new': '@property (nonatomic) BOOL privacyBrowserObservationLate;\n', 'sha256': '1acb5aa2f52f3148de6da70e539e4a0c21b7dfaf36b7dd5243fe337ad47fd58f'}, {'name': 'setup', 'new': '    self.privacyBrowserObservationLate = NO;\n', 'sha256': '27a2c4b04c437d82ee00ff82e50fde6fc937e6aee8d5e6b2d444e140e4225404'}, {'name': 'late_guard', 'new': '    if (self.privacyBrowserObservationLate) {\n        // A late public AX return leaves the handoff UNKNOWN. Stop all further\n        // test-authored AX reads/device actions while preserving XCTest cleanup.\n        [super tearDown];\n        if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': 'd5f27d4d56807290b70c0c66023a512e56cb851a6067c2312aa24b8a4c215d9a'}]
+PHONE_READINESS_HELPER_SHA256 = '8a6ab80d971daa1be51f0201103ddc22bc96152bf402139281d6a886cee73f0b'
+PHONE_READINESS_METHOD_REPLACEMENTS = [{'selector': 'assertOfflinePrivacyForChinese:', 'new_sha256': '34c1011eedb5350d313dcbf599840f2559b70275e962f09d0032c6ecb951db43', 'old': '- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese {\n    XCUIElementQuery *bodies = [self.app.staticTexts matchingIdentifier:@"privacy.body"];\n    XCUIElement *body = bodies.firstMatch;\n    XCTAssertTrue([body waitForExistenceWithTimeout:5]);\n    XCTAssertEqual(bodies.count, 1);\n    NSString *approved = Chinese ? @"Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片、相机画面、二维码或颜色数据，开发者不收集或上传这些数据。用户主动分享、打开链接，以及系统 iCloud 同步等行为由相应服务处理。如有隐私问题，请联系 100mango@gmail.com。本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。" : @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";\n    XCTAssertEqualObjects(body.label, approved);\n    XCTAssertEqual(self.app.webViews.count, 0, @"The default local policy must not create a web document.");\n    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);\n    XCUIElement *content = self.app.scrollViews[@"privacy.content"];\n    XCUIElement *actions = self.app.scrollViews[@"privacy.actionScroll"];\n    CGRect viewport = CGRectIntersection(self.app.frame, content.frame);\n    XCTAssertFalse(CGRectIsEmpty(viewport));\n    XCTAssertGreaterThan(CGRectGetHeight(body.frame), 0);\n    XCTAssertGreaterThan(CGRectGetWidth(body.frame), 0);\n    XCTAssertGreaterThanOrEqual(CGRectGetMinX(body.frame), CGRectGetMinX(viewport));\n    XCTAssertLessThanOrEqual(CGRectGetMaxX(body.frame), CGRectGetMaxX(viewport));\n    CGRect beginning = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMinY(body.frame), CGRectGetWidth(body.frame), MIN(20, CGRectGetHeight(body.frame)));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"The approved text must begin visibly in the real scroll pane.");\n    XCUIElement *external = self.app.buttons[@"privacy.externalPolicy"];\n    XCTAssertEqualObjects(external.label, Chinese ? @"在浏览器打开" : @"Open in Browser");\n    for (NSUInteger attempt = 0; attempt < 2; attempt++) {\n        if (external.hittable && CGRectContainsRect(actions.frame, external.frame)) break;\n        [actions swipeUp];\n    }\n    XCTAssertTrue(external.hittable);\n    XCTAssertTrue(CGRectContainsRect(actions.frame, external.frame));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"Action scrolling must preserve the visible local text.");\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.close"].hittable);\n    NSError *error = nil;\n    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"Offline privacy accessibility audit: %@", error);\n}\n'}, {'selector': 'testDeniedCameraAndEmptyHistory', 'new_sha256': 'bd1f1b1b9245d41a7a05e0f1c8b1efa225705397ed5135e7d121ca70b1c1c1ba', 'old': '- (void)testDeniedCameraAndEmptyHistory {\n    [self launch:@[@"-reset-history", @"-camera-denied"]];\n    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);\n    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);\n    XCUIElement *privacy = self.app.navigationBars.buttons[@"privacy.policy"];\n    XCTAssertTrue(privacy.hittable);\n    XCTAssertEqualObjects(privacy.label, @"Privacy Policy");\n    [privacy tap];\n    XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];\n    XCTAssertTrue([done waitForExistenceWithTimeout:15]);\n    [self assertOfflinePrivacyForChinese:NO];\n    NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);\n    [self logSyntheticScreenshot:@"privacy-open-diagnostic"];\n    [self.app.buttons[@"privacy.externalPolicy"] tap];\n    XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];\n    NSPredicate *browserForeground = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {\n        (void)object; (void)bindings;\n        return browser.state == XCUIApplicationStateRunningForeground &&\n            (self.app.state == XCUIApplicationStateRunningBackground || self.app.state == XCUIApplicationStateRunningBackgroundSuspended);\n    }];\n    XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];\n    XCTAssertEqual([XCTWaiter waitForExpectations:@[openedOutside] timeout:10], XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");\n    [self.app activate];\n    XCTAssertTrue([done waitForExistenceWithTimeout:10]);\n    [self assertOfflinePrivacyForChinese:NO];\n    [done tap];\n    BOOL returnedToScanner = [self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5];\n    if (!returnedToScanner) {\n        NSLog(@"PRIVACY_RETURN_UI:%@", self.app.debugDescription);\n        [self logSyntheticScreenshot:@"privacy-return-diagnostic"];\n    }\n    XCTAssertTrue(returnedToScanner);\n    [self.app.tabBars.buttons[@"history.tab"] tap];\n    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);\n    [self.app.tabBars.buttons[@"scan.tab"] tap];\n    XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);\n}\n'}]
+PHONE_BROWSER_WINDOW_BLOCKS = [{'name': 'import', 'new': '#import <math.h>\n', 'sha256': '96a4cc35888f13a108e3f9ca0c7b42699961ebd9910b2ffac58b8fb3485840a2'}, {'name': 'property', 'new': '@property (nonatomic) BOOL privacyBrowserObservationLate;\n@property (nonatomic) BOOL privacyBrowserCaptureUnknown;\n', 'sha256': '1bea3334ff9fca0dd26141c043d1b7b259bd7ae5439341564fb48e95838d3da8'}, {'name': 'setup', 'new': '    self.privacyBrowserObservationLate = NO;\n    self.privacyBrowserCaptureUnknown = NO;\n', 'sha256': '26fba94d6307e61b7e30a57d85af323670afeffe73597a876ca8f179379ba73b'}, {'name': 'late_guard', 'new': '    if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {\n        // A late observation or unavailable capture leaves the handoff UNKNOWN. Stop all further\n        // test-authored AX reads/device actions while preserving XCTest cleanup.\n        [super tearDown];\n        if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '6e2c96b45afad540973db1ef06be246b9990caa86d0e707b4bfc450e9a5952df'}]
 PAD_SHARE_OBSERVATION_BLOCKS = [{'name': 'properties', 'new': '@property (nonatomic) BOOL shareSystemObservationAttempted;\n@property (nonatomic) BOOL shareSystemObservationLate;\n', 'sha256': '7420ecc4688453962145d6867bddecb0409ea32ce2f8f97145edfc9bd02a19ec'}, {'name': 'setup', 'new': '    self.shareSystemObservationAttempted = NO; self.shareSystemObservationLate = NO;\n', 'sha256': '13510ef96ac74b8e5e44724ebb91ce9ee6657fe278dc93d3ee541e99a3549dee'}, {'name': 'late_guard', 'new': '    if (self.shareSystemObservationLate) {\n        // A returned late system observation cannot justify another AX read or\n        // a test-authored device action. The already-failed case stays failed.\n        [super tearDown];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '9ae65d32e23cc39dccfa5d11b25cb570374836ae95826ff4fa19eb28fcb3cfeb'}, {'name': 'helper', 'new': '- (void)retainSpringboardShareObservation {\n    if (self.shareSystemObservationAttempted) return;\n    self.shareSystemObservationAttempted = YES;\n    NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;\n    NSMutableDictionary *record = [@{@"version": @1, @"scope": @"springboard_unique_ActivityListView",\n        @"status": @"UNKNOWN", @"observations_qualify_pass": [NSNumber numberWithBool:NO],\n        @"activity_count": NSNull.null, @"activity_frame": NSNull.null,\n        @"payload_count": NSNull.null, @"payload_frame": NSNull.null,\n        @"copy_count": NSNull.null, @"copy_enabled": NSNull.null,\n        @"copy_hittable": NSNull.null, @"copy_frame": NSNull.null} mutableCopy];\n    // Each public AX getter may block until the unchanged case/outer timeout.\n    // A late return stops this observation and all later test-authored reads.\n    BOOL (^timely)(void) = ^BOOL {\n        NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n        BOOL valid = isfinite(elapsed) && elapsed >= 0 && elapsed < 10;\n        if (!valid) self.shareSystemObservationLate = YES;\n        return valid;\n    };\n    id (^frameValue)(CGRect) = ^id(CGRect frame) {\n        return QRPadFiniteNonemptyRect(frame) ? (id)@[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)] : (id)NSNull.null;\n    };\n    NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION_ENTER unqualified");\n    do {\n        XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];\n        XCUIElementQuery *activities = [system.otherElements matchingIdentifier:@"ActivityListView"];\n        if (!timely()) break;\n        NSUInteger activityCount = activities.count;\n        record[@"activity_count"] = @(activityCount);\n        if (!timely() || activityCount != 1) break;\n        XCUIElement *activity = activities.firstMatch;\n        CGRect activityFrame = activity.frame;\n        record[@"activity_frame"] = frameValue(activityFrame);\n        if (!timely() || !QRPadFiniteNonemptyRect(activityFrame)) break;\n        XCUIElementQuery *payloads = [activity.otherElements matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Native iPad QR result 你好"]];\n        NSUInteger payloadCount = payloads.count;\n        record[@"payload_count"] = @(payloadCount);\n        if (!timely()) break;\n        if (payloadCount == 1) {\n            record[@"payload_frame"] = frameValue(payloads.firstMatch.frame);\n            if (!timely()) break;\n        }\n        XCUIElementQuery *copies = [[activity.cells matchingIdentifier:@"actionGroupCell"]\n            containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",\n                (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];\n        NSUInteger copyCount = copies.count;\n        record[@"copy_count"] = @(copyCount);\n        if (!timely()) break;\n        if (copyCount == 1) {\n            XCUIElement *copy = copies.firstMatch;\n            record[@"copy_enabled"] = [NSNumber numberWithBool:copy.enabled];\n            if (!timely()) break;\n            record[@"copy_hittable"] = [NSNumber numberWithBool:copy.hittable];\n            if (!timely()) break;\n            record[@"copy_frame"] = frameValue(copy.frame);\n            if (!timely()) break;\n        }\n        record[@"status"] = @"scoped_observation_only";\n    } while (NO);\n    record[@"late_return"] = [NSNumber numberWithBool:self.shareSystemObservationLate];\n    NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n    record[@"elapsed"] = isfinite(elapsed) && elapsed >= 0 ? (id)@(elapsed) : (id)NSNull.null;\n    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];\n    if (data && data.length <= 3072) {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);\n    } else {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:UNKNOWN bounded serialization unavailable");\n    }\n}\n', 'sha256': 'a196957ba8d739a589c797743ed30b7bbe86219a65848766b2f38816008e52c4'}, {'name': 'call', 'new': '    if (readiness != XCTWaiterResultCompleted) [self retainSpringboardShareObservation];\n', 'sha256': 'af583824c9f3e3dfecbd5b8017632c852306b6d9f634b7384e8a19030aa52de1'}]
 
 def restore_phone_for_historical_observer(text):
@@ -154,7 +170,8 @@ def restore_phone_for_historical_observer(text):
     if start not in text:
         if any(token in text for token in ('PRIVACY_BROWSER_STATE_PAIRS:', 'noticeBeginning',
                                          'privacyBrowserObservationLate', 'QRPrivacyBrowserWindowQualifies',
-                                         'PRIVACY_BROWSER_WINDOW_RECEIPT:')):
+                                         'PRIVACY_BROWSER_MANUAL_RECEIPT:', 'privacyBrowserCaptureUnknown',
+                                         'QRPrivacyManualCaptureRetainable')):
             raise ValueError('Incomplete phone readiness observation')
         return text
     if text.count(start) != 1:
@@ -168,7 +185,7 @@ def restore_phone_for_historical_observer(text):
     for entry in PHONE_BROWSER_WINDOW_BLOCKS:
         block = entry['new']
         if text.count(block) != 1 or hashlib.sha256(block.encode()).hexdigest() != entry['sha256']:
-            raise ValueError('Changed admitted browser window import or cleanup clause')
+            raise ValueError('Changed admitted browser manual capture import or cleanup clause')
         text = text.replace(block, '', 1)
     for entry in PHONE_READINESS_METHOD_REPLACEMENTS:
         current = method(text, entry['selector'])
@@ -267,9 +284,9 @@ int main(void) {
 
 
 def compiled_browser_window_predicates(phone, scalar):
-    """Execute the exact native pure frame, deadline and qualification helpers."""
+    """Execute pinned legacy frame helpers plus the current deadline/capture guards."""
     names = ('QRPrivacyFiniteNonemptyRect', 'QRPrivacyObservationTimely',
-             'QRPrivacyBrowserWindowQualifies')
+             'QRPrivacyBrowserWindowQualifies', 'QRPrivacyManualCaptureRetainable')
     helpers = []
     for name in names:
         matches = re.findall(r'^static BOOL ' + name + r'\([^\n]+\) \{\n.*?^\}', phone, re.M | re.S)
@@ -286,6 +303,7 @@ def compiled_browser_window_predicates(phone, scalar):
 #include <stdio.h>
 typedef int BOOL;
 typedef double NSTimeInterval;
+typedef size_t NSUInteger;
 typedef SCALAR PortableCGFloat;
 typedef struct { PortableCGFloat x, y; } CGPoint;
 typedef struct { PortableCGFloat width, height; } CGSize;
@@ -321,8 +339,14 @@ int main(void) {
         QRPrivacyObservationTimely(100, 100), QRPrivacyObservationTimely(100, 109.999));
     for (size_t i = 0; i < sizeof(late) / sizeof(late[0]); i++)
         printf("%s%d", i ? "," : "", QRPrivacyObservationTimely(100, late[i]));
-    printf("],\"invalid_start\":[%d,%d]}\n", QRPrivacyObservationTimely(NAN, 100),
-           QRPrivacyObservationTimely(INFINITY, INFINITY));
+    printf("],\"invalid_start\":[%d,%d],\"capture_bounds\":[%d,%d,%d,%d,%d,%d]}\n",
+           QRPrivacyObservationTimely(NAN, 100), QRPrivacyObservationTimely(INFINITY, INFINITY),
+           QRPrivacyManualCaptureRetainable(1179, 2556, 1),
+           QRPrivacyManualCaptureRetainable(1179, 2556, 500 * 1024),
+           QRPrivacyManualCaptureRetainable(0, 2556, 1),
+           QRPrivacyManualCaptureRetainable(1179, 0, 1),
+           QRPrivacyManualCaptureRetainable(1179, 2556, 0),
+           QRPrivacyManualCaptureRetainable(1179, 2556, 500 * 1024 + 1));
     return 0;
 }
 '''
@@ -411,7 +435,7 @@ class OfflinePrivacyTests(unittest.TestCase):
     def test_phone_real_external_browser_return_and_both_languages_keep_all_audits(self):
         case = test_methods(self.phone)['testDeniedCameraAndEmptyHistory']
         for token in ('[self.app.buttons[@"privacy.externalPolicy"] tap]', 'com.apple.mobilesafari',
-                      'browser.windows', 'window.hittable', '[self.app activate]',
+                      'browser.state', 'XCUIScreen.mainScreen.screenshot.image', '[self.app activate]',
                       '[self assertOfflinePrivacyForChinese:NO]', '[done tap]'):
             self.assertIn(token, case)
         self.assertIn('[self assertOfflinePrivacyForChinese:YES]', self.phone)
@@ -434,13 +458,14 @@ class OfflinePrivacyTests(unittest.TestCase):
 
     def test_browser_states_are_single_snapshots_and_diagnostics_cannot_qualify(self):
         browser_observation_contract(self.phone)
-        changes = [('self.app.state;', 'self.app.state; (void)self.app.state;'),
+        changes = [('XCUIApplicationState browserState = browser.state;', 'XCUIApplicationState browserState = browser.state; (void)browser.state;'),
                    ('waitForExpectations:@[openedOutside] timeout:10];', 'waitForExpectations:@[openedOutside] timeout:11];'),
                    ('statePairs.count < 12', 'statePairs.count < 13'),
                    ('stateTraceData.length <= 2048', 'stateTraceData.length <= 2049'),
                    ('[NSNumber numberWithBool:NO]', '[NSNumber numberWithBool:YES]'),
-                   ('return QRPrivacyBrowserWindowQualifies(browserState, windowExists, windowFrame, windowHittable);',
-                    'return browserState == XCUIApplicationStateRunningForeground;'),
+                   ('return browserState == XCUIApplicationStateRunningForeground;', 'return YES;'),
+                   ('return browserState == XCUIApplicationStateRunningForeground;', 'return browserState == XCUIApplicationStateRunningForeground && browser.windows.firstMatch.exists;'),
+                   ('return browserState == XCUIApplicationStateRunningForeground;', 'return browserState == XCUIApplicationStateRunningForeground && self.app.state == XCUIApplicationStateRunningBackground;'),
                    ('[done tap];', '/* removed close */')]
         for before, after in changes:
             with self.subTest(mutation=before), self.assertRaises(ValueError):
@@ -476,6 +501,7 @@ class OfflinePrivacyTests(unittest.TestCase):
                 self.assertEqual(observed['timely'], [1, 1])
                 self.assertEqual(observed['late_getter_returns'], [0] * 6)
                 self.assertEqual(observed['invalid_start'], [0, 0])
+                self.assertEqual(observed['capture_bounds'], [1, 1, 0, 0, 0, 0])
 
     def test_real_c_mutations_expose_weakened_exists_hittable_finite_frame_or_deadline(self):
         mutations = [('&& exists &&', '&& (exists || 1) &&', 'missing_hidden_covered', 0),
@@ -483,7 +509,11 @@ class OfflinePrivacyTests(unittest.TestCase):
                       'QRPrivacyFiniteNonemptyRect(frame) && (hittable || 1);', 'missing_hidden_covered', 1),
                      ('frame.size.width > 0', 'frame.size.width >= 0', 'invalid_frames', 6),
                      ('isfinite(frame.origin.x + frame.size.width)', '1', 'invalid_frames', 10),
-                     ('elapsed < 10;', 'elapsed < 11;', 'late_getter_returns', 0)]
+                     ('elapsed < 10;', 'elapsed < 11;', 'late_getter_returns', 0),
+                     ('bytes <= 500 * 1024;', 'bytes <= 501 * 1024;', 'capture_bounds', 5),
+                     ('bytes > 0', '(bytes || 1)', 'capture_bounds', 4),
+                     ('return width > 0', 'return (width || 1)', 'capture_bounds', 2),
+                     ('height > 0 && bytes', '(height || 1) && bytes', 'capture_bounds', 3)]
         for before, after, field, index in mutations:
             changed = self.phone.replace(before, after, 1)
             with self.subTest(mutation=before):
@@ -496,25 +526,31 @@ class OfflinePrivacyTests(unittest.TestCase):
     def test_safari_owner_query_real_tap_visibility_and_all_return_clauses_cannot_be_erased(self):
         mutations = [
             ('initWithBundleIdentifier:@"com.apple.mobilesafari"', 'initWithBundleIdentifier:@"com.apple.springboard"'),
-            ('XCUIElementQuery *windows = browser.windows;', 'XCUIElementQuery *windows = self.app.windows;'),
-            ('XCUIElement *window = windows.firstMatch;', 'XCUIElement *window = browser.otherElements.firstMatch;'),
-            ('BOOL windowExists = window.exists;', 'BOOL windowExists = YES;'),
-            ('CGRect windowFrame = window.frame;', 'CGRect windowFrame = CGRectMake(0, 0, 390, 844);'),
-            ('BOOL windowHittable = window.hittable;', 'BOOL windowHittable = YES;'),
-            ('if (!timely() || !finiteFrame) return NO;', 'if (!timely()) return NO;'),
-            ('if (!timely() || !windowExists) return NO;', 'if (!timely()) return NO;'),
-            ('windowHittable];\n        if (!timely()) return NO;', 'windowHittable];'),
+            ('return browserState == XCUIApplicationStateRunningForeground;', 'return YES;'),
+            ('UIImage *image = XCUIScreen.mainScreen.screenshot.image;', 'UIImage *image = self.app.screenshot.image;'),
+            ('UIImage *image = XCUIScreen.mainScreen.screenshot.image;', 'UIImage *image = XCUIScreen.mainScreen.screenshot.image; (void)XCUIScreen.mainScreen.screenshot;'),
+            ('if (handoff == XCTWaiterResultCompleted && timely())', 'if (handoff == XCTWaiterResultCompleted)'),
+            ('if (timely() && image.CGImage)', 'if (image.CGImage)'),
+            ('CGImageGetWidth(image.CGImage)', '(size_t)1440'),
+            ('CGImageGetHeight(image.CGImage)', '(size_t)1440'),
+            ('UIImageJPEGRepresentation(image, 0.55)', 'UIImageJPEGRepresentation(image, 0.25)'),
+            ('if (timely() && QRPrivacyManualCaptureRetainable(width, height, JPEG.length))', 'if (JPEG)'),
+            ('attachment.name = @"privacy-browser-manual-review";', 'attachment.name = @"privacy-browser";'),
+            ('attachment.name = @"privacy-browser-manual-review";\n                    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;', 'attachment.name = @"privacy-browser-manual-review";\n                    attachment.lifetime = XCTAttachmentLifetimeDeleteOnSuccess;'),
+            ('captureRetained = timely();', 'captureRetained = YES;'),
+            ('if (!captureRetained) self.privacyBrowserCaptureUnknown = YES;', '/* unknown capture ignored */'),
             ('if (!timely()) handoff = XCTWaiterResultTimedOut;', '/* late result ignored */'),
-            ('if (self.privacyBrowserObservationLate) {', 'if (NO) {'),
+            ('if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {', 'if (NO) {'),
             ('[self.app.buttons[@"privacy.externalPolicy"] tap];', '/* real tap omitted */'),
             ('XCTAssertTrue(externalPolicy.exists);', ''),
             ('XCTAssertTrue(externalPolicy.enabled);', ''),
             ('XCTAssertTrue(externalPolicy.hittable);', ''),
             ('[self.app activate];\n    XCTAssertTrue([done waitForExistenceWithTimeout:10]);', '/* return omitted */'),
             ('[done tap];', '/* Close omitted */'),
-            ('@"qr_kind": QRObservedApplicationStateName(appState)', '@"qr_kind": @"background"'),
+            ('@"manual_review_required": [NSNumber numberWithBool:YES]', '@"manual_review_required": [NSNumber numberWithBool:NO]'),
+            ('@"automatic_page_qualification": [NSNumber numberWithBool:NO]', '@"automatic_page_qualification": [NSNumber numberWithBool:YES]'),
             ('@"runtime_precise_url": @"UNKNOWN"', '@"runtime_precise_url": @"https://100mango.github.io/app-privacy/"'),
-            ('windowData.length <= 1024', 'windowData.length <= 4096'),
+            ('manualData.length <= 1024', 'manualData.length <= 4096'),
         ]
         for before, after in mutations:
             changed = self.phone.replace(before, after, 1)
@@ -527,18 +563,21 @@ class OfflinePrivacyTests(unittest.TestCase):
 
     def test_window_receipt_is_once_bounded_and_keeps_runtime_address_unknown(self):
         case = test_methods(self.phone)['testDeniedCameraAndEmptyHistory']
-        self.assertEqual(case.count('NSData *windowData ='), 1)
-        self.assertEqual(case.count('PRIVACY_BROWSER_WINDOW_RECEIPT:%@'), 1)
+        self.assertEqual(case.count('NSData *manualData ='), 1)
+        self.assertEqual(case.count('PRIVACY_BROWSER_MANUAL_RECEIPT:%@'), 1)
         self.assertIn('@"runtime_precise_url": @"UNKNOWN"', case)
-        sample = {'version': 1, 'owner': 'com.apple.mobilesafari', 'query': 'windows.firstMatch',
-                  'status': 'visible_hittable_window', 'runtime_precise_url': 'UNKNOWN',
-                  'browser_raw': 18446744073709551615, 'window_exists': True,
-                  'window_frame': [1.7976931348623157e308] * 4, 'window_hittable': True, 'late_return': False}
+        sample = {'version': 1, 'owner': 'com.apple.mobilesafari', 'source': 'XCUIScreen.mainScreen',
+                  'status': 'manual_review_required', 'runtime_precise_url': 'UNKNOWN',
+                  'manual_review_required': True, 'automatic_page_qualification': False,
+                  'browser_raw': 18446744073709551615, 'capture_attempts': 1,
+                  'native_width': 18446744073709551615, 'native_height': 18446744073709551615,
+                  'source_bytes': 500 * 1024, 'attachment_name': 'privacy-browser-manual-review',
+                  'late_return': False, 'capture_unknown': False}
         encoded = json.dumps(sample, separators=(',', ':')).encode()
         self.assertLessEqual(len(encoded), 1024)
         self.assertLessEqual(2048 + len(encoded) + 256, 4096)
         guard = method(self.phone, 'tearDown').split('    if (self.testRun.failureCount > 0)', 1)[0]
-        for required in ('if (self.privacyBrowserObservationLate)', '[super tearDown];',
+        for required in ('if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown)', '[super tearDown];',
                          'removeUIInterruptionMonitor:self.cameraMonitor',
                          'removeUIInterruptionMonitor:self.interruptionGuard', 'return;'):
             self.assertIn(required, guard)

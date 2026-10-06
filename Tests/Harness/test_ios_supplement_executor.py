@@ -51,7 +51,7 @@ elif args[:2]==['simctl','addmedia']:raise SystemExit(int(os.environ.get('SEED_S
 elif args[:2]==['simctl','get_app_container']:print(os.environ['SYNTHETIC_APP' if args[-1]=='app' else 'SYNTHETIC_DATA'])
 elif args[:3]==['xcresulttool','get','test-results']:
  result=args[-1]
- count=2 if result in ('PhoneUIResults.xcresult','CompactPhoneUIResults.xcresult','PadUIResults-layout.xcresult') else 1
+ count=30 if result=='iOSUnitResults.xcresult' else 2 if result in ('PhoneUIResults.xcresult','CompactPhoneUIResults.xcresult','PadUIResults-layout.xcresult') else 1
  key='WARMUP_EXIT' if '-warmup.' in result else 'FILES_EXIT' if '-files.' in result else 'PHOTOS_EXIT' if '-imports.' in result or result in ('PadUIResults.xcresult','MiniUIResults.xcresult') else 'ORDINARY_EXIT'
  failed=int(os.environ.get(key,'0'))!=0
  print(json.dumps({'result':'Failed' if failed else 'Passed','totalTestCount':count,'passedTests':count-int(failed),
@@ -64,7 +64,7 @@ _actual_execute=execute
 def execute(*args,**kwargs):
  code,tail,operation=_actual_execute(*args,**kwargs)
  command=args[0];target=os.environ.get('RECEIPT_TARGET','native')
- if (target=='native' and command[0]=='xcodebuild') or (target=='seed' and command[:3]==['xcrun','simctl','addmedia']):
+ if (target=='native' and command[0]=='xcodebuild') or (target=='seed' and command[:3]==['xcrun','simctl','addmedia']) or (target=='summary' and command[:3]==['xcrun','xcresulttool','get']):
   change=json.loads(os.environ['RECEIPT_CHANGE'])
   if change.pop('late',False):change['elapsed_seconds']=operation['timeout_seconds']+2.01
   operation.update(change)
@@ -74,7 +74,7 @@ def execute(*args,**kwargs):
 
 class SupplementExecutorTests(unittest.TestCase):
  @contextlib.contextmanager
- def fixture(self,scope):
+ def fixture(self,scope,phone_completion=False):
   with tempfile.TemporaryDirectory(prefix='qr-supplement-executor-') as name:
    root=Path(name).resolve();(root/'build').mkdir();(root/'runner').mkdir()
    scripts=root/'scripts';scripts.mkdir()
@@ -82,6 +82,8 @@ class SupplementExecutorTests(unittest.TestCase):
    shutil.copyfile(ROOT/'scripts/run_ios_platform_ui.sh',scripts/'run_ios_platform_ui.sh')
    for filename in (route.original.CANONICAL,route.original.WORKFLOW,route.WORKFLOW):
     target=root/filename;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/filename,target)
+   (root/route.WORKFLOW).write_text((route.render_workflow if phone_completion else route.render_legacy_workflow)(
+    (root/route.original.CANONICAL).read_text()))
    fixture=root/'Tests/Fixtures';fixture.mkdir(parents=True);(fixture/'unicode.png').write_bytes(b'Explicit fixture routing bytes only')
    app=root/'synthetic-app';app.mkdir();data=root/'synthetic-data';data.mkdir()
    (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'100mango.QRCatcher','UIFileSharingEnabled':True,'LSSupportsOpeningDocumentsInPlace':True}))
@@ -97,6 +99,8 @@ class SupplementExecutorTests(unittest.TestCase):
     'APPLE_CALL_LOG':str(root/'calls.jsonl'),'STATE_COUNTER':str(root/'states'),
     'SYNTHETIC_APP':str(app),'SYNTHETIC_DATA':str(data)}
    env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
+   env.pop('PHONE_COMPLETION_ONLY',None)
+   if phone_completion:env['PHONE_COMPLETION_ONLY']='true'
    env.update(SIMULATOR_ID=DEVICE,COMPACT_SIMULATOR_ID=DEVICE,IPAD_SIMULATOR_ID=DEVICE,MINI_SIMULATOR_ID=DEVICE)
    yield root,env
  def invoke(self,root,env,result=None,kind=None):
@@ -139,6 +143,8 @@ class SupplementExecutorTests(unittest.TestCase):
   owner=base.MiniSetupTests();owner.setUp();package=IOSOnlyPackageTests();package.setUp()
   try:
    env,log=owner.prepare_fixture();f=owner.f;package.hosted(ui_target=True)
+   (f.root/route.WORKFLOW).write_text(route.render_legacy_workflow((f.root/route.original.CANONICAL).read_text()))
+   env.pop('PHONE_COMPLETION_ONLY',None)
    env.update(GITHUB_REF=route.REF,GITHUB_WORKFLOW_REF=route.WORKFLOW_REF,GITHUB_JOB='platform',
     EVIDENCE_SCOPE='ipad_mini',IOS_FIRST_RELEASE_CANDIDATE_ONLY='true',QRCATCHER_IOS_SUPPLEMENT_ONLY='true',
     RUNNER_OS='macOS',RUNNER_ARCH='ARM64',SYNTHETIC_IOS_PRODUCTS=str(package.xctestrun.parent))
@@ -195,7 +201,7 @@ class SupplementExecutorTests(unittest.TestCase):
    package.doCleanups();owner.tearDown()
  def test_actual_phones_select_exact_two_originals_then_independent_files_photos(self):
   for scope,file_cap in (('iphone_pro',360),('iphone_se3',240)):
-   with self.subTest(scope=scope),self.fixture(scope) as (root,env):
+   with self.subTest(scope=scope),self.fixture(scope,phone_completion=True) as (root,env):
     result=self.invoke(root,env);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
     cases=[args for name,args in self.calls(root) if name=='xcodebuild']
     self.assertEqual(len(cases),3)
@@ -203,11 +209,78 @@ class SupplementExecutorTests(unittest.TestCase):
     self.assertNotIn('-only-testing:QRCatcherUITests/QRCatcherUITests',cases[0])
     self.assertEqual([arg for arg in cases[1] if arg.startswith('-only-testing:')],['-only-testing:'+route.FILES])
     self.assertEqual([arg for arg in cases[2] if arg.startswith('-only-testing:')],['-only-testing:'+route.PHONE_PHOTOS])
+    self.assertEqual(sum(args[:3]==['xcresulttool','get','test-results'] for name,args in self.calls(root)),3)
     base_name='PhoneUIResults' if scope=='iphone_pro' else 'CompactPhoneUIResults'
     for stem,count,cap in ((base_name,2,570),(base_name+'-files',1,file_cap),(base_name+'-imports',1,360)):
      command=json.loads((root/'build'/(stem+'-command.json')).read_text());summary=json.loads((root/'build'/(stem+'-summary.json')).read_text())
      self.assertEqual(command['timeout_seconds'],cap);self.assertTrue(command['cleanup_confirmed'])
      self.assertEqual(summary['totalTestCount'],count);self.assertEqual(summary['devicesAndConfigurations'][0]['device']['deviceId'],DEVICE)
+     summary_receipt=json.loads((root/'build'/(stem+'-summary-command.json')).read_text())
+     self.assertEqual(summary_receipt['timeout_seconds'],30 if scope=='iphone_se3' and stem==base_name else 10)
+    admissions=[json.loads(line.split(' ',1)[1]) for line in result.stdout.splitlines() if line.startswith('IOS_SUPPLEMENT_SUMMARY_ADMISSION ')]
+    self.assertEqual(len(admissions),3)
+    self.assertEqual(len({item['phase_started_monotonic'] for item in admissions}),1)
+    self.assertEqual([item['phase_seconds'] for item in admissions],[1200 if scope=='iphone_pro' else 1320]*3)
+    self.assertEqual([item['required_seconds'] for item in admissions],[52,32,32] if scope=='iphone_se3' else [32,32,32])
+ def test_actual_hosted_workflow_first_reader_is30_with_original900s_phase(self):
+  with self.fixture('iphone_pro',phone_completion=True) as (root,env):
+   text=(root/route.WORKFLOW).read_text()
+   step=text[text.index('    - name: Run iOS codec'):text.index('    - name: Run large-phone UI')]
+   script='\n'.join(line[8:] for line in step.split('      run: |\n',1)[1].splitlines())
+   result=subprocess.run(['bash','-e','-c',script],cwd=root,env=env,capture_output=True,text=True,timeout=20)
+   self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+   calls=self.calls(root)
+   self.assertEqual(sum(name=='xcodebuild' for name,args in calls),1)
+   self.assertEqual(sum(args[:3]==['xcresulttool','get','test-results'] for name,args in calls),1)
+   receipt=json.loads((root/'build/iOSUnitResults-summary-command.json').read_text())
+   self.assertEqual(receipt['timeout_seconds'],30)
+   admission=json.loads(next(line.split(' ',1)[1] for line in result.stdout.splitlines() if line.startswith('IOS_SUPPLEMENT_SUMMARY_ADMISSION ')))
+   self.assertEqual(admission['phase_seconds'],900);self.assertEqual(admission['required_seconds'],52)
+   self.assertEqual(admission['phase_deadline_monotonic'],admission['phase_started_monotonic']+900)
+ def test_actual_final_reporting_step_prints_retained_raw_and_never_calls_apple(self):
+  with self.fixture('iphone_se3',phone_completion=True) as (root,env):
+   raw='{"result":"Failed","totalTestCount":2,"passedTests":1,"failedTests":1}\n'
+   summary=root/'build/CompactPhoneUIResults-summary.json';summary.write_text(raw)
+   receipt=root/'build/CompactPhoneUIResults-summary-command.json'
+   receipt.write_text(json.dumps({'command':['xcrun','xcresulttool','get','test-results','summary','--path','CompactPhoneUIResults.xcresult'],
+    'timeout_seconds':10,'state':'timed_out','exit':124,'elapsed_seconds':10.05,'output_bytes':len(raw.encode()),'cleanup_confirmed':True}))
+   before=(summary.read_bytes(),receipt.read_bytes())
+   workflow=(root/route.WORKFLOW).read_text()
+   step=workflow[workflow.index('    - name: Summarize executed evidence'):workflow.index('    - name: Verify final Mini source')]
+   script='\n'.join(line[8:] for line in step.split('      run: |\n',1)[1].splitlines())
+   result=subprocess.run(['bash','-e','-c',script],cwd=root,env={**env,'GITHUB_STEP_SUMMARY':str(root/'step-summary')},capture_output=True,text=True,timeout=10)
+   self.assertEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(self.calls(root),[])
+   reports=[json.loads(line.split(' ',1)[1]) for line in result.stdout.splitlines() if line.startswith('IOS_SUPPLEMENT_RETAINED_SUMMARY ')]
+   self.assertEqual([item['state'] for item in reports],['unqualified_retained_raw','missing','missing'])
+   self.assertTrue(all(item['acceptance'] is False for item in reports));self.assertIn(raw,result.stdout)
+   self.assertEqual((summary.read_bytes(),receipt.read_bytes()),before)
+   self.assertEqual(set(path.name for path in (root/'build').iterdir()),{summary.name,receipt.name})
+ def test_actual_current_phone_route_missing_false_flag_or_pad_mini_refuses_before_any_command(self):
+  for scope in ('iphone_pro','iphone_se3'):
+   for value in (None,'false','TRUE',''):
+    with self.subTest(scope=scope,flag=value),self.fixture(scope,phone_completion=True) as (root,env):
+     if value is None:env.pop('PHONE_COMPLETION_ONLY')
+     else:env['PHONE_COMPLETION_ONLY']=value
+     result=self.invoke(root,env)
+     self.assertNotEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(self.calls(root),[])
+  for scope in ('ipad_pro','ipad_mini'):
+   with self.subTest(scope=scope),self.fixture(scope,phone_completion=True) as (root,env):
+    result=self.invoke(root,env)
+    self.assertNotEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(self.calls(root),[])
+    if scope=='ipad_mini':
+     result=subprocess.run([sys.executable,'scripts/ipad_mini_setup.py','configure'],cwd=root,env=env,capture_output=True,text=True,timeout=10)
+     self.assertNotEqual(result.returncode,0,result.stdout+result.stderr);self.assertEqual(self.calls(root),[])
+ def test_component_fixtures_clear_outer_ci_completion_flag_and_keep_explicit_four_scope_profile(self):
+  for scope in route.SCOPES:
+   with self.subTest(scope=scope),patch.dict(os.environ,{'PHONE_COMPLETION_ONLY':'true'}),self.fixture(scope) as (root,env):
+    self.assertEqual(os.environ['PHONE_COMPLETION_ONLY'],'true');self.assertNotIn('PHONE_COMPLETION_ONLY',env)
+    self.assertEqual((root/route.WORKFLOW).read_text(),route.render_legacy_workflow((root/route.original.CANONICAL).read_text()))
+    previous=Path.cwd()
+    with patch.dict(os.environ,env,clear=True):
+     os.chdir(root)
+     try:self.assertEqual(route.current_identity()['selected_scopes'],list(route.SCOPES))
+     finally:os.chdir(previous)
+    self.assertEqual(self.calls(root),[])
  def test_actual_phone_failed_selected_phase_retains_two_and_hardstops(self):
   with self.fixture('iphone_pro') as (root,env):
    result=self.invoke(root,{**env,'ORDINARY_EXIT':'65'});self.assertEqual(result.returncode,65,result.stdout+result.stderr)
@@ -235,6 +308,47 @@ class SupplementExecutorTests(unittest.TestCase):
    cases=[args for name,args in self.calls(root) if name=='xcodebuild']
    self.assertEqual(len(cases),3);self.assertIn('-only-testing:QRCatcherUITests/QRCatcherPadUITests',cases[0])
    self.assertEqual(json.loads((root/'build/PadUIResults-layout-summary.json').read_text())['totalTestCount'],2)
+   self.assertEqual([json.loads((root/'build'/(stem+'-summary-command.json')).read_text())['timeout_seconds']
+                     for stem in ('PadUIResults-layout','PadUIResults-files','PadUIResults')],[30,10,10])
+   self.assertEqual(sum(args[:3]==['xcresulttool','get','test-results'] for name,args in self.calls(root)),3)
+ def test_actual_first_summary_old_timeout_late_unclean_or_wrong_cap_never_postqualifies_raw(self):
+  for scope,stem,cap in (('iphone_pro','PhoneUIResults',10),('iphone_se3','CompactPhoneUIResults',30),('ipad_pro','PadUIResults-layout',30)):
+   for change in ({'elapsed_seconds':cap+2},{'cleanup_confirmed':False},{'state':'unknown'},
+                  {'timeout_seconds':cap+1},{'state':'timed_out','exit':124,'timeout_seconds':10,'elapsed_seconds':10.05}):
+    with self.subTest(scope=scope,change=change),self.fixture(scope) as (root,env):
+     self.receipt_double(root)
+     result=self.invoke(root,{**env,'RECEIPT_TARGET':'summary','RECEIPT_CHANGE':json.dumps(change)})
+     self.assertEqual(result.returncode,126,result.stdout+result.stderr)
+     calls=self.calls(root)
+     self.assertEqual(sum(name=='xcodebuild' for name,args in calls),1)
+     self.assertEqual(sum(args[:3]==['xcresulttool','get','test-results'] for name,args in calls),1)
+     self.assertTrue((root/'build'/(stem+'-summary.json')).is_file())
+     self.assertEqual(json.loads((root/'build'/(stem+'-summary.json')).read_text())['totalTestCount'],2)
+     self.assertNotIn('IOS_SUPPLEMENT_RESULT ',result.stdout)
+     self.assertFalse(any('addmedia' in args or 'get_app_container' in args for name,args in calls))
+ def test_actual_ui_original_phase_clock_requires_whole_reader_and_cleanup_before_dispatch(self):
+  for scope,stem,seconds,required in (('iphone_pro','PhoneUIResults',1200,32),
+                                    ('iphone_se3','CompactPhoneUIResults',1320,52),
+                                    ('ipad_pro','PadUIResults-layout',1080,52)):
+   with self.subTest(scope=scope),self.fixture(scope) as (root,env):
+    source=root/'scripts/run_ios_platform_ui.sh';text=source.read_text()
+    before="STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')"
+    self.assertEqual(text.count(before),1)
+    source.write_text(text.replace(before,"STEP_STARTED=$(python3 -c 'import time;print(time.monotonic()-"+str(seconds-required+1)+")')",1))
+    result=self.invoke(root,env)
+    self.assertEqual(result.returncode,126,result.stdout+result.stderr)
+    calls=self.calls(root)
+    self.assertEqual(sum(name=='xcodebuild' for name,args in calls),1)
+    self.assertFalse(any(args[:3]==['xcresulttool','get','test-results'] for name,args in calls))
+    self.assertTrue((root/'build'/(stem+'-command.json')).is_file())
+    self.assertFalse((root/'build'/(stem+'-summary.json')).exists())
+    self.assertIn('Full summary and cleanup reserve unavailable',result.stderr)
+ def test_actual_ui_clock_is_captured_once_before_boot_and_passed_unchanged(self):
+  text=(ROOT/'scripts/run_ios_platform_ui.sh').read_text()
+  self.assertEqual(text.count('STEP_STARTED='),1)
+  self.assertLess(text.index('STEP_STARTED='),text.index('scripts/owned_process_barrier.py --check'))
+  self.assertLess(text.index('STEP_STARTED='),text.index('simctl boot'))
+  self.assertIn('"$3" "$STEP_STARTED"',text)
  def test_actual_wrong_identity_flag_and_foreign_destination_refuse_before_any_command(self):
   changes=({'GITHUB_WORKFLOW_SHA':'b'*40},{'GITHUB_WORKFLOW_REF':'wrong'},
    {'GITHUB_REF':'refs/heads/codex/apple-platforms'},{'IOS_FIRST_RELEASE_CANDIDATE_ONLY':'false'},

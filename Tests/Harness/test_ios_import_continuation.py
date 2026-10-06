@@ -27,7 +27,7 @@ def continuation_fixture_environment(environment):
     # that selection without modifying the caller or its cleanup evidence.
     fixture = dict(environment)
     fixture['GITHUB_REF'] = 'refs/heads/codex/apple-platforms'
-    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY', 'QRCATCHER_IOS_SUPPLEMENT_ONLY'):
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY', 'QRCATCHER_IOS_SUPPLEMENT_ONLY', 'PHONE_COMPLETION_ONLY'):
         fixture.pop(key, None)
     return fixture
 

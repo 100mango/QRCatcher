@@ -65,13 +65,13 @@ fi
 if [ "$SUPPLEMENT_ONLY" = true ]; then PROJECT=$SUPPLEMENT_PROJECT; fi
 COMMON=(xcodebuild test-without-building -project "$PROJECT" -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 CODE_SIGNING_ALLOWED=NO)
 qualify_supplement_result() {
-  python3 - "$DEVICE" "$1" "$2" "$3" <<'PY'
+  python3 - "$DEVICE" "$1" "$2" "$3" "$STEP_STARTED" <<'PY'
 from pathlib import Path
-import json,math,os,sys
+import json,math,os,sys,time
 sys.path.insert(0,'scripts')
 from atomic_json import write_json
 from ios_import_continuation import read_regular
-from ios_original_supplement_route import current_identity,PROJECT
+from ios_original_supplement_route import current_identity,PROJECT,summary_admission,SUMMARY_POST_RETURN_SECONDS,SUMMARY_CLEANUP_SECONDS
 from owned_process_barrier import blocked,mark_unconfirmed
 from watch_process import execute
 def strict(raw):
@@ -82,7 +82,7 @@ def strict(raw):
    result[key]=value
   return result
  return json.loads(raw,object_pairs_hook=pairs,parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Nonfinite JSON')))
-device,result,raw_cap,raw_exit=sys.argv[1:];cap=int(raw_cap);exit_code=int(raw_exit)
+device,result,raw_cap,raw_exit,raw_start=sys.argv[1:];cap=int(raw_cap);exit_code=int(raw_exit);started=float(raw_start)
 identity=current_identity()
 scope=os.environ['EVIDENCE_SCOPE']
 base={'iphone_pro':'PhoneUIResults','iphone_se3':'CompactPhoneUIResults','ipad_pro':'PadUIResults'}[scope]
@@ -113,13 +113,18 @@ try:
  if starts[0]!={'seconds':cap,'command':command} or operation.get('command')!=command or operation.get('timeout_seconds')!=cap or operation.get('exit')!=exit_code or exit_code not in (0,65) or operation.get('state')!='completed' or operation.get('cleanup_confirmed') is not True or type(elapsed) not in (int,float) or not math.isfinite(elapsed) or not 0<=elapsed<cap+2 or blocked():
   raise ValueError('Selected command is unknown, late or unclean; no summary query allowed')
  summary_command=['xcrun','xcresulttool','get','test-results','summary','--path',result]
- print('BOUNDED_COMMAND_START '+json.dumps({'seconds':10,'command':summary_command}),flush=True)
- code,raw,summary_operation=execute(summary_command,10,output_limit=65536,tail_limit=65536,echo=False)
+ admission=summary_admission(scope,result,started)
+ summary_cap=admission['summary_seconds']
+ print('IOS_SUPPLEMENT_SUMMARY_ADMISSION '+json.dumps(admission),flush=True)
+ print('BOUNDED_COMMAND_START '+json.dumps({'seconds':summary_cap,'command':summary_command}),flush=True)
+ summary_admission(scope,result,started)
+ began=time.monotonic()
+ code,raw,summary_operation=execute(summary_command,summary_cap,output_limit=65536,tail_limit=65536,echo=False)
  print('BOUNDED_COMMAND_END '+json.dumps(summary_operation),flush=True)
  write_json(Path('build')/(stem+'-summary-command.json'),summary_operation,limit=16384)
  if raw:Path('build',stem+'-summary.json').write_text(raw)
  duration=summary_operation.get('elapsed_seconds')
- if code!=0 or summary_operation.get('command')!=summary_command or summary_operation.get('timeout_seconds')!=10 or summary_operation.get('exit')!=0 or summary_operation.get('state')!='completed' or summary_operation.get('cleanup_confirmed') is not True or summary_operation.get('output_bytes')!=len(raw.encode()) or type(duration) not in (int,float) or not math.isfinite(duration) or not 0<=duration<12:
+ if code!=0 or summary_operation.get('command')!=summary_command or summary_operation.get('timeout_seconds')!=summary_cap or summary_operation.get('exit')!=0 or summary_operation.get('state')!='completed' or summary_operation.get('cleanup_confirmed') is not True or summary_operation.get('output_bytes')!=len(raw.encode()) or type(duration) not in (int,float) or not math.isfinite(duration) or not 0<=duration<summary_cap+SUMMARY_POST_RETURN_SECONDS or time.monotonic()>=began+summary_cap+SUMMARY_POST_RETURN_SECONDS or time.monotonic()+SUMMARY_CLEANUP_SECONDS>admission['phase_deadline_monotonic']:
   raise ValueError('Summary is incomplete, late or unclean')
  value=strict(raw);keys=['totalTestCount','passedTests','failedTests','skippedTests','expectedFailures']
  counts={key:value.get(key) for key in keys};rows=value.get('devicesAndConfigurations')

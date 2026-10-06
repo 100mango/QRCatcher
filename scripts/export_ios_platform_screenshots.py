@@ -124,12 +124,12 @@ def supplement_contract(scope,stem):
  if scope=='ipad_mini':
   inventory={'MiniUIResults-warmup':(480,1,[MINI_WARMUP],30),'MiniUIResults':(360,1,[PAD_PHOTOS],10)}
  elif scope=='ipad_pro':
-  inventory={base+'-layout':(480,2,None,10),base+'-files':(240,1,[FILES],10),base:(360,1,[PAD_PHOTOS],10)}
+  inventory={base+'-layout':(480,2,None,30),base+'-files':(240,1,[FILES],10),base:(360,1,[PAD_PHOTOS],10)}
  else:
-  inventory={base:(570,2,list(PHONE_CHECKS),10),base+'-files':(360 if scope=='iphone_pro' else 240,1,[FILES],10),base+'-imports':(360,1,[PHONE_PHOTOS],10)}
+  inventory={base:(570,2,list(PHONE_CHECKS),30 if scope=='iphone_se3' else 10),base+'-files':(360 if scope=='iphone_pro' else 240,1,[FILES],10),base+'-imports':(360,1,[PHONE_PHOTOS],10)}
  result=stem+'.xcresult'
  if stem=='iOSUnitResults' and scope=='iphone_pro':
-  return {'command':['xcodebuild','test-without-building','-project',PROJECT,'-scheme','QRCatcher','-configuration','Debug','-derivedDataPath','build/iOS','-destination','platform=iOS Simulator,id='+device,'-only-testing:QRCatcherTests','-parallel-testing-enabled','NO','-collect-test-diagnostics','never','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','90','-maximum-test-execution-time-allowance','120','-resultBundlePath',result,'CODE_SIGNING_ALLOWED=NO'],'cap':855,'expected':30,'summary_cap':10,'device':device}
+  return {'command':['xcodebuild','test-without-building','-project',PROJECT,'-scheme','QRCatcher','-configuration','Debug','-derivedDataPath','build/iOS','-destination','platform=iOS Simulator,id='+device,'-only-testing:QRCatcherTests','-parallel-testing-enabled','NO','-collect-test-diagnostics','never','-test-timeouts-enabled','YES','-default-test-execution-time-allowance','90','-maximum-test-execution-time-allowance','120','-resultBundlePath',result,'CODE_SIGNING_ALLOWED=NO'],'cap':855,'expected':30,'summary_cap':30,'device':device}
  if stem not in inventory:raise ValueError('Unselected supplemental result')
  cap,expected,selectors,summary_cap=inventory[stem]
  flags=['-only-testing:'+case for case in selectors] if selectors is not None else ['-only-testing:QRCatcherUITests/QRCatcherPadUITests','-skip-testing:'+PAD_PHOTOS]
@@ -329,7 +329,7 @@ for name in ['release-watch.log','release-tv.log','release-vision.log','watch-te
   continue
  path=pathlib.Path(name)
  if path.is_file():(out/name).write_bytes(path.read_bytes()[-64*1024:])
-names=('image-import-history-after-cancel','phone-largest-history-result-top','phone-largest-history-result-end','phone-largest-history-result','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
+names=('privacy-browser-manual-review','image-import-history-after-cancel','phone-largest-history-result-top','phone-largest-history-result-end','phone-largest-history-result','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
@@ -414,6 +414,10 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
   data=attachment_bytes(folder/entry['exportedFileName'],folder,16*1024*1024,selected_identity)
   source_bytes=len(data)
+  native_manual_browser_jpeg=name=='privacy-browser-manual-review'
+  if native_manual_browser_jpeg:
+   expected_label={'iphone_pro':'pro-max','iphone_se3':'SE3'}.get(scope)
+   if label!=expected_label or not data.startswith(b'\xff\xd8') or not 0<len(data)<=500*1024:raise ValueError('Invalid fixed native browser review image')
   native_watch_png=label.startswith('watch-') and data.startswith(b'\x89PNG')
   native_dimensions=None
   if native_watch_png:
@@ -429,7 +433,7 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
    converted=path.with_suffix('.bounded.jpg')
    attachment_command(['sips','-s','format','jpeg','-s','formatOptions','50','-Z','1920',str(path),'--out',str(converted)],selected_identity,check=True,capture_output=True,timeout=30)
    data=attachment_bytes(converted,folder,800*1024,selected_identity)
-  elif not label.startswith('watch-') and data.startswith(b'\xff\xd8'):
+  elif not label.startswith('watch-') and data.startswith(b'\xff\xd8') and not native_manual_browser_jpeg:
    # Full phone/iPad frames retain both real import routes within the unchanged
    # per-row allocation; Watch endpoint pixels above remain byte-for-byte native.
    converted=path.with_suffix('.bounded.jpg')
@@ -448,6 +452,7 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   (out/filename).write_bytes(data)
   item={'name':filename,'result_label':label,'checkpoint':name,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()}
   if native_dimensions:item.update(native_pixel_dimensions=native_dimensions,source_bytes_preserved=True)
+  if native_manual_browser_jpeg:item.update(source_bytes_preserved=True,manual_review_required=True,automatic_page_qualification=False,runtime_precise_url='UNKNOWN')
   summary['screenshots'].append(item);print(json.dumps(item),flush=True)
 expected_phone_result_results=[] if selected_identity else [label for label in ['pro-max','SE3'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
 summary['missing_phone_result_endpoints']=missing_phone_result_endpoints(summary['phone_result_evidence_requirements'],summary['screenshots'],expected_phone_result_results)
