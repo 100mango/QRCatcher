@@ -30,12 +30,53 @@ sys.modules[SPEC.name] = gate
 SPEC.loader.exec_module(gate)
 ARM64 = 0x0100000C
 X86_64 = 0x01000007
+TEST_UUID = bytes(range(1, 17))
 
 
 def dylib_command(name, command=0xC, endian='<'):
     encoded = name.encode('utf-8') + b'\0'
     size = (24 + len(encoded) + 7) & ~7
     return struct.pack(endian + '6I', command, size, 24, 0, 0x10000, 0x10000) + encoded.ljust(size - 24, b'\0')
+
+
+def uuid_command(value=TEST_UUID, endian='<'):
+    return struct.pack(endian + '2I', 0x1B, 24) + value
+
+
+def target_triple_command(value='arm64-apple-ios17.0.0-simulator', endian='<', offset=12):
+    encoded = value.encode('utf-8') + b'\0'
+    size = (offset + len(encoded) + 7) & ~7
+    return (struct.pack(endian + '3I', 0x39, size, offset) + b'\0' * (offset - 12)
+            + encoded.ljust(size - offset, b'\0'))
+
+
+def symbol_macho(cpu=ARM64, subtype=0, endian='<', uuid=TEST_UUID,
+                 platform=7, filetype=0xA, extra=(), markers=b''):
+    """Public dsymutil layout: virtual original sections plus stored DWARF.
+
+    These are synthetic structural fixtures, not retained Xcode dSYM bytes.
+    """
+    commands = []
+    if uuid is not None:
+        commands.append(uuid_command(uuid, endian))
+    if platform is not None:
+        commands.append(struct.pack(endian + '6I', 0x32, 24, platform, 17 << 16, 27 << 16, 0))
+    commands.extend(extra)
+    byte_count = sum(map(len, commands)) + 304
+    data_offset = 32 + byte_count
+    payload = b'synthetic DWARF\0' + markers
+    text_name = b'__TEXT'.ljust(16, b'\0')
+    dwarf_name = b'__DWARF'.ljust(16, b'\0')
+    commands.append(struct.pack(endian + 'II16sQQQQIIII', 0x19, 152, text_name,
+                                0x100000000, 0x1000, 0, 0, 5, 5, 1, 0)
+                    + struct.pack(endian + '16s16sQQIIIIIIII', b'__text'.ljust(16, b'\0'), text_name,
+                                  0x100000400, 256, 0, 2, 0, 0, 0x80000400, 0, 0, 0))
+    commands.append(struct.pack(endian + 'II16sQQQQIIII', 0x19, 152, dwarf_name,
+                                0x100001000, 0x1000, data_offset, len(payload), 7, 3, 1, 0)
+                    + struct.pack(endian + '16s16sQQIIIIIIII', b'__debug_info'.ljust(16, b'\0'), dwarf_name,
+                                  0x100001000, len(payload), data_offset, 0, 0, 0, 0x02000000, 0, 0, 0))
+    return struct.pack(endian + '8I', 0xFEEDFACF, cpu, subtype, filetype,
+                        len(commands), byte_count, 0, 0) + b''.join(commands) + payload
 
 
 def macho(platform=2, cpu=ARM64, subtype=0, filetype=2, minimum=15 << 16,
@@ -267,9 +308,42 @@ class IOSOnlyPackageTests(unittest.TestCase):
         settings = {'platform': 7, 'filetype': 8, 'minimum': 17 << 16,
                     'markers': b'QRWatchPhoneService\0QRWatchSessionGate\0XCTestCase\0',
                     'extra': [dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
-                              dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest')]}
+                              dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest'), uuid_command()]}
         settings.update(changes)
         (self.test_bundle / 'QRCatcherTests').write_bytes(macho(**settings))
+
+    def symbols(self, data=None):
+        folder = self.app / gate.TEST_SYMBOLS
+        dwarf = self.app / gate.TEST_DWARF
+        dwarf.parent.mkdir(parents=True, exist_ok=True)
+        self.symbol_info = {'CFBundleDevelopmentRegion': 'English',
+                            'CFBundleIdentifier': 'com.apple.xcode.dsym.' + gate.TEST_BUNDLE_ID,
+                            'CFBundleInfoDictionaryVersion': '6.0', 'CFBundlePackageType': 'dSYM',
+                            'CFBundleSignature': '????', 'CFBundleShortVersionString': '1.0',
+                            'CFBundleVersion': '1'}
+        self.write_symbol_info()
+        dwarf.write_bytes(symbol_macho(markers=b'QRWatchPhoneService\0QRWatchSessionGate\0XCTestCase\0')
+                          if data is None else data)
+        return folder, dwarf
+
+    def write_symbol_info(self):
+        (self.app / gate.TEST_SYMBOLS / 'Contents/Info.plist').write_bytes(plistlib.dumps(self.symbol_info))
+
+    def relocation_yaml(self, architecture='aarch64', records=(), triple=None, binary_path=None):
+        """LLVM RelocationMap's public emitted shape, not observed native bytes."""
+        triple = triple or architecture + '-apple-ios17.0.0-simulator'
+        binary_path = binary_path or str(self.test_bundle / 'QRCatcherTests')
+        lines = ['---', 'triple:          ' + repr(triple),
+                 'binary-path:     ' + json.dumps(binary_path),
+                 'relocations:' + ('' if records else '    []')]
+        lines.extend('  - ' + record for record in records)
+        return ('\n'.join(lines + ['...']) + '\n').encode('utf-8')
+
+    def relocations(self, architecture='aarch64', data=None):
+        path = self.app / gate.TEST_RELOCATIONS / architecture / 'QRCatcherTests.yml'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(self.relocation_yaml(architecture) if data is None else data)
+        return path
 
     def test_owned_temporary_alias_is_resolved_without_admitting_bound_path_aliases(self):
         alias = self.base / 'temporary-alias'
@@ -593,6 +667,559 @@ class IOSOnlyPackageTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(report['reason'], 'test_host_binding')
 
+    def test_bound_symbols_are_separate_from_runtime_images_and_use_public_metadata(self):
+        options = self.hosted(format_version=2)
+        self.symbols()
+        for identifier in ('com.apple.xcode.dsym.' + gate.TEST_BUNDLE_ID,
+                           'com.apple.xcode.dsym.QRCatcherTests.xctest'):
+            self.symbol_info['CFBundleIdentifier'] = identifier
+            self.write_symbol_info()
+            with patch('subprocess.run', side_effect=AssertionError('no native symbol tools')):
+                report = gate.verify_package(self.app, **options)
+            self.assertEqual([entry['path'] for entry in report['mach_o']], ['QRCatcher'])
+            self.assertEqual([entry['path'] for entry in report['hosted_tests']['mach_o']],
+                             [gate.TEST_BUNDLE + '/QRCatcherTests'])
+            symbols = report['hosted_tests']['symbols']
+            self.assertEqual(symbols['classification'], 'test-symbols')
+            self.assertEqual(symbols['bound_executable'], gate.TEST_BUNDLE + '/QRCatcherTests')
+            self.assertEqual(symbols['dwarf']['path'], gate.TEST_DWARF)
+            self.assertEqual(symbols['dwarf']['slices'][0]['uuid'], TEST_UUID.hex())
+            self.assertEqual(symbols['dwarf']['slices'][0]['file_type'], 0xA)
+            self.assertEqual(symbols['metadata']['CFBundleIdentifier'], identifier)
+        dwarf = self.app / gate.TEST_DWARF
+        dwarf.write_bytes(symbol_macho(platform=None))
+        self.assertIsNone(gate.verify_package(self.app, **options)['hosted_tests']['symbols']['dwarf']['slices'][0]['platform'])
+
+    def test_symbols_match_every_fat_slice_by_architecture_not_position(self):
+        options = self.hosted()
+        second_uuid = bytes(range(17, 33))
+        arm = (self.test_bundle / 'QRCatcherTests').read_bytes()
+        self.write_test_binary(cpu=X86_64, endian='>', extra=[
+            dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity', endian='>'),
+            uuid_command(second_uuid, '>')])
+        intel = (self.test_bundle / 'QRCatcherTests').read_bytes()
+        for wide in (False, True):
+            for endian in ('<', '>'):
+                with self.subTest(wide=wide, endian=endian):
+                    (self.test_bundle / 'QRCatcherTests').write_bytes(fat([arm, intel], wide, endian))
+                    self.symbols(fat([symbol_macho(cpu=X86_64, endian='>', uuid=second_uuid),
+                                      symbol_macho()], wide, endian))
+                    report = gate.verify_package(self.app, **options)
+                    self.assertEqual(len(report['hosted_tests']['symbols']['dwarf']['slices']), 2)
+                    (self.app / gate.TEST_DWARF).write_bytes(fat([symbol_macho(cpu=X86_64, uuid=TEST_UUID),
+                                                              symbol_macho()], wide, endian))
+                    self.rejected('test_symbol_uuid', **options)
+
+    def test_symbol_uuid_missing_duplicate_zero_malformed_or_foreign_is_rejected(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        good_binary = (self.test_bundle / 'QRCatcherTests').read_bytes()
+        cases = ((symbol_macho(uuid=bytes(range(17, 33))), 'test_symbol_uuid'),
+                 (symbol_macho(uuid=None), 'missing_uuid_command'),
+                 (symbol_macho(extra=[uuid_command()]), 'duplicate_uuid_command'),
+                 (symbol_macho(uuid=b'\0' * 16), 'invalid_uuid'),
+                 (edit_command(symbol_macho(), 0x1B, 4, 'I', 16), 'malformed_uuid_command'))
+        for data, reason in cases:
+            with self.subTest(reason=reason):
+                dwarf.write_bytes(data)
+                self.rejected(reason, **options)
+        dwarf.write_bytes(symbol_macho())
+        watch_link = dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity')
+        for extra, reason in (([watch_link], 'missing_uuid_command'),
+                              ([watch_link, uuid_command(), uuid_command()], 'duplicate_uuid_command')):
+            self.write_test_binary(extra=extra)
+            self.rejected(reason, **options)
+        (self.test_bundle / 'QRCatcherTests').write_bytes(good_binary)
+
+    def test_symbols_reject_missing_duplicate_foreign_or_subtype_architectures(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        for data, reason in ((symbol_macho(cpu=X86_64), 'test_symbol_architecture'),
+                             (symbol_macho(subtype=1), 'test_symbol_architecture'),
+                             (fat([symbol_macho(), symbol_macho(cpu=X86_64)]), 'test_symbol_architecture'),
+                             (fat([symbol_macho(), symbol_macho()]), 'duplicate_fat_slice')):
+            with self.subTest(reason=reason):
+                dwarf.write_bytes(data)
+                self.rejected(reason, **options)
+        first = (self.test_bundle / 'QRCatcherTests').read_bytes()
+        self.write_test_binary(cpu=X86_64)
+        second = (self.test_bundle / 'QRCatcherTests').read_bytes()
+        (self.test_bundle / 'QRCatcherTests').write_bytes(fat([first, second]))
+        dwarf.write_bytes(symbol_macho())
+        self.rejected('test_symbol_architecture', **options)
+
+    def test_symbols_require_exact_sibling_and_unique_dwarf_file(self):
+        options = self.hosted()
+        folder, dwarf = self.symbols()
+        for destination in (self.app / 'QRCatcherTests.xctest.dSYM',
+                            self.test_bundle / 'QRCatcherTests.xctest.dSYM',
+                            self.app / 'PlugIns/nested/QRCatcherTests.xctest.dSYM',
+                            self.app / 'PlugIns/Other.xctest.dSYM'):
+            with self.subTest(destination=destination.relative_to(self.app)):
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                folder.rename(destination)
+                self.rejected(**options)
+                destination.rename(folder)
+        original = dwarf.read_bytes()
+        dwarf.unlink()
+        self.rejected('missing_test_symbols', **options)
+        dwarf.write_bytes(original)
+        duplicate = dwarf.with_name('Other')
+        duplicate.write_bytes(original)
+        self.rejected('test_symbol_inventory', **options)
+        duplicate.unlink()
+        dwarf.rename(duplicate)
+        self.rejected('test_symbol_inventory', **options)
+
+    def test_symbol_metadata_cannot_declare_foreign_or_executable_bundle(self):
+        options = self.hosted()
+        folder, _ = self.symbols()
+        original = dict(self.symbol_info)
+        for key, value in (('CFBundleIdentifier', 'com.apple.xcode.dsym.Foreign'),
+                           ('CFBundleIdentifier', []),
+                           ('CFBundlePackageType', 'BNDL'), ('CFBundleInfoDictionaryVersion', '5.0'),
+                           ('CFBundleExecutable', 'QRCatcherTests'), ('CFBundleVersion', 1),
+                           ('CFBundleSignature', 'OTHER'), ('CFBundleDevelopmentRegion', 'unknown'),
+                           ('Toolchain', []), ('CFBundleShortVersionString', '')):
+            with self.subTest(key=key):
+                self.symbol_info = dict(original, **{key: value})
+                self.write_symbol_info()
+                error = self.rejected('test_symbol_metadata', **options)
+                if key == 'CFBundleExecutable':
+                    self.assertIn('CFBundleExecutable:str', error.detail)
+        self.symbol_info = original
+        self.write_symbol_info()
+        metadata = folder / 'Contents/Info.plist'
+        metadata.write_bytes(b'<plist><dict>')
+        self.rejected('malformed_plist', **options)
+        metadata.unlink()
+        self.rejected('missing_test_symbols', **options)
+
+    def test_symbols_reject_symlinks_special_files_runtime_types_and_extra_code(self):
+        options = self.hosted()
+        folder, dwarf = self.symbols()
+        original = dwarf.read_bytes()
+        for path in (folder, folder / 'Contents', folder / 'Contents/Info.plist', dwarf):
+            with self.subTest(path=path.relative_to(self.app)):
+                saved = self.base / 'saved-symbol-entry'
+                path.rename(saved)
+                path.symlink_to(saved, target_is_directory=saved.is_dir())
+                self.rejected('symlink', **options)
+                path.unlink()
+                saved.rename(path)
+        dwarf.unlink()
+        os.mkfifo(dwarf)
+        self.rejected('unsupported_file_type', **options)
+        dwarf.unlink()
+        for data, reason in ((macho(platform=7, filetype=8), 'test_symbol_file_type'),
+                             (symbol_macho(filetype=2), 'test_symbol_file_type'),
+                             (symbol_macho(extra=[dylib_command('@rpath/Extra.dylib')]), 'test_symbol_load_command'),
+                             (symbol_macho(extra=[struct.pack('<IIQQ', 0x80000028, 24, 4096, 0)]), 'test_symbol_load_command'),
+                             (symbol_macho(platform=4), 'mach_o_platform'),
+                             (edit_command(symbol_macho(), 0x19, 40, 'Q', 32), 'test_symbol_runtime_code'),
+                             (edit_command(symbol_macho(), 0x19, 120, 'I', 32), 'test_symbol_runtime_code')):
+            with self.subTest(reason=reason):
+                dwarf.write_bytes(data)
+                self.rejected(reason, **options)
+        dwarf.write_bytes(original)
+        extra = folder / 'Contents/Resources/extra-code'
+        extra.write_bytes(macho(platform=7, filetype=6))
+        self.rejected('test_symbol_inventory', **options)
+
+    def test_symbol_unknown_metadata_and_load_command_details_are_bounded_non_source_summaries(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        self.symbol_info['NewMetadata'] = {'payload': 'private metadata sentinel'}
+        self.write_symbol_info()
+        error = self.rejected('test_symbol_metadata', **options)
+        self.assertIn('NewMetadata:dict', error.detail)
+        self.assertNotIn('private metadata sentinel', json.dumps(error.symbol_observations))
+        self.assertNotIn('private metadata sentinel', error.detail)
+        del self.symbol_info['NewMetadata']
+        self.write_symbol_info()
+        dwarf.write_bytes(symbol_macho(extra=[struct.pack('<2I', 0x7FFFFFFE, 8)]))
+        error = self.rejected('test_symbol_load_command', **options)
+        self.assertIn('0x7ffffffe', error.detail)
+        self.assertLessEqual(len(error.detail), 400)
+
+    def test_symbol_exception_never_weakens_shipping_helpers_or_test_frameworks(self):
+        options = self.hosted()
+        self.symbols()
+        for markers, reason in ((b'QRWatchPhoneService', 'watch_presence'),
+                                (b'QRWatchSessionGate', 'watch_presence')):
+            self.write_binary(macho(platform=7, markers=markers))
+            self.rejected(reason, **options)
+        self.write_binary(macho(platform=7))
+        self.framework(name='XCTest', data=macho(platform=7, filetype=6))
+        self.rejected('shipping_test_inventory', **options)
+
+    def test_bound_symbols_keep_shipping_xctest_bytes_and_links_strict_in_debug(self):
+        options = self.hosted()
+        self.symbols()
+        framework = self.framework(data=macho(platform=7, filetype=6))
+        self.write_binary(macho(platform=7, markers=b'-ui-testing\0-fixture-payload\0QRStartupObservation\0'))
+        debug_dylib = self.app / 'QRCatcher.debug.dylib'
+        debug_dylib.write_bytes(macho(platform=7, filetype=6, markers=b'-mini-startup-fixture\0'))
+        self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+        for location in (self.app / 'QRCatcher', debug_dylib, framework / 'Ordinary'):
+            filetype = 2 if location.name == 'QRCatcher' else 6
+            original = location.read_bytes()
+            for marker in ('XCTestCase', 'XCTestObservation'):
+                for encoding in ('ascii', 'utf-16-le', 'utf-16-be'):
+                    with self.subTest(location=location.name, marker=marker, encoding=encoding):
+                        location.write_bytes(macho(platform=7, filetype=filetype, markers=marker.encode(encoding)))
+                        self.rejected('release_diagnostics', **options)
+            location.write_bytes(macho(platform=7, filetype=filetype, extra=[
+                dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest')]))
+            self.rejected('release_diagnostics', **options)
+            location.write_bytes(macho(platform=7, filetype=filetype, extra=[
+                dylib_command('/Developer/Library/Frameworks/xCtEsT.framework/xCtEsT')]))
+            self.rejected('shipping_test_dependency', **options)
+            location.write_bytes(original)
+        self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+
+    def test_symbol_cli_positive_and_uuid_failure_keep_gates_under_optimization(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            with self.subTest(optimized=optimized):
+                dwarf.write_bytes(symbol_macho())
+                result, report = self.cli(*arguments, optimized=optimized)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(report['hosted_tests']['symbols']['classification'], 'test-symbols')
+                dwarf.write_bytes(symbol_macho(uuid=bytes(range(17, 33))))
+                result, report = self.cli(*arguments, optimized=optimized)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(report['reason'], 'test_symbol_uuid')
+
+    def test_release_and_unbound_debug_reject_even_empty_test_symbol_inventory(self):
+        folder = self.app / gate.TEST_SYMBOLS
+        folder.mkdir(parents=True)
+        self.rejected('shipping_test_inventory')
+        self.simulator()
+        self.debug()
+        self.rejected('shipping_test_inventory', platform='simulator', configuration='Debug')
+        folder.rmdir()
+        folder = self.app / 'PlugIns/QRCatcherTests.dSYM'
+        folder.mkdir()
+        self.rejected('test_symbol_path', platform='simulator', configuration='Debug')
+        archive = self.archive()
+        with self.assertRaises(gate.ValidationError):
+            gate.verify_package(archive)
+
+    def test_optional_relocation_metadata_accepts_public_empty_and_nonempty_flow_maps(self):
+        options = self.hosted(format_version=2)
+        self.symbols()
+        row = "{ offset: 0x8, size: 0x8, addend: 0x0, symName: '-[QRWatchPhoneService item:]', symObjAddr: 0x0, symBinAddr: 0x100000000, symSize: 0x10 }"
+        quoted_row = row.replace("'-[QRWatchPhoneService item:]'", "'symbol, with a doubled ''quote'''" )
+        path = self.relocations()
+        for records in ((), (row,), (row, quoted_row),
+                        (row.replace('symObjAddr: 0x0, ', '').replace("'-[QRWatchPhoneService item:]'", json.dumps('symbol"name')),)):
+            with self.subTest(records=len(records)):
+                path.write_bytes(self.relocation_yaml(records=records))
+                report = gate.verify_package(self.app, **options)
+                resources = report['hosted_tests']['symbols']['relocation_metadata']
+                self.assertEqual(len(resources), 1)
+                self.assertEqual(resources[0]['path'], str(path.relative_to(self.app)))
+                metadata = resources[0]['relocation_map']
+                self.assertEqual(metadata['classification'], 'test-symbol-relocation-metadata')
+                self.assertEqual(metadata['relocation_count'], len(records))
+                self.assertEqual(metadata['binary_path'], str(self.test_bundle / 'QRCatcherTests'))
+                self.assertEqual([image['path'] for image in report['mach_o']], ['QRCatcher'])
+                self.assertEqual(len(report['hosted_tests']['mach_o']), 1)
+        for triple in ('arm64-apple-ios17.0.0-simulator', 'aarch64-apple-ios-simulator'):
+            path.write_bytes(self.relocation_yaml(triple=triple))
+            self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+
+    def test_relocation_metadata_owns_exact_test_binary_simulator_triple_and_architecture(self):
+        options = self.hosted()
+        self.symbols()
+        path = self.relocations()
+        for binary_path in (str(self.app / 'QRCatcher'), str(self.base / 'QRCatcherTests'),
+                            str(self.test_bundle / '..' / 'QRCatcherTests.xctest/QRCatcherTests')):
+            with self.subTest(binary_path=binary_path):
+                path.write_bytes(self.relocation_yaml(binary_path=binary_path))
+                self.rejected('test_relocation_binary_path', **options)
+        for triple in ('aarch64-apple-ios17.0.0', 'aarch64-apple-tvos17.0.0-simulator',
+                       'aarch64-unknown-ios17.0.0-simulator', 'aarch64-apple-watchos17.0.0-simulator'):
+            with self.subTest(triple=triple):
+                path.write_bytes(self.relocation_yaml(triple=triple))
+                self.rejected('test_relocation_platform', **options)
+        path.write_bytes(self.relocation_yaml(triple='x86_64-apple-ios17.0.0-simulator'))
+        self.rejected('test_relocation_architecture', **options)
+        path.write_bytes(self.relocation_yaml())
+        foreign = self.relocations(architecture='x86_64')
+        self.rejected('test_relocation_architecture', **options)
+        foreign.unlink()
+        foreign.parent.rmdir()
+
+    def test_relocation_metadata_rejects_duplicates_unknown_fields_malformed_yaml_and_code(self):
+        options = self.hosted()
+        self.symbols()
+        row = "{ offset: 0x8, size: 0x4, addend: 0x0, symName: _ordinary, symBinAddr: 0x100000000, symSize: 0x10 }"
+        valid = self.relocation_yaml(records=(row,))
+        path = self.relocations()
+        cases = ((valid.replace(b'triple:', b'triple: aarch64-apple-ios-simulator\ntriple:', 1), 'duplicate_test_relocation_field'),
+                 (valid.replace(b'size: 0x4,', b'size: 0x4, size: 0x8,'), 'duplicate_test_relocation_field'),
+                 (valid.replace(b'triple:', b'unknown:'), 'unsupported_test_relocation_field'),
+                 (valid.replace(b'symSize: 0x10', b'symSize: 0x10, unknown: 0x0'), 'unsupported_test_relocation_field'),
+                 (valid.replace(b'offset: 0x8', b'offset: 0x10000000000000000'), 'unsupported_test_relocation_format'),
+                 (valid.replace(b'size: 0x4', b'size: 0x2'), 'test_relocation_size'),
+                 (valid.replace(b'symSize: 0x10', b'symSize: []'), 'unsupported_test_relocation_format'),
+                 (valid.replace(b'symName: _ordinary, ', b''), 'unsupported_test_relocation_format'),
+                 (valid.replace(b'{ offset: 0x8, ', b'offset: 0x8\n    '), 'unsupported_test_relocation_format'),
+                 (valid.replace(b'symName: _ordinary', b'symName: *alias'), 'unsupported_test_relocation_format'),
+                 (valid.replace(b'...\n', b'...\n---\n'), 'unsupported_test_relocation_format'),
+                 (valid[:-5], 'unsupported_test_relocation_format'),
+                 (b'\xff\xfeinvalid', 'test_relocation_encoding'),
+                 (valid + b'\0', 'test_relocation_encoding'),
+                 (macho(platform=7, filetype=8), 'test_relocation_runtime_code'))
+        for data, reason in cases:
+            with self.subTest(reason=reason, data=data[:40]):
+                path.write_bytes(data)
+                self.rejected(reason, **options)
+
+    def test_relocation_metadata_reuses_existing_size_node_symbol_and_total_limits(self):
+        options = self.hosted()
+        self.symbols()
+        row = "{ offset: 0x8, size: 0x4, addend: 0x0, symName: _ordinary, symBinAddr: 0x100000000, symSize: 0x10 }"
+        path = self.relocations()
+        path.write_bytes(b'x' * (gate.DEFAULT_LIMITS.plist_bytes + 1))
+        self.rejected('test_relocation_bytes_limit', **options)
+        path.write_bytes(self.relocation_yaml(records=(row,) * 100))
+        self.rejected('test_relocation_node_limit', limits=replace(gate.DEFAULT_LIMITS, plist_nodes=256), **options)
+        path.write_bytes(self.relocation_yaml(records=(row.replace('_ordinary', 'x' * (gate.DEFAULT_LIMITS.dependency_bytes + 1)),)))
+        self.rejected('test_relocation_symbol_limit', **options)
+        path.write_bytes(self.relocation_yaml())
+        report = gate.verify_package(self.app, **options)
+        self.rejected('total_bytes_limit', limits=replace(gate.DEFAULT_LIMITS, total_bytes=report['inventory']['file_bytes'] - 1), **options)
+
+    def test_relocation_inventory_requires_exact_filename_regular_type_and_closed_resources(self):
+        options = self.hosted()
+        folder, _ = self.symbols()
+        path = self.relocations()
+        original = path.read_bytes()
+        wrong = path.with_name('Foreign.yml')
+        path.rename(wrong)
+        self.rejected('test_symbol_inventory', **options)
+        wrong.rename(path)
+        outside = self.base / 'outside-relocations.yml'
+        path.rename(outside)
+        path.symlink_to(outside)
+        self.rejected('symlink', **options)
+        path.unlink()
+        os.mkfifo(path)
+        self.rejected('unsupported_file_type', **options)
+        path.unlink()
+        path.write_bytes(original)
+        for relative in ('Contents/Resources/Relocations/arm64',
+                         'Contents/Resources/Swift/aarch64', 'Contents/Resources/Remarks',
+                         'Contents/Resources/Relocations/aarch64/nested'):
+            with self.subTest(relative=relative):
+                entry = folder / relative
+                entry.mkdir(parents=True)
+                self.rejected('test_symbol_inventory', **options)
+                entry.rmdir()
+                if relative.startswith('Contents/Resources/Swift/'):
+                    entry.parent.rmdir()
+
+    def test_relocation_metadata_and_platform_rejection_remain_active_under_optimization(self):
+        options = self.hosted()
+        self.symbols()
+        path = self.relocations()
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            path.write_bytes(self.relocation_yaml())
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(report['hosted_tests']['symbols']['relocation_metadata'][0]['relocation_map']['relocation_count'], 0)
+            path.write_bytes(self.relocation_yaml(triple='aarch64-apple-ios17.0.0'))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'test_relocation_platform')
+
+    def test_symbol_failures_retain_only_bounded_unqualified_observations_from_existing_reads(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(uuid=bytes(range(17, 33)), markers=b'private DWARF source sentinel'))
+        self.relocations()
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('test_symbol_uuid', **options)
+        evidence = error.symbol_observations
+        self.assertEqual(evidence['qualification'], 'unqualified')
+        self.assertEqual(evidence['scope'], 'exact-xctestrun-bound-test-symbol-companion')
+        self.assertEqual(evidence['path'], gate.TEST_SYMBOLS)
+        self.assertTrue(all(entry['path'].startswith(gate.TEST_SYMBOLS) and not Path(entry['path']).is_absolute()
+                            for entry in evidence['inventory']))
+        self.assertEqual(evidence['plist']['keys']['CFBundlePackageType']['value'], 'dSYM')
+        observed = evidence['mach_o'][0]['slices'][0]
+        self.assertEqual(observed['file_type'], 0xA)
+        self.assertEqual(observed['architecture'], 'arm64')
+        self.assertEqual(observed['uuid'], bytes(range(17, 33)).hex())
+        reference = evidence['bound_test_binary']
+        self.assertEqual(set(reference), {'path', 'slices'})
+        self.assertEqual(reference['path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+        self.assertFalse(Path(reference['path']).is_absolute())
+        self.assertEqual(reference['slices'], [{'file_type': 8, 'cpu_type': ARM64, 'cpu_subtype': 0,
+                                               'architecture': 'arm64', 'uuid': TEST_UUID.hex()}])
+        self.assertNotEqual(reference['slices'][0]['uuid'], observed['uuid'])
+        self.assertEqual(sum(call.args[3] == gate.TEST_DWARF for call in reader.call_args_list), 1)
+        self.assertEqual(sum(call.args[3] == gate.TEST_BUNDLE + '/QRCatcherTests'
+                             for call in reader.call_args_list), 1)
+        encoded = gate.encode_report({'schema_version': 1, 'status': 'fail', 'reason': error.code,
+                                      'test_symbol_observations': evidence})
+        self.assertLessEqual(len(encoded), gate.DEFAULT_LIMITS.report_bytes)
+        self.assertNotIn(b'private DWARF source sentinel', encoded)
+        self.assertNotIn(b'QRWatchPhoneService', encoded)
+        dwarf.write_bytes(symbol_macho())
+        self.symbol_info['CFBundlePackageType'] = 'BNDL'
+        self.write_symbol_info()
+        error = self.rejected('test_symbol_metadata', **options)
+        self.assertEqual(error.symbol_observations['plist']['keys']['CFBundlePackageType']['value'], 'BNDL')
+        self.symbol_info['CFBundlePackageType'] = 'dSYM'
+        self.write_symbol_info()
+        dwarf.write_bytes(macho(platform=7, filetype=8))
+        error = self.rejected('test_symbol_file_type', **options)
+        self.assertEqual(error.symbol_observations['mach_o'][0]['slices'][0]['file_type'], 8)
+        self.assertIsNone(error.symbol_observations['mach_o'][0]['slices'][0]['uuid'])
+        dwarf.write_bytes(symbol_macho(extra=[uuid_command()]))
+        error = self.rejected('duplicate_uuid_command', **options)
+        self.assertEqual(error.symbol_observations['mach_o'][0]['slices'][0]['uuid_commands_observed'], 2)
+        dwarf.write_bytes(symbol_macho(uuid=bytes(range(17, 33))))
+        error = self.rejected('test_symbol_uuid', limits=replace(gate.DEFAULT_LIMITS, report_bytes=512), **options)
+        self.assertEqual(error.symbol_observations['summaries_omitted'], 'existing-report-budget')
+
+    def test_symbol_failure_json_retention_obeys_actual_binding_and_optimization(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(uuid=bytes(range(17, 33)), markers=b'private DWARF source sentinel'))
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'test_symbol_uuid')
+            evidence = report['test_symbol_observations']
+            self.assertEqual(evidence['qualification'], 'unqualified')
+            self.assertEqual(evidence['mach_o'][0]['slices'][0]['uuid'], bytes(range(17, 33)).hex())
+            reference = evidence['bound_test_binary']
+            self.assertEqual(set(reference), {'path', 'slices'})
+            self.assertEqual(reference['path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+            self.assertFalse(Path(reference['path']).is_absolute())
+            self.assertEqual(reference['slices'][0]['uuid'], TEST_UUID.hex())
+            self.assertEqual(set(reference['slices'][0]), {'file_type', 'cpu_type', 'cpu_subtype', 'architecture', 'uuid'})
+            self.assertNotIn('private DWARF source sentinel', json.dumps(report))
+            self.assertLessEqual(len(result.stdout.encode('utf-8')), gate.DEFAULT_LIMITS.report_bytes)
+        self.test_target['TestHostBundleIdentifier'] = 'example.foreign'
+        self.write_xctestrun()
+        result, report = self.cli(*arguments)
+        self.assertEqual(report['reason'], 'test_host_binding')
+        self.assertNotIn('test_symbol_observations', report)
+
+    def test_optional_target_triple_matches_bound_arm64_x86_fat_and_both_endiannesses(self):
+        options = self.hosted()
+        for endian in ('<', '>'):
+            images = []
+            companions = []
+            for cpu, subtype, architecture, uuid in ((ARM64, 0, 'arm64', TEST_UUID),
+                                                     (X86_64, 3, 'x86_64', bytes(range(17, 33)))):
+                triple = architecture + '-apple-ios17.0.0-simulator'
+                self.write_test_binary(cpu=cpu, subtype=subtype, endian=endian, extra=[
+                    dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity', endian=endian),
+                    uuid_command(uuid, endian), target_triple_command(triple, endian)])
+                image = (self.test_bundle / 'QRCatcherTests').read_bytes()
+                companion = symbol_macho(cpu=cpu, subtype=subtype, endian=endian, uuid=uuid,
+                                         extra=[target_triple_command(triple, endian)])
+                self.symbols(companion)
+                report = gate.verify_package(self.app, **options)
+                self.assertEqual(report['hosted_tests']['symbols']['dwarf']['slices'][0]['target_triple'], triple)
+                images.append(image)
+                companions.append(companion)
+            for wide in (False, True):
+                for fat_endian in ('<', '>'):
+                    with self.subTest(endian=endian, wide=wide, fat_endian=fat_endian):
+                        (self.test_bundle / 'QRCatcherTests').write_bytes(fat(images, wide, fat_endian))
+                        self.symbols(fat(list(reversed(companions)), wide, fat_endian))
+                        report = gate.verify_package(self.app, **options)
+                        self.assertEqual(len(report['hosted_tests']['symbols']['dwarf']['slices']), 2)
+
+    def test_target_triple_rejects_malformed_offset_nul_padding_encoding_size_and_duplicates(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        command = target_triple_command()
+        size = len(command)
+        padded = bytearray(target_triple_command(offset=16))
+        padded[12] = 1
+        cases = ((struct.pack('<3I', 0x39, size, 11) + command[12:], 'malformed_target_triple_command'),
+                 (struct.pack('<3I', 0x39, size, size) + command[12:], 'malformed_target_triple_command'),
+                 (command[:12] + b'X' * (size - 12), 'malformed_target_triple_command'),
+                 (command[:-1] + b'X', 'malformed_target_triple_command'),
+                 (target_triple_command(''), 'malformed_target_triple_command'),
+                 (target_triple_command('arm64-apple-ios17.0.0-simulator\n'), 'malformed_target_triple_command'),
+                 (target_triple_command('arm64-apple-ios17.0.0-simulatör'), 'malformed_target_triple_command'),
+                 (target_triple_command('x' * (gate.DEFAULT_LIMITS.dependency_bytes + 1)), 'malformed_target_triple_command'),
+                 (bytes(padded), 'malformed_target_triple_command'),
+                 (struct.pack('<2I', 0x39, 8), 'malformed_target_triple_command'))
+        for value, reason in cases:
+            with self.subTest(value=value[:24]):
+                dwarf.write_bytes(symbol_macho(extra=[value]))
+                self.rejected(reason, **options)
+        dwarf.write_bytes(symbol_macho(extra=[command, command]))
+        self.rejected('duplicate_target_triple_command', **options)
+        self.write_test_binary(extra=[
+            dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
+            uuid_command(), command, command])
+        dwarf.write_bytes(symbol_macho(extra=[command]))
+        self.rejected('duplicate_target_triple_command', **options)
+
+    def test_target_triple_requires_both_sides_exact_simulator_architecture_and_platform(self):
+        options = self.hosted()
+        _, dwarf = self.symbols()
+        command = target_triple_command()
+        dwarf.write_bytes(symbol_macho(extra=[command]))
+        self.rejected('test_symbol_target_triple', **options)
+        self.write_test_binary(extra=[
+            dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
+            uuid_command(), command])
+        dwarf.write_bytes(symbol_macho())
+        self.rejected('test_symbol_target_triple', **options)
+        dwarf.write_bytes(symbol_macho(extra=[target_triple_command('arm64-apple-ios18.0.0-simulator')]))
+        self.rejected('test_symbol_target_triple', **options)
+        dwarf.write_bytes(symbol_macho(extra=[target_triple_command('x86_64-apple-ios17.0.0-simulator')]))
+        self.rejected('test_symbol_target_architecture', **options)
+        for triple in ('arm64-apple-ios17.0.0', 'arm64-apple-tvos17.0.0-simulator',
+                       'arm64-apple-watchos17.0.0-simulator', 'arm64-apple-macosx17.0.0',
+                       'arm64-unknown-ios17.0.0-simulator'):
+            with self.subTest(triple=triple):
+                dwarf.write_bytes(symbol_macho(extra=[target_triple_command(triple)]))
+                self.rejected('test_symbol_target_platform', **options)
+        padded = target_triple_command(offset=16)
+        self.write_test_binary(extra=[
+            dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
+            uuid_command(), padded])
+        dwarf.write_bytes(symbol_macho(extra=[padded]))
+        self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+
+    def test_target_triple_cli_positive_and_mismatch_remain_active_under_optimization(self):
+        options = self.hosted()
+        command = target_triple_command()
+        self.write_test_binary(extra=[
+            dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
+            uuid_command(), command])
+        _, dwarf = self.symbols()
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            dwarf.write_bytes(symbol_macho(extra=[command]))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(report['hosted_tests']['symbols']['dwarf']['slices'][0]['target_triple'], 'arm64-apple-ios17.0.0-simulator')
+            dwarf.write_bytes(symbol_macho(extra=[target_triple_command('arm64-apple-ios18.0.0-simulator')]))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'test_symbol_target_triple')
+            observations = report['test_symbol_observations']
+            self.assertEqual(observations['qualification'], 'unqualified')
+            self.assertEqual(observations['bound_test_binary']['slices'][0]['target_triple'], 'arm64-apple-ios17.0.0-simulator')
+            self.assertEqual(observations['mach_o'][0]['slices'][0]['target_triple'], 'arm64-apple-ios18.0.0-simulator')
+
     def test_device_identity_inventory_and_stripped_symbol_table(self):
         with patch('subprocess.run', side_effect=AssertionError('must not execute Apple tools')):
             report = gate.verify_package(self.app)
@@ -758,14 +1385,89 @@ class IOSOnlyPackageTests(unittest.TestCase):
         (self.app / '__preview.dylib').write_bytes(macho(filetype=6))
         self.rejected('orphan_mach_o')
 
-    def test_hosted_test_bundles_outside_shipping_app_are_permitted(self):
+    def test_release_archive_rejects_test_packages_symbols_and_xctest_outer_inventory(self):
         archive = self.archive()
+        for relative in ('Products/Tests/Hosted.xctest', 'dSYMs/QRCatcherTests.xctest.dSYM',
+                         'dSYMs/QRCatcherTests.dSYM', 'Products/Library/XCTest.framework',
+                         'Symbols/xCtEsT-support'):
+            with self.subTest(relative=relative):
+                entry = archive / relative
+                entry.mkdir(parents=True)
+                with self.assertRaises(gate.ValidationError) as raised:
+                    gate.verify_package(archive)
+                self.assertEqual(raised.exception.code, 'archive_test_inventory')
+                entry.rmdir()
+
+    def test_release_archive_preserves_normal_app_symbols_and_metadata_under_shared_limits(self):
+        archive = self.archive()
+        symbols = archive / 'dSYMs/QRCatcher.app.dSYM/Contents/Resources/DWARF'
+        symbols.mkdir(parents=True)
+        (symbols / 'QRCatcher').write_bytes(symbol_macho(platform=2))
+        (symbols.parent.parent / 'Info.plist').write_bytes(plistlib.dumps({
+            'CFBundleIdentifier': 'com.apple.xcode.dsym.' + gate.BUNDLE_ID,
+            'CFBundlePackageType': 'dSYM', 'CFBundleInfoDictionaryVersion': '6.0'}))
+        report = gate.verify_package(archive)
+        self.assertEqual(report['status'], 'pass')
+        self.assertEqual(len(report['mach_o']), 1)
+        self.assertEqual(report['inventory']['files'], 4)
+        self.assertEqual(report['archive_inventory']['files'], 7)
+        self.assertGreater(report['archive_inventory']['entries'], report['inventory']['entries'])
+        for field in ('entries', 'file_bytes'):
+            limits = replace(gate.DEFAULT_LIMITS, **{field if field == 'entries' else 'total_bytes':
+                                                   report['archive_inventory'][field] - 1})
+            with self.subTest(field=field), self.assertRaises(gate.ValidationError) as raised:
+                gate.verify_package(archive, limits=limits)
+            self.assertEqual(raised.exception.code, 'inventory_entry_limit' if field == 'entries' else 'total_bytes_limit')
+
+    def test_release_archive_rejects_outer_test_symbol_metadata_and_path_aliases(self):
+        archive = self.archive()
+        symbols = archive / 'dSYMs/Ordinary.dSYM/Contents'
+        symbols.mkdir(parents=True)
+        metadata = symbols / 'Info.plist'
+        metadata.write_bytes(plistlib.dumps({'CFBundleIdentifier': 'com.apple.xcode.dsym.' + gate.TEST_BUNDLE_ID,
+                                             'CFBundlePackageType': 'dSYM'}))
+        with self.assertRaises(gate.ValidationError) as raised:
+            gate.verify_package(archive)
+        self.assertEqual(raised.exception.code, 'archive_test_metadata')
+        metadata.unlink()
+        outside = self.base / 'outside-symbols'
+        outside.mkdir()
+        link = archive / 'dSYMs/linked'
+        link.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(gate.ValidationError) as raised:
+            gate.verify_package(archive)
+        self.assertEqual(raised.exception.code, 'symlink')
+
+    def test_release_archive_rejects_additional_or_renamed_installed_apps(self):
+        archive = self.archive()
+        other = archive / 'Products/Applications/Other.app'
+        other.mkdir()
+        with self.assertRaises(gate.ValidationError) as raised:
+            gate.verify_package(archive)
+        self.assertEqual(raised.exception.code, 'archive_app_inventory')
+        other.rmdir()
+        renamed = self.app.with_name('Other.app')
+        self.app.rename(renamed)
+        props = plistlib.loads((archive / 'Info.plist').read_bytes())
+        props['ApplicationProperties']['ApplicationPath'] = 'Applications/Other.app'
+        (archive / 'Info.plist').write_bytes(plistlib.dumps(props))
+        with self.assertRaises(gate.ValidationError) as raised:
+            gate.verify_package(archive)
+        self.assertEqual(raised.exception.code, 'archive_app_inventory')
+
+    def test_release_archive_outer_inventory_gate_remains_active_under_optimization(self):
+        archive = self.archive()
+        self.app = archive
+        for optimized in (False, True):
+            result, report = self.cli(optimized=optimized)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIsNotNone(report['archive_inventory'])
         tests = archive / 'Products/Tests/Hosted.xctest'
         tests.mkdir(parents=True)
-        (tests / 'Hosted').write_bytes(macho(markers=b'QRWatchPhoneService\0WatchConnectivity\0-ui-testing'))
-        (archive / 'dSYMs').mkdir()
-        (archive / 'dSYMs/other').write_bytes(b'QRWatchSessionGate')
-        self.assertEqual(gate.verify_package(archive)['status'], 'pass')
+        for optimized in (False, True):
+            result, report = self.cli(optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'archive_test_inventory')
 
     def test_shipped_test_bundle_rejected(self):
         (self.app / 'PlugIns/Hosted.xctest').mkdir(parents=True)
