@@ -284,8 +284,29 @@ def restore_pad_share_observation(text):
 UNIT_PRIVACY_HELPER_SHA256 = 'f87128dad627b7b12df8969ccb0e883a61836f828d73329112690304d718a491'
 UNIT_PRIVACY_CALLS = '    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryLarge];\n    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge];\n'
 
+def restore_multiline_unit_parent(text):
+    """Reverse only the exact stronger native vector/raw-value exercise."""
+    expected = '9a8fb07e23bf6f7a3291f489d6f9392f1d58bcf2285b0d04031d4be5835b000c'
+    if 'save:NO cannot touch the application' not in text:
+        return text
+    declaration = '- (void)displayPayload:(NSString *)payload saveToHistory:(BOOL)save;\n'
+    vector = 'for (NSString *payload in @[@"https://example.com/path?q=one", @"QRCatcher 你好 123", @"周末计划\\n上午逛市集，下午喝咖啡"])'
+    old_vector = 'for (NSString *payload in @[@"https://example.com/path?q=one", @"QRCatcher 你好 123"])'
+    if text.count(declaration) != 1 or text.count(vector) != 1:
+        raise ValueError('Changed multiline native method declaration/vector')
+    begin = text.index('        if ([payload containsString:@"\\n"]) {')
+    end = text.index('        }\n', begin) + len('        }\n')
+    if hashlib.sha256(text[begin:end].encode()).hexdigest() != 'c5b892c2fc8da134430cc32fed10f67f271f236adf88d88e9cee44daa3f9ecfe':
+        raise ValueError('Changed multiline codec/scanner/isolated history assertions')
+    text = (text[:begin] + text[end:]).replace(declaration, '', 1).replace(vector, old_vector, 1)
+    if hashlib.sha256(text.encode()).hexdigest() != expected:
+        raise ValueError('Original native unit parent changed')
+    return text
+
+
 def restore_unit_for_historical_observer(text):
     """Keep the old unit inventory proof while binding this exact added exercise."""
+    text = restore_multiline_unit_parent(text)
     system = '#if DEBUG\n- (void)assertPrivacySystemObservationGateAndCompletionPolicy'
     if system in text:
         begin = text.index(system)
@@ -574,7 +595,10 @@ def release_preprocessed(source):
     compiler = shutil.which('cc') or shutil.which('clang')
     result = subprocess.run([compiler, '-E', '-P', '-x', 'c', '-undef', '-DDEBUG=0', '-'], input=source,
                             text=True, capture_output=True, check=True, timeout=10)
-    return result.stdout
+    # Apple cc can retain presentation-only blank lines that GCC omits.
+    # Keep every character of every nonblank physical line, including literal
+    # spaces, escapes and business tokens; never collapse token whitespace.
+    return '\n'.join(line for line in result.stdout.split('\n') if line.strip(' \t\r')) + '\n'
 
 
 class OfflinePrivacyTests(unittest.TestCase):
@@ -623,6 +647,8 @@ class OfflinePrivacyTests(unittest.TestCase):
     def test_same_native_case_inventory_and_unrelated_method_bodies_remain_exact(self):
         for path, reference in NATIVE_REFERENCE.items():
             text = (ROOT/path).read_text()
+            if path.endswith('QRCatcherTests.m'):
+                text = restore_multiline_unit_parent(text)
             if path.endswith('QRCatcherPadUITests.m'):
                 text = restore_pad_share_observation(text)
             actual = test_methods(text)
@@ -821,6 +847,40 @@ class OfflinePrivacyTests(unittest.TestCase):
         for selector in ('viewDidLoad', 'openPolicyInBrowser', 'close'):
             self.assertEqual(method(self.source, selector), method(restore_privacy_policy_parent(self.source), selector))
 
+    def test_multiline_roundtrip_raw_scanner_and_isolated_history_remain_exact(self):
+        parent = restore_multiline_unit_parent(self.unit)
+        self.assertEqual(hashlib.sha256(parent.encode()).hexdigest(),
+                         '9a8fb07e23bf6f7a3291f489d6f9392f1d58bcf2285b0d04031d4be5835b000c')
+        case = test_methods(self.unit)['testQRRoundTrip']
+        self.assertIn('@"周末计划\\n上午逛市集，下午喝咖啡"', case)
+        self.assertIn('[scanner displayPayload:decoded saveToHistory:NO]', case)
+        self.assertIn('XCTAssertEqualObjects(label.text, payload)', case)
+        self.assertIn('[[QRHistoryStore alloc] initWithURL:nil]', case)
+        self.assertIn('XCTAssertEqualObjects(((URLEntity *)rows.firstObject).url, payload)', case)
+        self.assertNotIn('[AppDelegate appDelegate]', case)
+        self.assertEqual(len(test_methods(self.unit)), 12)
+        for before, after in [('saveToHistory:NO', 'saveToHistory:YES'),
+                              ('label.text, payload', 'label.text, @"first-line"'),
+                              ('上午逛市集，下午喝咖啡', 'shorter second line')]:
+            with self.subTest(change=before), self.assertRaises(ValueError):
+                restore_multiline_unit_parent(self.unit.replace(before, after, 1))
+
+    def test_release_projection_ignores_only_blank_physical_lines(self):
+        source = 'NSString *text = @"first second\\nthird";\nint business = 1;\n'
+        expected = release_preprocessed(source)
+        from unittest.mock import patch
+        # Reproduce the actual Apple leading-blank failure and extra empty
+        # output lines, without changing the retained nonempty bytes.
+        decorated = '\n \t\r\n' + expected.replace('\n', '\n\n')
+        result = subprocess.CompletedProcess([], 0, stdout=decorated, stderr='')
+        with patch('subprocess.run', return_value=result):
+            self.assertEqual(release_preprocessed(source), expected)
+        for before, after in [('first second', 'firstsecond'), ('business = 1', 'business = 2'),
+                              (r'\nthird', r'\tthird')]:
+            with self.subTest(change=before):
+                self.assertNotEqual(release_preprocessed(source.replace(before, after, 1)), expected)
+        self.assertIn('@"first second\\nthird"', expected)
+
     def test_self_contained_privacy_restoration_rejects_business_or_diagnostic_mutation(self):
         for before, after in [('https://100mango.github.io/app-privacy/', 'https://example.com/'),
                               ('elapsed < 10', 'elapsed < 100')]:
@@ -941,7 +1001,10 @@ class OfflinePrivacyTests(unittest.TestCase):
             with self.subTest(mutation=before), self.assertRaises(ValueError):
                 restore_unit_for_historical_observer(self.unit.replace(before, after, 1))
         outside = self.unit.replace('XCTAssertNil([QRCodeCodec imageForPayload:@""]);', 'XCTAssertNotNil([QRCodeCodec imageForPayload:@""]);', 1)
-        self.assertNotEqual(hashlib.sha256(restore_unit_for_historical_observer(outside).encode()).hexdigest(), '9c48f6dac92deff8383127febef1e302f4b9315ea184c2b6adcdf80ab3f63612')
+        # The new exact whole-parent reversal rejects this unrelated business
+        # mutation even before the older final digest comparison can run.
+        with self.assertRaisesRegex(ValueError, 'Original native unit parent changed'):
+            restore_unit_for_historical_observer(outside)
 
     def test_share_system_observation_is_once_scoped_bounded_and_never_supplies_readiness(self):
         helper = method(self.pad, 'retainSpringboardShareObservation')

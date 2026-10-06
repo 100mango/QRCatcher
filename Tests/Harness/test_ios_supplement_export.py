@@ -195,15 +195,18 @@ class SupplementExportTests(unittest.TestCase):
   for variant in ('late','uncertainty','stale','foreign_clock','unclean_native'):
    with self.subTest(variant=variant),self.fixture('iphone_pro') as root:
     self.produce(root,'PhoneUIResults','iphone_pro')
-    started=time.monotonic()-(1024 if variant=='late' else 0)
+    # Independent positive epoch: a fresh host must reach the intended
+    # whole-export-reserve gate rather than an unrelated negative-clock gate.
+    started=10000-(1024 if variant=='late' else 0)
     step={'identity':route.current_identity(),'device':DEVICE,'owner_pid':os.getppid(),'step_started_monotonic':started}
     (root/'build/ios-platform-step.json').write_text(json.dumps(step))
     if variant=='uncertainty':(root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
     if variant=='stale':(root/'build/ios-platform-closed-phase/PhoneUIResults').mkdir(parents=True)
     if variant=='unclean_native':
      path=root/'build/PhoneUIResults-command.json';record=json.loads(path.read_text());record['cleanup_confirmed']=False;path.write_text(json.dumps(record))
-    with patch('watch_process.execute',side_effect=AssertionError('No closed-phase command admitted')):
-     with self.assertRaises(ValueError):NAMESPACE['retain_closed_phone_phase'](route.current_identity(),'PhoneUIResults',str(started+1 if variant=='foreign_clock' else started))
+    with patch.object(time,'monotonic',return_value=10000),patch('watch_process.execute',side_effect=AssertionError('No closed-phase command admitted')):
+     reason='Full closed-phase export and cleanup reserve unavailable' if variant=='late' else ''
+     with self.assertRaisesRegex(ValueError,reason):NAMESPACE['retain_closed_phone_phase'](route.current_identity(),'PhoneUIResults',str(started+1 if variant=='foreign_clock' else started))
 
  def test_clean_closed_export_reject_is_not_device_uncertainty_or_tail_fallback(self):
   # A known-clean host-only rejection fails this component. It neither

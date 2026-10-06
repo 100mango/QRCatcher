@@ -129,6 +129,29 @@ class SupplementExecutorTests(unittest.TestCase):
       env[route.original.INITIAL_HASH_KEY]=hashlib.sha256(raw).hexdigest()
      finally:os.chdir(before)
    yield root,env
+ def positive_fixture_clock(self,root,environment):
+  # This disposable command-double fixture uses one positive synthetic epoch
+  # across every Python child, while real elapsed time continues to advance.
+  # Host uptime (including a fresh Mac VM) never determines a budget case.
+  clock=root/'fixture-clock';clock.mkdir()
+  (clock/'sitecustomize.py').write_text('import os,time\n'
+   '_real=time.monotonic\n_origin=float(os.environ["QRCATCHER_FIXTURE_CLOCK_ORIGIN"])\n'
+   'time.monotonic=lambda:_real()-_origin+10000\n')
+  return {**environment,'PYTHONPATH':str(clock),
+   'QRCATCHER_FIXTURE_CLOCK_ORIGIN':str(time.monotonic_ns()/1_000_000_000)}
+
+ def test_positive_fixture_epoch_handles_small_host_uptime_and_real_elapsed_time(self):
+  with self.fixture('iphone_pro',phone_completion=True) as (root,env):
+   before=dict(env)
+   with patch.object(time,'monotonic',return_value=100):
+    clocked=self.positive_fixture_clock(root,env)
+   self.assertEqual(env,before)
+   result=subprocess.run([sys.executable,'-c','import json,time;start=time.monotonic();time.sleep(.02);print(json.dumps([start,time.monotonic()]))'],
+    cwd=root,env=clocked,capture_output=True,text=True,timeout=5)
+   self.assertEqual(result.returncode,0,result.stderr)
+   start,end=json.loads(result.stdout);self.assertGreaterEqual(start,10000);self.assertLess(end,11000)
+   self.assertGreater(end,start)
+
  def invoke(self,root,env,result=None,kind=None):
   defaults={'iphone_pro':('PhoneUIResults.xcresult','QRCatcherUITests'),
    'iphone_se3':('CompactPhoneUIResults.xcresult','QRCatcherUITests'),
@@ -320,6 +343,7 @@ class SupplementExecutorTests(unittest.TestCase):
  def test_actual_early_phone_export_cannot_reset_original_clock_or_borrow_later_phase(self):
   for scope,seconds in (('iphone_pro',1200),('iphone_se3',1320)):
    with self.subTest(scope=scope),self.fixture(scope,phone_completion=True) as (root,env):
+    env=self.positive_fixture_clock(root,env)
     source=root/'scripts/run_ios_platform_ui.sh';text=source.read_text()
     before="STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')"
     source.write_text(text.replace(before,"STEP_STARTED=$(python3 -c 'import time;print(time.monotonic()-"+str(seconds-176)+")')",1))
@@ -440,6 +464,7 @@ class SupplementExecutorTests(unittest.TestCase):
                                     ('iphone_se3','CompactPhoneUIResults',1320,52),
                                     ('ipad_pro','PadUIResults-layout',1080,52)):
    with self.subTest(scope=scope),self.fixture(scope) as (root,env):
+    env=self.positive_fixture_clock(root,env)
     source=root/'scripts/run_ios_platform_ui.sh';text=source.read_text()
     before="STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')"
     self.assertEqual(text.count(before),1)

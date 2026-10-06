@@ -15,6 +15,7 @@
 
 @interface QRCatchViewController (RegressionTesting)
 - (void)handlePayload:(NSString *)payload;
+- (void)displayPayload:(NSString *)payload saveToHistory:(BOOL)save;
 - (void)copyResult;
 - (void)shareResult;
 @end
@@ -56,10 +57,30 @@
     return nil;
 }
 - (void)testQRRoundTrip {
-    for (NSString *payload in @[@"https://example.com/path?q=one", @"QRCatcher 你好 123"]) {
+    for (NSString *payload in @[@"https://example.com/path?q=one", @"QRCatcher 你好 123", @"周末计划\n上午逛市集，下午喝咖啡"]) {
         UIImage *image = [QRCodeCodec imageForPayload:payload];
         XCTAssertNotNil(image);
         XCTAssertEqualObjects([QRCodeCodec payloadsInImage:image].firstObject, payload);
+        if ([payload containsString:@"\n"]) {
+            // Inspect native scanner text separately from accessibility labels.
+            // save:NO cannot touch the application's actual history store.
+            NSString *decoded = [QRCodeCodec payloadsInImage:image].firstObject;
+            QRCatchViewController *scanner = [QRCatchViewController new];
+            [scanner loadViewIfNeeded];
+            [scanner displayPayload:decoded saveToHistory:NO];
+            UILabel *label = (UILabel *)[self viewWithIdentifier:@"scan.result" inView:scanner.view];
+            XCTAssertTrue([label isKindOfClass:UILabel.class]);
+            XCTAssertEqualObjects(label.text, payload);
+            QRHistoryStore *isolated = [[QRHistoryStore alloc] initWithURL:nil];
+            XCTAssertNil(isolated.loadError);
+            NSError *error;
+            XCTAssertTrue([isolated recordPayload:decoded error:&error]);
+            XCTAssertNil(error);
+            NSFetchRequest *request = [NSFetchRequest fetchRequestWithEntityName:@"URLEntity"];
+            NSArray *rows = [isolated.context executeFetchRequest:request error:&error];
+            XCTAssertNil(error); XCTAssertEqual(rows.count, 1);
+            XCTAssertEqualObjects(((URLEntity *)rows.firstObject).url, payload);
+        }
     }
 }
 - (void)testSharedCodecMatchesOriginalUIImageOracle {
