@@ -45,16 +45,35 @@ class OriginalIOSPreflightTests(unittest.TestCase):
         for key in ('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', 'QRCATCHER_OWNED_PROCESS_BARRIER',
                     'GITHUB_ENV', 'GITHUB_WORKSPACE'):
             os.environ.pop(key, None)
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = package_fixtures.owned_temporary_directory()
         self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve(strict=True)
         self.old = Path.cwd()
-        os.chdir(self.temp.name)
+        os.chdir(self.base)
         self.addCleanup(os.chdir, self.old)
         os.environ['GITHUB_WORKSPACE'] = str(Path.cwd())
         os.environ['QRCATCHER_OWNED_PROCESS_BARRIER'] = str(Path.cwd() / 'build/owned-process-cleanup.json')
         os.environ['GITHUB_ENV'] = str(Path.cwd() / 'job-env')
         self.clock = Clock()
         self.calls = []
+
+    def test_actual_temporary_alias_preserves_success_and_fault_barriers(self):
+        alias = self.base / 'temporary-alias'
+        alias.symlink_to(self.base, target_is_directory=True)
+        with patch.object(tempfile, 'tempdir', str(alias)), patch.dict(os.environ, TMPDIR=str(alias)):
+            for method in ('test_complete_schedule_fixed_original_project_and_hosted_ui_test_scheme',
+                           'test_late_unclean_unknown_or_foreign_completion_latches_and_stops',
+                           'test_unknown_return_and_execution_exception_cannot_launch_following_command'):
+                with self.subTest(method=method):
+                    fixture = OriginalIOSPreflightTests(method)
+                    try:
+                        fixture.setUp()
+                        self.assertNotEqual(Path(fixture.temp.name), fixture.base)
+                        self.assertEqual(Path(fixture.temp.name).parent, alias)
+                        self.assertEqual(Path.cwd(), fixture.base)
+                        getattr(fixture, method)()
+                    finally:
+                        fixture.doCleanups()
 
     def debug_products(self):
         fixture = package_fixtures.IOSOnlyPackageTests()
@@ -246,10 +265,11 @@ class OriginalIOSPreflightTests(unittest.TestCase):
                    dict(command=['xcodebuild', 'other']),
                    dict(timeout_seconds=391), dict(exit=1), dict(exit=False)]
         for defect in defects:
-            with self.subTest(defect=defect), tempfile.TemporaryDirectory() as nested:
+            with self.subTest(defect=defect), package_fixtures.owned_temporary_directory() as nested:
+                nested = Path(nested).resolve(strict=True)
                 os.chdir(nested)
                 os.environ.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', None)
-                os.environ['GITHUB_WORKSPACE'] = nested
+                os.environ['GITHUB_WORKSPACE'] = str(nested)
                 os.environ['GITHUB_ENV'] = str(Path(nested) / 'job-env')
                 os.environ['QRCATCHER_OWNED_PROCESS_BARRIER'] = str(Path(nested) / 'build/owned-process-cleanup.json')
                 self.calls.clear()
@@ -266,7 +286,7 @@ class OriginalIOSPreflightTests(unittest.TestCase):
                 self.assertEqual(os.environ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED'], 'true')
                 self.assertTrue(Path('build/owned-process-cleanup.json').is_file())
                 self.assertIn('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED=true', Path('job-env').read_text())
-                os.chdir(self.temp.name)
+                os.chdir(self.base)
 
     def test_late_wall_clock_return_cannot_be_hidden_by_timely_metadata(self):
         def command(args, seconds, **options):
@@ -315,10 +335,11 @@ class OriginalIOSPreflightTests(unittest.TestCase):
 
     def test_unknown_return_and_execution_exception_cannot_launch_following_command(self):
         for failure in ('malformed', 'exception'):
-            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as nested:
+            with self.subTest(failure=failure), package_fixtures.owned_temporary_directory() as nested:
+                nested = Path(nested).resolve(strict=True)
                 os.chdir(nested)
                 os.environ.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', None)
-                os.environ['GITHUB_WORKSPACE'] = nested
+                os.environ['GITHUB_WORKSPACE'] = str(nested)
                 os.environ['GITHUB_ENV'] = str(Path(nested) / 'job-env')
                 os.environ['QRCATCHER_OWNED_PROCESS_BARRIER'] = str(Path(nested) / 'build/owned-process-cleanup.json')
                 self.calls.clear()
@@ -331,7 +352,7 @@ class OriginalIOSPreflightTests(unittest.TestCase):
                 self.assertEqual(code, 126)
                 self.assertEqual(len(self.calls), 1)
                 self.assertTrue(report['cleanup_unconfirmed'])
-                os.chdir(self.temp.name)
+                os.chdir(self.base)
 
     def test_identity_rejects_platform_job_before_compilation(self):
         code, report = self.run_preflight(identity=dict(IDENTITY, job='platform', scope='ipad_mini'))

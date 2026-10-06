@@ -4,6 +4,17 @@ Runs the host Bash, including macOS Bash3.2 in CI; only disposable test files.
 """
 from pathlib import Path
 import ast,json,os,plistlib,shutil,subprocess,tempfile
+def launcher_fixture_environment(environment, folder):
+    # These scenarios own the default launcher identity. The dedicated staged
+    # route has a separate complete source-bound fixture in its route suite.
+    fixture = {**environment, 'GITHUB_WORKSPACE': str(folder),
+               'GITHUB_ENV': str(folder/'fixture-github-env'),
+               'GITHUB_REF': 'refs/heads/codex/apple-platforms'}
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY',
+                'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', 'EVIDENCE_SCOPE'):
+        fixture.pop(key, None)
+    return fixture
+
 root=Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as directory:
     # macOS exposes temporary roots through /var -> /private/var. Exercise a
@@ -13,9 +24,7 @@ with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as direct
     workspace=temporary/'workspace';workspace.mkdir()
     alias=temporary/'workspace-alias';alias.symlink_to(workspace,target_is_directory=True)
     folder=alias.resolve();binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
-    fixture_env={**os.environ,'GITHUB_WORKSPACE':str(folder),'GITHUB_ENV':str(folder/'fixture-github-env')}
-    fixture_env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
-    fixture_env.pop('EVIDENCE_SCOPE',None)
+    fixture_env=launcher_fixture_environment(os.environ,folder)
     for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','atomic_json.py','stage_owned_import_fixture.py', 'fixture_query_guard.py','ios_import_continuation.py']:
         shutil.copyfile(root/'scripts'/name,folder/'scripts'/name)
     rejected=subprocess.run(['python3','scripts/owned_process_barrier.py','--check'],cwd=folder,

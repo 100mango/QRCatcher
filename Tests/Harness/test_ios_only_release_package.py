@@ -20,6 +20,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'scripts/verify_ios_only_release.py'
@@ -98,11 +99,56 @@ def edit_command(data, command, field_offset, fmt, value):
     raise ValueError('Missing synthetic command')
 
 
+def normalize_owned_temporary_leaf(path):
+    """Give only a newly allocated empty owned leaf an unambiguous name."""
+    path = Path(path)
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError('Owned positive fixture leaf must be a real directory')
+    with os.scandir(path) as entries:
+        if next(entries, None) is not None:
+            raise ValueError('Only an empty owned fixture leaf may be renamed')
+    parent = path.resolve(strict=True).parent
+    if '__' in str(parent):
+        raise ValueError('Owned positive fixture has a reserved marker in an ancestor: ' + str(parent))
+    destination = path.with_name('qrcatcher-fixture-' + uuid4().hex)
+    path.rename(destination)
+    return destination
+
+
+class OwnedTemporaryDirectory:
+    def __init__(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        try:
+            self.name = str(normalize_owned_temporary_leaf(self.temporary.name))
+        except Exception:
+            self.temporary.cleanup()
+            raise
+
+    def cleanup(self):
+        try:
+            if Path(self.name).exists():
+                shutil.rmtree(self.name)
+        finally:
+            self.temporary.cleanup()
+
+    def __enter__(self):
+        return self.name
+
+    def __exit__(self, *_):
+        self.cleanup()
+
+
+def owned_temporary_directory():
+    return OwnedTemporaryDirectory()
+
+
 class IOSOnlyPackageTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = owned_temporary_directory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        # Own the concrete fixture directory even when macOS TMPDIR uses /var
+        # for /private/var. The verifier must still reject supplied aliases.
+        self.base = Path(self.temp.name).resolve(strict=True)
         self.app = self.base / 'QRCatcher.app'
         self.app.mkdir()
         self.info = {
@@ -224,6 +270,68 @@ class IOSOnlyPackageTests(unittest.TestCase):
                               dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest')]}
         settings.update(changes)
         (self.test_bundle / 'QRCatcherTests').write_bytes(macho(**settings))
+
+    def test_owned_temporary_alias_is_resolved_without_admitting_bound_path_aliases(self):
+        alias = self.base / 'temporary-alias'
+        alias.symlink_to(self.base, target_is_directory=True)
+        with patch.object(tempfile, 'tempdir', str(alias)), patch.dict(os.environ, TMPDIR=str(alias)):
+            ambiguous = alias / 'owned__empty'
+            ambiguous.mkdir()
+            normalized = normalize_owned_temporary_leaf(ambiguous)
+            self.assertFalse(ambiguous.exists())
+            self.assertEqual(normalized.parent, alias)
+            self.assertTrue(normalized.is_dir())
+            self.assertNotIn('__', normalized.name)
+            normalized.rmdir()
+            fixture = IOSOnlyPackageTests()
+            fixture.setUp()
+            self.addCleanup(fixture.doCleanups)
+            raw_base = Path(fixture.temp.name)
+            self.assertNotIn('__', raw_base.name)
+            self.assertNotEqual(raw_base, fixture.base)
+            self.assertEqual(raw_base.parent, alias)
+            self.assertEqual(raw_base.resolve(strict=True), fixture.base)
+            options = fixture.hosted(format_version=2, absolute_paths=True)
+            aliased_run = raw_base / fixture.xctestrun.relative_to(fixture.base)
+            self.assertEqual(aliased_run.resolve(strict=True), fixture.xctestrun)
+            ambiguous_root = fixture.base / 'case__name'
+            shutil.copytree(fixture.base / 'Build', ambiguous_root / 'Build')
+            ambiguous_app = ambiguous_root / fixture.app.relative_to(fixture.base)
+            ambiguous_run = ambiguous_root / fixture.xctestrun.relative_to(fixture.base)
+            ambiguous_info = plistlib.loads(ambiguous_run.read_bytes())
+            ambiguous_target = ambiguous_info['TestConfigurations'][0]['TestTargets'][0]
+            ambiguous_target.update(TestHostPath='__TESTROOT__/Debug-iphonesimulator/QRCatcher.app',
+                                    TestBundlePath='__TESTHOST__/PlugIns/QRCatcherTests.xctest')
+            ambiguous_run.write_bytes(plistlib.dumps(ambiguous_info))
+            for optimized in (False, True):
+                with self.subTest(optimized=optimized), patch.dict(os.environ, PYTHONOPTIMIZE='1' if optimized else '0'):
+                    arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun')
+                    result, report = fixture.cli(*arguments, str(fixture.xctestrun), optimized=optimized)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(report['hosted_tests']['xctestrun']['binding']['host'], str(fixture.app))
+                    result, report = fixture.cli(*arguments, str(aliased_run), optimized=optimized)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(report['reason'], 'xctestrun_root')
+                    for field, concrete in (('TestHostPath', fixture.app), ('TestBundlePath', fixture.test_bundle)):
+                        with self.subTest(field=field):
+                            aliased = raw_base / concrete.relative_to(fixture.base)
+                            self.assertEqual(aliased.resolve(strict=True), concrete)
+                            fixture.test_target[field] = str(aliased)
+                            fixture.write_xctestrun()
+                            result, report = fixture.cli(*arguments, str(fixture.xctestrun), optimized=optimized)
+                            self.assertEqual(result.returncode, 1)
+                            self.assertEqual(report['reason'], 'xctestrun_path')
+                            fixture.test_target[field] = str(concrete)
+                            fixture.write_xctestrun()
+                    concrete_app = fixture.app
+                    try:
+                        fixture.app = ambiguous_app
+                        result, report = fixture.cli(*arguments, str(ambiguous_run), optimized=optimized)
+                    finally:
+                        fixture.app = concrete_app
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(report['reason'], 'xctestrun_path')
+                    self.assertIn('unexpanded', report['detail'])
 
     def test_exact_hosted_debug_binding_reports_test_only_evidence_in_both_formats(self):
         options = self.hosted(ui_target=True)

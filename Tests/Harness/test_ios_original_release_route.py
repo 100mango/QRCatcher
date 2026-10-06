@@ -243,6 +243,28 @@ class OriginalIOSRouteTests(unittest.TestCase):
      self.assertTrue(any('testRealFilesImportAndReopen' in arg for arg in cases[1]))
      self.assertEqual(sum('addmedia' in r['args'] for r in rows),0 if barrier else 1)
      if not barrier:self.assertTrue(any('testRealPhoto' in arg for arg in cases[2]))
+ def test_default_launcher_fixture_owns_ref_despite_outer_ios_candidate_environment(self):
+  path=ROOT/'Tests/Harness/test_ios_launcher.py';source=path.read_text();tree=ast.parse(source)
+  functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='launcher_fixture_environment']
+  self.assertEqual(len(functions),1)
+  calls=[n for n in ast.walk(tree) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='fixture_env' for t in n.targets)]
+  self.assertEqual(len(calls),1)
+  self.assertEqual(ast.dump(calls[0].value),ast.dump(ast.parse('launcher_fixture_environment(os.environ,folder)',mode='eval').body))
+  # Execute only the actual pure environment constructor. Complete discovery
+  # already runs all original33 Bash scenarios under this same outer CI ref.
+  namespace={};exec(compile(ast.Module(body=functions,type_ignores=[]),str(path),'exec'),namespace)
+  environment={'GITHUB_REF':route.REF,'IOS_FIRST_RELEASE_CANDIDATE_ONLY':'true',
+   'GITHUB_WORKFLOW_REF':route.WORKFLOW_REF,'GITHUB_JOB':'preflight',
+   'GITHUB_WORKSPACE':'/outer/workspace','GITHUB_ENV':'/outer/job-env',
+   'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED':'true','EVIDENCE_SCOPE':'ipad_mini','PATH':'/owned/path'}
+  original=dict(environment)
+  with tempfile.TemporaryDirectory() as name:
+   folder=Path(name).resolve();actual=namespace['launcher_fixture_environment'](environment,folder)
+   self.assertEqual(actual['GITHUB_REF'],'refs/heads/codex/apple-platforms')
+   self.assertEqual(actual['GITHUB_WORKSPACE'],str(folder));self.assertEqual(actual['GITHUB_ENV'],str(folder/'fixture-github-env'))
+   self.assertEqual(actual['PATH'],'/owned/path');self.assertEqual(actual['GITHUB_WORKFLOW_REF'],route.WORKFLOW_REF)
+   self.assertTrue(all(k not in actual for k in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','EVIDENCE_SCOPE')))
+  self.assertEqual(environment,original)
  def test_actual_newprofile_host_prepare_preserves_marker_and_default_dependency(self):
   owner=base.MiniSetupTests();owner.setUp()
   try:
