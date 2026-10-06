@@ -9,6 +9,10 @@ The original all-platform Debug cap180 becomes390 only in this closed iOS-first
 redistribution, alongside a new Release prerequisite. This is not evidence that
 the earlier compiler latency has been fixed. Completion must be clean and
 observed strictly before cap+2, using the existing owned-process runner and uncertainty latch.
+Only a timely clean package exit1 with a bound, safely complete owned-inventory
+failure receipt may leave the independent Release archive/inspection phases
+eligible. All original phase/full-schedule admission remains; any failure still
+returns nonzero and prevents runtime. Build/unknown/timeout/unsafe scan stops.
 """
 import hashlib
 import json
@@ -70,6 +74,9 @@ def package_receipt(label):
     debug = label == 'debug-package'
     require(type(value) is dict and value.get('status') == 'pass' and value.get('schema_version') == 1,
             'Missing successful strict package report')
+    require(value.get('safe_inventory_complete') is True and value.get('findings') == []
+            and value.get('findings_complete') is True and type(value.get('findings_omitted')) is int
+            and value['findings_omitted'] == 0, 'Successful package must retain complete inventory and zero findings')
     require(value.get('configuration') == ('Debug' if debug else 'Release') and
             value.get('platform') == ('simulator' if debug else 'device') and
             value.get('bundle_id') == '100mango.QRCatcher' and value.get('device_families') == [1, 2] and
@@ -88,6 +95,38 @@ def package_receipt(label):
             'scope': value['scope'], 'configuration': value['configuration'], 'platform': value['platform']}
 
 
+def rejected_package_receipt(label):
+    """Closed safe diagnostic dependency; never a successful package proof."""
+    path = PACKAGE_REPORTS[label]
+    raw = read_regular(path, REPORT_BYTES)
+    value = json.loads(raw)
+    debug = label == 'debug-package'
+    expected = Path(DEBUG_APP if debug else ARCHIVE).absolute()
+    app = Path(DEBUG_APP if debug else ARCHIVE + '/Products/Applications/QRCatcher.app').absolute()
+    require(type(value) is dict and value.get('schema_version') == 1 and value.get('status') == 'fail'
+            and value.get('qualification') == 'unqualified' and value.get('safe_inventory_complete') is True,
+            'Only complete safe owned-inventory rejection may continue independent Release diagnostics')
+    require(value.get('configuration') == ('Debug' if debug else 'Release') and
+            value.get('platform') == ('simulator' if debug else 'device') and
+            value.get('package') == str(expected) and value.get('app') == str(app),
+            'Rejected package receipt is outside this exact app/archive scope')
+    findings = value.get('findings')
+    require(type(findings) is list and 1 <= len(findings) <= 64 and
+            all(type(item) is dict and set(item) == {'code', 'stage', 'scope'} and
+                all(type(item[key]) is str and 0 < len(item[key]) <= (512 if key == 'scope' else 64)
+                    for key in ('code', 'stage', 'scope')) for item in findings),
+            'Bounded closed rejected-package findings required')
+    require(type(value.get('findings_complete')) is bool and type(value.get('findings_omitted')) is int
+            and 0 <= value['findings_omitted'] and (not value['findings_complete'] or value['findings_omitted'] == 0)
+            and value.get('reason') == findings[0]['code'],
+            'Rejected package findings binding is invalid')
+    return {'path': path, 'sha256': hashlib.sha256(raw).hexdigest(), 'status': 'fail',
+            'qualification': 'unqualified', 'safe_inventory_complete': True,
+            'configuration': value['configuration'], 'platform': value['platform'],
+            'reason': value['reason'], 'findings_count': len(findings),
+            'findings_complete': value['findings_complete'], 'findings_omitted': value['findings_omitted']}
+
+
 def main():
     started = time.monotonic()
     build = Path('build')
@@ -102,7 +141,8 @@ def main():
               'final_receipt_reserve_seconds': FINAL_SECONDS, 'cleanup_dispatch_reserve_per_phase_seconds': CLEANUP_SECONDS,
               'timely_postreturn_allowance_seconds': TIMELY_ALLOWANCE,
               'previous_all_platform_debug_cap_seconds': 180,
-              'phase_caps_seconds': {name: cap for name, cap, _ in PHASES}, 'operations': [], 'package_reports': {}}
+              'phase_caps_seconds': {name: cap for name, cap, _ in PHASES}, 'operations': [], 'package_reports': {},
+              'rejected_package_phases': []}
 
     def save():
         write_json(ROOT / 'summary.json', report, limit=REPORT_BYTES)
@@ -183,6 +223,12 @@ def main():
             save()
             print('IOS_ORIGINAL_PREFLIGHT_END ' + json.dumps(row), flush=True)
             if code != 0:
+                if code == 1 and label in PACKAGE_REPORTS:
+                    receipt = rejected_package_receipt(label)
+                    report['package_reports'][label] = receipt
+                    report['rejected_package_phases'].append(label)
+                    save()
+                    continue
                 return code
             if label in PACKAGE_REPORTS:
                 report['package_reports'][label] = package_receipt(label)
@@ -192,10 +238,10 @@ def main():
         require(finite(ended) and started <= ended <= started + TOTAL_SECONDS - FINAL_SECONDS,
                 'Preflight final receipt reserve exhausted')
         report['elapsed_seconds'] = round(ended - started, 3)
-        report['passed'] = True
+        report['passed'] = not report['rejected_package_phases']
         save()
         print(json.dumps(report), flush=True)
-        return 0
+        return 0 if report['passed'] else 1
     except (OSError, ValueError, TypeError) as error:
         report['failure'] = str(error)[:400]
         save()

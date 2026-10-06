@@ -460,8 +460,10 @@ class IOSOnlyPackageTests(unittest.TestCase):
         options = self.hosted()
         del options['xctestrun']
         self.rejected('release_test_bundle', **options)
-        with self.assertRaises(OSError):
+        with self.assertRaises(gate.ValidationError) as raised:
             gate.verify_package(self.app, **dict(options, xctestrun=self.xctestrun.with_name('missing.xctestrun')))
+        self.assertEqual(raised.exception.code, 'inspection_error')
+        self.assertIs(raised.exception.package_diagnostics['safe_inventory_complete'], False)
         self.xctestrun.write_bytes(b'<plist><dict>')
         self.rejected('malformed_plist', **dict(options, xctestrun=self.xctestrun))
 
@@ -1002,7 +1004,10 @@ class IOSOnlyPackageTests(unittest.TestCase):
                 for encoding in ('ascii', 'utf-16-le', 'utf-16-be'):
                     with self.subTest(location=location.name, marker=marker, encoding=encoding):
                         location.write_bytes(macho(platform=7, filetype=filetype, markers=marker.encode(encoding)))
-                        self.rejected('release_diagnostics', **options)
+                        if marker == 'XCTestCase' and location.name in gate.DEBUG_DETECTION_IMAGES:
+                            self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+                        else:
+                            self.rejected('release_diagnostics', **options)
             location.write_bytes(macho(platform=7, filetype=filetype, extra=[
                 dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest')]))
             self.rejected('release_diagnostics', **options)
@@ -2040,6 +2045,272 @@ class IOSOnlyPackageTests(unittest.TestCase):
     def test_missing_native_fd_capabilities_fail_explicitly(self):
         with patch.object(os, 'supports_fd', set()):
             self.rejected('unsupported_filesystem_capabilities')
+
+    def test_debug_dynamic_detection_name_is_exact_and_limited_to_known_images(self):
+        self.simulator()
+        self.debug()
+        options = {'platform': 'simulator', 'configuration': 'Debug'}
+        for encoding in ('ascii', 'utf-16-le', 'utf-16-be'):
+            marker = ('XCTestCase\0').encode(encoding)
+            self.write_binary(macho(platform=7, markers=marker))
+            for name in ('QRCatcher.debug.dylib', '__preview.dylib'):
+                (self.app / name).write_bytes(macho(platform=7, filetype=6, markers=marker))
+            report = gate.verify_package(self.app, **options)
+            self.assertIs(report['safe_inventory_complete'], True)
+            self.assertEqual(report['findings'], [])
+            self.assertIs(report['findings_complete'], True)
+            for token in ('OtherXCTestCase\0', 'XCTestCaseOther\0', 'XCTestCase/Dependency\0',
+                          'path/XCTestCase\0', 'NS.XCTestCase\0', ' XCTestCase\0', 'XCTestCase\0OtherXCTestCase\0'):
+                self.write_binary(macho(platform=7, markers=token.encode(encoding)))
+                self.rejected('release_diagnostics', **options)
+            self.write_binary(macho(platform=7, markers=marker))
+            resource = self.app / 'ordinary-resource'
+            resource.write_bytes(marker)
+            self.rejected('release_diagnostics', **options)
+            resource.unlink()
+        (self.app / 'ordinary.plist').write_bytes(plistlib.dumps({'Detection': 'XCTestCase'}))
+        self.rejected('release_diagnostics', **options)
+
+    def test_debug_detection_name_does_not_waive_real_test_links_or_scope(self):
+        options = self.hosted()
+        self.write_binary(macho(platform=7, markers=b'XCTestCase\0', extra=[
+            dylib_command('/Developer/Library/Frameworks/xCtEsT.framework/xCtEsT')]))
+        error = self.rejected('shipping_test_dependency', **options)
+        self.assertIs(error.package_diagnostics['safe_inventory_complete'], True)
+        self.write_binary(macho(platform=4, markers=b'XCTestCase\0QRWatchPhoneService\0'))
+        error = self.rejected('watch_presence', **options)
+        self.assertIn('mach_o_platform', {item['code'] for item in error.package_diagnostics['findings']})
+        self.write_binary(macho(platform=7, markers=b'XCTestCase\0'))
+        self.rejected('release_test_bundle', platform='simulator', configuration='Debug')
+        error = self.rejected('xctestrun_scope', **dict(options, configuration='Release'))
+        self.assertIs(error.package_diagnostics['safe_inventory_complete'], False)
+
+    def test_combined_owned_defects_keep_all_independent_gates_without_second_reads(self):
+        options = self.hosted()
+        self.symbols()
+        self.info['UIDeviceFamily'] = [3]
+        self.info['NSCameraUsageDescription'] = 'private disclosure sentinel'
+        self.write_info()
+        self.write_binary(macho(platform=4, markers=b'XCTestCase\0QRWatchPhoneService\0', extra=[
+            dylib_command('/Developer/Library/Frameworks/xCtEsT.framework/xCtEsT')]))
+        (self.app / 'PrivacyInfo.xcprivacy').write_bytes(plistlib.dumps({'Unrelated': 'private value sentinel'}))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('watch_presence', **options)
+        receipt = error.package_diagnostics
+        self.assertIs(receipt['safe_inventory_complete'], True)
+        self.assertIs(receipt['findings_complete'], True)
+        self.assertEqual(receipt['findings_omitted'], 0)
+        self.assertEqual(receipt['package'], str(self.app))
+        self.assertEqual(receipt['app'], str(self.app))
+        self.assertEqual(receipt['platform'], 'simulator')
+        self.assertEqual(receipt['configuration'], 'Debug')
+        self.assertEqual(receipt['qualification'], 'unqualified')
+        codes = {item['code'] for item in receipt['findings']}
+        self.assertTrue({'watch_presence', 'bundle_device_families', 'bundle_camera_usage', 'privacy_manifest',
+                         'nested_bundle_device_families', 'mach_o_platform', 'shipping_test_dependency'} <= codes)
+        self.assertEqual(receipt['findings'][0]['code'], error.code)
+        labels = [call.args[3] for call in reader.call_args_list]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertEqual(error.symbol_observations['qualification'], 'unqualified')
+        self.assertEqual(error.symbol_observations['mach_o'][0]['slices'][0]['uuid'], TEST_UUID.hex())
+        serialized = json.dumps(receipt['findings'])
+        for sentinel in ('private disclosure sentinel', 'private value sentinel', 'QRWatchPhoneService',
+                         'XCTestCase', str(self.base), '/Developer/Library'):
+            self.assertNotIn(sentinel, serialized)
+        self.assertTrue(all(set(item) == {'code', 'stage', 'scope'} and not Path(item['scope']).is_absolute()
+                            for item in receipt['findings']))
+
+    def test_malformed_owned_files_block_dependencies_but_keep_independent_owned_findings(self):
+        (self.app / 'A-broken.plist').write_bytes(b'<plist><dict>')
+        self.write_binary(macho()[:31])
+        framework = self.framework(data=macho(platform=4, filetype=6))
+        (self.app / 'z-watch.plist').write_bytes(plistlib.dumps({'WKWatchKitApp': False}))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('malformed_plist')
+        receipt = error.package_diagnostics
+        self.assertIs(receipt['safe_inventory_complete'], True)
+        self.assertIs(receipt['findings_complete'], False)
+        self.assertEqual(receipt['findings_omitted'], 0)
+        self.assertTrue({'malformed_plist', 'truncated_mach_o', 'watch_plist_key', 'missing_shipping_mach_o',
+                         'mach_o_platform', 'dependent_checks_unknown'} <= {item['code'] for item in receipt['findings']})
+        self.assertTrue(any(item['code'] == 'dependent_checks_unknown' and item['scope'] == 'QRCatcher'
+                            for item in receipt['findings']))
+        self.assertTrue(any(item['code'] == 'mach_o_platform' and item['scope'] == str((framework / 'Ordinary').relative_to(self.app))
+                            for item in receipt['findings']))
+        labels = [call.args[3] for call in reader.call_args_list]
+        self.assertEqual(len(labels), len(set(labels)))
+
+    def test_bad_main_metadata_keeps_input_identity_and_independent_image_gates_in_cli(self):
+        (self.app / 'Info.plist').write_bytes(b'<plist><dict>')
+        self.write_binary(macho(platform=4, extra=[
+            dylib_command('/Developer/Library/Frameworks/xCtEsT.framework/xCtEsT')]))
+        for optimized in (False, True):
+            result, report = self.cli(optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'malformed_plist')
+            self.assertEqual(report['package'], str(self.app))
+            self.assertEqual(report['app'], str(self.app))
+            self.assertEqual(report['qualification'], 'unqualified')
+            self.assertIs(report['safe_inventory_complete'], True)
+            self.assertIs(report['findings_complete'], False)
+            self.assertTrue({'missing_bundle_info', 'dependent_checks_unknown', 'mach_o_platform', 'shipping_test_dependency'}
+                            <= {item['code'] for item in report['findings']})
+            self.assertNotIn('bundle_id', report)
+
+    def test_findings_scope_never_comes_from_unowned_executable_metadata(self):
+        framework = self.framework()
+        sentinel = 'private-executable-sentinel-' + 'x' * 2048
+        (framework / 'Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable': sentinel}))
+        error = self.rejected('orphan_bundle_executable')
+        findings = error.package_diagnostics['findings']
+        self.assertNotIn(sentinel, json.dumps(findings))
+        self.assertTrue(all(len(item['scope'].encode()) <= gate.DEFAULT_LIMITS.path_bytes for item in findings))
+        self.assertTrue(any(item['code'] == 'orphan_bundle_executable' and item['scope'] == 'Frameworks/Ordinary.framework'
+                            for item in findings))
+        self.assertIs(error.package_diagnostics['findings_complete'], False)
+
+    def test_multiple_symbol_and_relocation_bindings_fail_independently_without_leakage(self):
+        options = self.hosted()
+        self.write_test_binary(extra=[dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity'),
+                                     uuid_command(), target_triple_command()])
+        self.symbols(symbol_macho(uuid=bytes(range(17, 33)), extra=[target_triple_command('arm64-apple-ios18.0.0-simulator')]))
+        self.symbol_info['CFBundlePackageType'] = 'OTHER'
+        self.write_symbol_info()
+        row = "{ offset: 0x8, size: 0x3, addend: 0x0, symName: 'private symbol sentinel', symBinAddr: 0x100000000, symSize: 0x10 }"
+        self.relocations(data=self.relocation_yaml(triple='arm64-apple-watchos', binary_path='/private/foreign/sentinel', records=(row,)))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('test_relocation_binary_path', **options)
+        receipt = error.package_diagnostics
+        self.assertIs(receipt['safe_inventory_complete'], True)
+        self.assertIs(receipt['findings_complete'], False)
+        self.assertTrue({'test_relocation_binary_path', 'test_relocation_platform', 'test_relocation_size',
+                         'test_symbol_metadata', 'test_symbol_uuid', 'test_symbol_target_triple',
+                         'dependent_checks_unknown'} <= {item['code'] for item in receipt['findings']})
+        labels = [call.args[3] for call in reader.call_args_list]
+        self.assertEqual(len(labels), len(set(labels)))
+        encoded = json.dumps(receipt['findings']) + json.dumps(error.symbol_observations)
+        self.assertNotIn('private symbol sentinel', encoded)
+        self.assertNotIn('/private/foreign/sentinel', encoded)
+        self.assertNotIn(str(self.base), encoded)
+
+    def test_structural_uncertainty_stops_after_existing_findings_and_never_reads_later_files(self):
+        (self.app / 'A-marker').write_bytes(b'QRWatchPhoneService')
+        unsafe = self.app / 'Z-unsafe'
+        later = self.app / 'ZZ-never-read'
+        later.write_bytes(b'XCTestObservation')
+        for kind, code in (('symlink', 'symlink'), ('hardlink', 'hardlinked_file'), ('fifo', 'unsupported_file_type')):
+            with self.subTest(kind=kind):
+                if kind == 'symlink':
+                    unsafe.symlink_to(self.base / 'unowned-private-target')
+                elif kind == 'hardlink':
+                    os.link(self.app / 'Assets.car', unsafe)
+                else:
+                    os.mkfifo(unsafe)
+                with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+                    error = self.rejected('watch_presence')
+                receipt = error.package_diagnostics
+                self.assertIs(receipt['safe_inventory_complete'], False)
+                self.assertIs(receipt['findings_complete'], False)
+                self.assertIn(code, {item['code'] for item in receipt['findings']})
+                self.assertNotIn(later.name, [call.args[3] for call in reader.call_args_list])
+                unsafe.unlink()
+
+    def test_inventory_and_parser_budgets_still_stop_cumulative_inspection(self):
+        (self.app / 'A-marker').write_bytes(b'QRWatchPhoneService')
+        (self.app / 'ZZ-never-read').write_bytes(b'XCTestObservation')
+        cases = (replace(gate.DEFAULT_LIMITS, total_bytes=20),
+                 replace(gate.DEFAULT_LIMITS, binaries=1),
+                 replace(gate.DEFAULT_LIMITS, plist_nodes=2),
+                 replace(gate.DEFAULT_LIMITS, load_commands=1))
+        self.framework()
+        for limits in cases:
+            with self.subTest(limits=limits):
+                with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+                    error = self.rejected('watch_presence', limits=limits)
+                self.assertIs(error.package_diagnostics['safe_inventory_complete'], False)
+                self.assertIs(error.package_diagnostics['findings_complete'], False)
+                self.assertTrue(any(item['code'].endswith('_limit') for item in error.package_diagnostics['findings']))
+                self.assertNotIn('ZZ-never-read', [call.args[3] for call in reader.call_args_list])
+
+    def test_findings_saturation_is_bounded_explicit_and_cannot_pass(self):
+        for index in range(70):
+            (self.app / ('diagnostic-%03d' % index)).write_bytes(b'QRWatchPhoneService')
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('watch_presence')
+        receipt = error.package_diagnostics
+        self.assertIs(receipt['safe_inventory_complete'], True)
+        self.assertIs(receipt['findings_complete'], False)
+        self.assertEqual(len(receipt['findings']), 64)
+        self.assertEqual(receipt['findings_omitted'], 6)
+        self.assertEqual(len(reader.call_args_list), 74)
+        error = self.rejected('watch_presence', limits=replace(gate.DEFAULT_LIMITS, findings=2))
+        self.assertEqual(len(error.package_diagnostics['findings']), 2)
+        self.assertEqual(error.package_diagnostics['findings_omitted'], 68)
+        error = self.rejected('watch_presence', limits=replace(gate.DEFAULT_LIMITS, report_bytes=2048))
+        self.assertGreater(error.package_diagnostics['findings_omitted'], 6)
+        summary = json.dumps({'findings': error.package_diagnostics['findings']}, sort_keys=True, indent=2).encode()
+        self.assertLessEqual(len(summary), 1024)
+
+    def test_invalid_findings_caps_and_nonfinite_report_data_fail_with_closed_receipts(self):
+        for cap in (0, -1, True, 'unbounded'):
+            with self.subTest(cap=cap):
+                error = self.rejected('invalid_limits', limits=replace(gate.DEFAULT_LIMITS, findings=cap))
+                self.assertIs(error.package_diagnostics['safe_inventory_complete'], False)
+        for budget in (0, -1, True, 'unbounded'):
+            with self.subTest(report_bytes=budget):
+                error = self.rejected('invalid_limits', limits=replace(gate.DEFAULT_LIMITS, report_bytes=budget))
+                self.assertIs(error.package_diagnostics['safe_inventory_complete'], False)
+        self.info['CFBundleIcons']['Unrelated'] = float('nan')
+        self.write_info()
+        for optimized in (False, True):
+            result, report = self.cli(optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'report_encoding_error')
+            self.assertIs(report['safe_inventory_complete'], False)
+            self.assertIs(report['findings_complete'], False)
+
+    def test_archive_semantic_failure_reads_each_owned_file_once_and_keeps_app_failures(self):
+        self.write_binary(macho(platform=4, markers=b'QRWatchPhoneService'))
+        archive = self.archive()
+        (archive / 'Info.plist').write_bytes(plistlib.dumps({'ApplicationProperties': {
+            'ApplicationPath': 'Applications/Foreign.app', 'CFBundleIdentifier': 'foreign'}}))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            with self.assertRaises(gate.ValidationError) as raised:
+                gate.verify_package(archive)
+        receipt = raised.exception.package_diagnostics
+        self.assertIs(receipt['safe_inventory_complete'], True)
+        self.assertEqual(receipt['package'], str(archive))
+        self.assertEqual(receipt['app'], str(self.app))
+        self.assertTrue({'watch_presence', 'mach_o_platform', 'archive_identity'} <= {item['code'] for item in receipt['findings']})
+        self.assertEqual(sum(call.args[3] == 'Info.plist' for call in reader.call_args_list), 2)
+        self.assertEqual(len(reader.call_args_list), 5)
+
+    def test_cumulative_cli_receipts_and_unknown_dependencies_remain_closed_under_optimization(self):
+        self.info['UIDeviceFamily'] = [3]
+        self.write_info()
+        self.write_binary(macho(platform=4, markers=b'QRWatchPhoneService', extra=[
+            dylib_command('/Developer/Library/Frameworks/xCtEsT.framework/xCtEsT')]))
+        for optimized in (False, True):
+            with self.subTest(optimized=optimized):
+                result, report = self.cli(optimized=optimized)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(report['status'], 'fail')
+                self.assertEqual(report['reason'], report['findings'][0]['code'])
+                self.assertIs(report['safe_inventory_complete'], True)
+                self.assertEqual(report['package'], str(self.app))
+                self.assertEqual(report['app'], str(self.app))
+                self.assertEqual(report['configuration'], 'Release')
+                self.assertEqual(report['platform'], 'device')
+                self.assertIs(report['findings_complete'], True)
+                self.assertTrue({'watch_presence', 'bundle_device_families', 'mach_o_platform', 'shipping_test_dependency'}
+                                <= {item['code'] for item in report['findings']})
+        self.write_binary(macho()[:31])
+        for optimized in (False, True):
+            result, report = self.cli(optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertIs(report['safe_inventory_complete'], True)
+            self.assertIs(report['findings_complete'], False)
+            self.assertIn('dependent_checks_unknown', {item['code'] for item in report['findings']})
 
 
 if __name__ == '__main__':

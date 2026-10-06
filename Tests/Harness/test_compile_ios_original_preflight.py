@@ -182,7 +182,7 @@ class OriginalIOSPreflightTests(unittest.TestCase):
         self.assertEqual({p.name for p in preflight.ROOT.iterdir()},
                          {'summary.json', 'debug-build.log', 'debug-package.log', 'release-archive.log', 'release-package.log'})
 
-    def test_shipping_helper_cannot_use_hosted_exception_and_archive_never_runs(self):
+    def test_safe_debug_helper_rejection_retains_failure_while_independent_archive_is_inspected(self):
         def command(args, seconds, **options):
             result = self.execute(args, seconds, **options)
             if len(self.calls) == 1:
@@ -191,9 +191,14 @@ class OriginalIOSPreflightTests(unittest.TestCase):
         code, report = self.run_preflight(command)
         self.assertEqual(code, 1)
         self.assertFalse(report['passed'])
-        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(len(self.calls), 4)
         self.assertEqual(json.loads(Path(preflight.PACKAGE_REPORTS['debug-package']).read_text())['reason'], 'watch_presence')
-        self.assertFalse(Path(preflight.ARCHIVE).exists())
+        self.assertTrue(Path(preflight.ARCHIVE).exists())
+        self.assertEqual(report['rejected_package_phases'], ['debug-package'])
+        self.assertEqual(report['package_reports']['debug-package']['status'], 'fail')
+        self.assertEqual(report['package_reports']['release-package']['status'], 'pass')
+        self.assertFalse(report['release_qualification'])
+        self.assertEqual(report['runtime_tests_executed'], 0)
 
     def test_release_xctest_marker_is_rejected_after_archive(self):
         def command(args, seconds, **options):
@@ -207,6 +212,120 @@ class OriginalIOSPreflightTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 4)
         self.assertFalse(report['passed'])
         self.assertEqual(json.loads(Path(preflight.PACKAGE_REPORTS['release-package']).read_text())['reason'], 'release_diagnostics')
+
+    def rejected_receipt(self, label, **changes):
+        debug = label == 'debug-package'
+        value = {'schema_version': 1, 'status': 'fail', 'qualification': 'unqualified',
+                 'safe_inventory_complete': True, 'configuration': 'Debug' if debug else 'Release',
+                 'platform': 'simulator' if debug else 'device',
+                 'package': str(Path(preflight.DEBUG_APP if debug else preflight.ARCHIVE).absolute()),
+                 'app': str(Path(preflight.DEBUG_APP if debug else preflight.ARCHIVE + '/Products/Applications/QRCatcher.app').absolute()),
+                 'reason': 'synthetic-semantic-rejection',
+                 'findings': [{'code': 'synthetic-semantic-rejection', 'stage': 'metadata', 'scope': 'Info.plist'}],
+                 'findings_complete': True, 'findings_omitted': 0}
+        value.update(changes)
+        path = Path(preflight.PACKAGE_REPORTS[label])
+        path.write_text(json.dumps(value))
+        return value
+
+    def test_two_safe_package_rejections_collect_both_without_runtime_or_qualification(self):
+        def command(args, seconds, **options):
+            code, tail, operation = self.execute(args, seconds, **options)
+            label = preflight.PHASES[len(self.calls) - 1][0]
+            if label in preflight.PACKAGE_REPORTS:
+                self.rejected_receipt(label)
+                code = operation['exit'] = 1
+            return code, tail, operation
+        code, report = self.run_preflight(command)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(self.calls), 4)
+        self.assertEqual(report['rejected_package_phases'], ['debug-package', 'release-package'])
+        self.assertFalse(report['passed'])
+        self.assertFalse(report['release_qualification'])
+        self.assertEqual(report['runtime_tests_executed'], 0)
+        self.assertTrue(all(value['status'] == 'fail' for value in report['package_reports'].values()))
+        self.assertEqual([cap for _, cap, _ in preflight.PHASES], [390, 20, 390, 20])
+        self.assertEqual(preflight.ADMISSION_SECONDS + preflight.required_seconds(0), 900)
+
+    def test_foreign_unsafe_or_malformed_rejection_never_admits_independent_archive(self):
+        defects = [dict(safe_inventory_complete=False), dict(safe_inventory_complete=1),
+                   dict(status='pass'), dict(qualification='qualified'), dict(schema_version=2),
+                   dict(configuration='Release'), dict(platform='device'), dict(package='/foreign/app'),
+                   dict(app='/foreign/app'), dict(findings=[]), dict(findings=[{'code': 'x', 'stage': 'y'}]),
+                   dict(findings_complete=1), dict(findings_omitted=-1), dict(findings_omitted=True),
+                   dict(findings_complete=True, findings_omitted=1),
+                   dict(reason='another'), dict(findings=[{'code': 'x' * 65, 'stage': 'metadata', 'scope': 'Info.plist'}])]
+        for defect in defects:
+            with self.subTest(defect=defect), package_fixtures.owned_temporary_directory() as nested:
+                os.chdir(Path(nested).resolve(strict=True))
+                os.environ['GITHUB_WORKSPACE'] = str(Path.cwd())
+                os.environ['QRCATCHER_OWNED_PROCESS_BARRIER'] = str(Path.cwd() / 'build/owned-process-cleanup.json')
+                os.environ['GITHUB_ENV'] = str(Path.cwd() / 'job-env')
+                self.calls.clear(); self.clock.now = 0
+                def command(args, seconds, **options):
+                    code, tail, operation = self.execute(args, seconds, **options)
+                    if len(self.calls) == 2:
+                        self.rejected_receipt('debug-package', **defect)
+                        code = operation['exit'] = 1
+                    return code, tail, operation
+                code, report = self.run_preflight(command)
+                self.assertEqual(code, 1)
+                self.assertEqual(len(self.calls), 2)
+                self.assertFalse(Path(preflight.ARCHIVE).exists())
+                self.assertFalse(report['passed'])
+                os.chdir(self.base)
+
+    def test_safe_semantic_rejection_keeps_full_remaining_schedule_and_uncertainty_fence(self):
+        package_returned = False
+        def identity():
+            if package_returned:
+                self.clock.now = 450.001
+            return IDENTITY
+        def command(args, seconds, **options):
+            nonlocal package_returned
+            code, tail, operation = self.execute(args, seconds, **options)
+            if len(self.calls) == 2:
+                self.rejected_receipt('debug-package')
+                code = operation['exit'] = 1
+                package_returned = True
+            return code, tail, operation
+        with patch.object(route, 'current_identity', side_effect=identity):
+            code, report = self.run_preflight(command, identity=None)
+        self.assertEqual(code, 124)
+        self.assertEqual(len(self.calls), 2)
+        self.assertFalse(Path(preflight.ARCHIVE).exists())
+        self.assertEqual(report['operations'][-1]['label'], 'release-archive')
+        self.assertEqual(report['operations'][-1]['required_seconds'], 450)
+        self.assertEqual(report['rejected_package_phases'], ['debug-package'])
+
+    def test_late_package_failure_is_uncertain_before_any_receipt_can_admit_archive(self):
+        def command(args, seconds, **options):
+            code, tail, operation = self.execute(args, seconds, **options)
+            if len(self.calls) == 2:
+                self.rejected_receipt('debug-package')
+                code = operation['exit'] = 1
+                operation['elapsed_seconds'] = 22
+            return code, tail, operation
+        code, report = self.run_preflight(command)
+        self.assertEqual(code, 126)
+        self.assertTrue(report['cleanup_unconfirmed'])
+        self.assertEqual(len(self.calls), 2)
+        self.assertFalse(Path(preflight.ARCHIVE).exists())
+
+    def test_independent_archive_compiler_failure_remains_failure_after_safe_debug_rejection(self):
+        def command(args, seconds, **options):
+            code, tail, operation = self.execute(args, seconds, **options)
+            if len(self.calls) == 2:
+                self.rejected_receipt('debug-package')
+                code = operation['exit'] = 1
+            elif len(self.calls) == 3:
+                code = operation['exit'] = 65
+            return code, tail, operation
+        code, report = self.run_preflight(command)
+        self.assertEqual(code, 65)
+        self.assertEqual(len(self.calls), 3)
+        self.assertFalse(report['passed'])
+        self.assertEqual(report['rejected_package_phases'], ['debug-package'])
 
     def test_missing_actual_xctestrun_stops_before_archive(self):
         def command(args, seconds, **options):
@@ -246,6 +365,31 @@ class OriginalIOSPreflightTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(len(self.calls), 2)
         self.assertFalse(report['passed'])
+
+    def test_success_exit_cannot_hide_nonempty_incomplete_or_unsafe_package_findings(self):
+        defects = [dict(safe_inventory_complete=False), dict(safe_inventory_complete=1),
+                   dict(findings=[{'code': 'rejected', 'stage': 'metadata', 'scope': 'Info.plist'}]),
+                   dict(findings_complete=False), dict(findings_complete=1),
+                   dict(findings_omitted=1), dict(findings_omitted=False)]
+        for defect in defects:
+            with self.subTest(defect=defect), package_fixtures.owned_temporary_directory() as nested:
+                os.chdir(Path(nested).resolve(strict=True))
+                os.environ['GITHUB_WORKSPACE'] = str(Path.cwd())
+                os.environ['QRCATCHER_OWNED_PROCESS_BARRIER'] = str(Path.cwd() / 'build/owned-process-cleanup.json')
+                os.environ['GITHUB_ENV'] = str(Path.cwd() / 'job-env')
+                self.calls.clear(); self.clock.now = 0
+                def command(args, seconds, **options):
+                    result = self.execute(args, seconds, **options)
+                    if len(self.calls) == 2:
+                        path = Path(preflight.PACKAGE_REPORTS['debug-package'])
+                        value = json.loads(path.read_text()); value.update(defect); path.write_text(json.dumps(value))
+                    return result
+                code, report = self.run_preflight(command)
+                self.assertEqual(code, 1)
+                self.assertEqual(len(self.calls), 2)
+                self.assertFalse(report['passed'])
+                self.assertFalse(Path(preflight.ARCHIVE).exists())
+                os.chdir(self.base)
 
     def test_nonzero_completed_compiler_stops_without_a_following_command(self):
         def command(args, seconds, **options):

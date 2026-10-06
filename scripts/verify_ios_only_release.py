@@ -38,7 +38,11 @@ Archives require device/Release scope and inspect their complete bounded outer
 inventory for test package/symbol/XCTest names, alongside strict shipping code.
 Ordinary app symbol companions and archive metadata outside the shipping app
 are inventoried but are not claimed as runtime-code or symbol-binding evidence.
-Debug admits existing fixture/startup diagnostics, while preserving every
+Debug admits existing fixture/startup diagnostics and the exact XCTestCase
+dynamic camera-permission detection name in QRCatcher's main/debug images.
+That name alone is not observed XCTest runtime code. XCTest load dependencies,
+other XCTest names and markers elsewhere retain their independent gates.
+Debug preserves every
 Watch/helper/companion and shipping-inventory check. The default is Release.
 Only --xctestrun in Debug/simulator/.app scope admits one exact, actual-bound
 PlugIns/QRCatcherTests.xctest. Its code is bounded and inspected separately;
@@ -85,6 +89,14 @@ owned companion inspection: relative path/types, fixed plist keys and Mach-O
 type/architecture/UUID summaries and at most 16 already-read __DWARF section
 headers per slice. Omitted header counts remain explicit. No raw DWARF, symbol
 names, source paths, private section content or second traversal is retained.
+Independent owned-file rule failures accumulate after the same bounded reads.
+Malformed file syntax blocks its dependent checks explicitly as UNKNOWN;
+filesystem identity/ownership and resource-cap uncertainty stop immediately.
+All findings fail the package. At most 64 fixed code/stage/owned-relative-scope
+receipts share the existing half-report summary budget with symbol observations;
+omission and incomplete qualification remain explicit. safe_inventory_complete
+records completion of the owned inventory's stable-read/directory checks only,
+and never qualifies failed metadata, code, dependencies or runtime behavior.
 """
 
 import argparse
@@ -121,6 +133,7 @@ class Limits:
     test_configurations: int = 16
     test_targets: int = 64
     report_bytes: int = 64 * 1024
+    findings: int = 64
 
 
 DEFAULT_LIMITS = Limits()
@@ -192,6 +205,11 @@ BYTE_MARKERS = tuple((label, value.encode(encoding))
                      for value in values for encoding in ('ascii', 'utf-16-le', 'utf-16-be'))
 TEST_BYTE_MARKERS = {value.encode(encoding) for value in ('XCTest.framework', 'XCTestCase', 'XCTestObservation')
                      for encoding in ('ascii', 'utf-16-le', 'utf-16-be')}
+DEBUG_DETECTION_IMAGES = {'QRCatcher', 'QRCatcher.debug.dylib', '__preview.dylib'}
+DEBUG_DETECTION_BYTES = {value.encode(encoding): encoding for encoding in ('ascii', 'utf-16-le', 'utf-16-be')
+                         for value in ('XCTestCase',)}
+DEBUG_TEXT_UNITS = {encoding: {chr(value).encode(encoding) for value in range(32, 127)}
+                    for encoding in DEBUG_DETECTION_BYTES.values()}
 
 
 class ValidationError(ValueError):
@@ -207,19 +225,106 @@ def require(condition, code, detail):
         raise ValidationError(code, detail)
 
 
+class PackageFindings:
+    """Finite package-rule receipts; no retry, rescan or parser recovery."""
+    def __init__(self, limits):
+        self.limits = limits
+        self.cap = min(limits.findings, 64) if type(limits.findings) is int and limits.findings > 0 else 64
+        self.summary_budget = limits.report_bytes // 2 if type(limits.report_bytes) is int and limits.report_bytes > 0 else DEFAULT_LIMITS.report_bytes // 2
+        self.items = []
+        self.first = None
+        self.omitted = 0
+        self.complete = True
+        self.safe_inventory_complete = False
+        self.identity = {}
+
+    def add(self, error, stage, scope):
+        if self.first is None:
+            self.first = error
+        item = {'code': error.code, 'stage': stage, 'scope': scope}
+        if item in self.items:
+            return
+        if len(self.items) < self.cap:
+            self.items.append(item)
+        else:
+            self.omitted += 1
+            self.complete = False
+
+    def check(self, condition, code, detail, stage, scope):
+        if not condition:
+            self.add(ValidationError(code, detail), stage, scope)
+        return bool(condition)
+
+    def unknown(self, scope, checks):
+        self.complete = False
+        self.add(ValidationError('dependent_checks_unknown', 'UNKNOWN: ' + checks), 'dependent-checks', scope)
+
+    def file_error(self, error, stage, scope):
+        # Every resource cap and filesystem/identity uncertainty is still an
+        # immediate stop. Syntax failures only block this owned file's checks.
+        if error.code.endswith('_limit'):
+            raise error
+        self.add(error, stage, scope)
+        self.unknown(scope, 'invalid file syntax or unsupported format blocks dependent qualification')
+
+    def reject(self):
+        if self.first is not None:
+            raise self.first
+
+
+def debug_detection_name(data, marker):
+    """Admit only complete encoded name tokens, never a dependency path."""
+    offset = data.find(marker)
+    original_encoding = DEBUG_DETECTION_BYTES[marker]
+    original_unit = 1 if original_encoding == 'ascii' else 2
+    while offset >= 0:
+        end = offset + len(marker)
+        if offset >= original_unit and data[offset - original_unit:offset] in DEBUG_TEXT_UNITS[original_encoding]:
+            return False
+        complete_token = False
+        # UTF-16 endian searches can also match one byte into the other endian
+        # spelling, including its terminator. Qualify the complete surrounding
+        # token in either encoding instead of rejecting that overlap.
+        for candidate, encoding in DEBUG_DETECTION_BYTES.items():
+            unit = 1 if encoding == 'ascii' else 2
+            text_units = DEBUG_TEXT_UNITS[encoding]
+            for start in (offset - 1, offset, offset + 1):
+                finish = start + len(candidate)
+                if (start < 0 or start > offset or finish + unit < end
+                        or data[start:finish] != candidate):
+                    continue
+                if ((start < unit or data[start - unit:start] not in text_units)
+                        and (finish == len(data) or data[finish:finish + unit] == b'\0' * unit)):
+                    complete_token = True
+                    break
+            if complete_token:
+                break
+        if not complete_token:
+            return False
+        offset = data.find(marker, end)
+    return True
+
+
 def version(value):
     return '{}.{}.{}'.format(value >> 16, (value >> 8) & 255, value & 255)
 
 
-def scan_bytes(data, label, release=True, allow_watch=False):
+def scan_bytes(data, label, release=True, allow_watch=False, findings=None, dynamic_detection=False):
     for code, marker in BYTE_MARKERS:
         if ((code == 'release_diagnostics' and not release and (allow_watch or marker not in TEST_BYTE_MARKERS))
                 or (code == 'watch_presence' and allow_watch)):
             continue
-        require(marker not in data, code, '{}: forbidden shipping marker {}'.format(label, marker.decode('ascii', errors='replace')[:100]))
+        if (not release and dynamic_detection and marker in DEBUG_DETECTION_BYTES
+                and debug_detection_name(data, marker)):
+            continue
+        detail = '{}: forbidden shipping marker {}'.format(label, marker.decode('ascii', errors='replace')[:100])
+        if findings is None:
+            require(marker not in data, code, detail)
+        else:
+            findings.check(marker not in data, code, detail, 'markers', label)
 
 
-def scan_plist(info, label, limits, release=True, allow_watch=False):
+def scan_plist(info, label, limits, release=True, allow_watch=False, findings=None):
     stack = [(info, 0)]
     nodes = 0
     while stack:
@@ -230,8 +335,11 @@ def scan_plist(info, label, limits, release=True, allow_watch=False):
             require(len(value) <= limits.plist_nodes, 'plist_limit', label)
             for key, child in value.items():
                 require(isinstance(key, str), 'malformed_plist', label)
-                require(key not in WATCH_PLIST_KEYS and not key.startswith(('WKCompanion', 'WKWatchKit', 'CLKComplication')),
-                        'watch_plist_key', '{}: {}'.format(label, key))
+                condition = key not in WATCH_PLIST_KEYS and not key.startswith(('WKCompanion', 'WKWatchKit', 'CLKComplication'))
+                if findings is None:
+                    require(condition, 'watch_plist_key', '{}: {}'.format(label, key))
+                else:
+                    findings.check(condition, 'watch_plist_key', '{}: {}'.format(label, key), 'plist', label)
                 stack.append((key, depth + 1))
                 stack.append((child, depth + 1))
         elif isinstance(value, list):
@@ -239,12 +347,16 @@ def scan_plist(info, label, limits, release=True, allow_watch=False):
             stack.extend((child, depth + 1) for child in value)
         elif isinstance(value, str):
             lowered = value.casefold()
-            require(allow_watch or (not any(marker.casefold() in lowered for marker in WATCH_MARKERS)
-                    and lowered not in {'watchos', 'watchsimulator', 'watchossimulator'}), 'watch_plist_value', label)
-            scan_bytes(value.encode('utf-8'), label, release, allow_watch)
+            condition = allow_watch or (not any(marker.casefold() in lowered for marker in WATCH_MARKERS)
+                    and lowered not in {'watchos', 'watchsimulator', 'watchossimulator'})
+            if findings is None:
+                require(condition, 'watch_plist_value', label)
+            else:
+                findings.check(condition, 'watch_plist_value', label, 'plist', label)
+            scan_bytes(value.encode('utf-8'), label, release, allow_watch, findings)
 
 
-def parse_plist(data, label, limits, release=True, allow_watch=False):
+def parse_plist(data, label, limits, release=True, allow_watch=False, findings=None):
     require(len(data) <= limits.plist_bytes, 'plist_bytes_limit', label)
     try:
         info = plistlib.loads(data)
@@ -252,7 +364,7 @@ def parse_plist(data, label, limits, release=True, allow_watch=False):
             ExpatError, IndexError, KeyError, struct.error) as exc:
         raise ValidationError('malformed_plist', label) from exc
     require(isinstance(info, dict), 'malformed_plist', label)
-    scan_plist(info, label, limits, release, allow_watch)
+    scan_plist(info, label, limits, release, allow_watch, findings)
     return info
 
 
@@ -268,7 +380,7 @@ def stable_stat(item):
             item.st_size, item.st_mtime_ns, item.st_ctime_ns)
 
 
-def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_companion=False, slice_observations=None):
+def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_companion=False, slice_observations=None, findings=None, finding_scope=None):
     endian = THIN_MAGICS.get(data[:4])
     require(endian is not None, 'unsupported_mach_o', label)
     require(len(data) >= 32, 'truncated_mach_o', label)
@@ -331,7 +443,7 @@ def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_comp
                 raise ValidationError('malformed_target_triple_command', label) from exc
             require(re.fullmatch(r'[A-Za-z0-9_.+-]+', triple) is not None,
                     'malformed_target_triple_command', label)
-            scan_bytes(encoded[:terminator], label, release, allow_watch)
+            scan_bytes(encoded[:terminator], finding_scope or label, release, allow_watch, findings)
             if observed is not None:
                 observed['target_triple'] = triple
             if symbol_companion:
@@ -352,7 +464,7 @@ def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_comp
                 name = encoded[:terminator].decode('utf-8')
             except UnicodeError as exc:
                 raise ValidationError('malformed_dylib_command', label) from exc
-            scan_bytes(encoded[:terminator], label, release, allow_watch)
+            scan_bytes(encoded[:terminator], finding_scope or label, release, allow_watch, findings)
             dependencies.append({'command': command, 'path': name})
         elif command == 0x32:  # LC_BUILD_VERSION + ntools * build_tool_version.
             require(size >= 24, 'malformed_build_version', label)
@@ -472,9 +584,9 @@ def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_comp
             'target_triple': target_triples[0] if target_triples else None}
 
 
-def parse_mach_o(data, label, limits, release=True, allow_watch=False, symbol_companion=False, slice_observations=None):
+def parse_mach_o(data, label, limits, release=True, allow_watch=False, symbol_companion=False, slice_observations=None, findings=None):
     if data[:4] in THIN_MAGICS:
-        return [parse_thin(data, label, limits, release, allow_watch, symbol_companion, slice_observations)]
+        return [parse_thin(data, label, limits, release, allow_watch, symbol_companion, slice_observations, findings, label)]
     require(data[:4] in FAT_MAGICS, 'unsupported_mach_o', label)
     endian, wide = FAT_MAGICS[data[:4]]
     require(len(data) >= 8, 'truncated_fat_header', label)
@@ -499,29 +611,30 @@ def parse_mach_o(data, label, limits, release=True, allow_watch=False, symbol_co
         identities.add((cpu, subtype))
         ranges.append((offset, offset + length))
         slice_info = parse_thin(data[offset:offset + length], '{} slice {}'.format(label, index), limits,
-                                release, allow_watch, symbol_companion, slice_observations)
+                                release, allow_watch, symbol_companion, slice_observations, findings, label)
         require((slice_info['cpu_type'], slice_info['cpu_subtype']) == (cpu, subtype), 'fat_header_mismatch', label)
         result.append(slice_info)
     return result
 
 
-def check_path(relative, limits, test_bound=False, symbol_bound=False):
+def check_path(relative, limits, test_bound=False, symbol_bound=False, findings=None):
     require(len(relative.encode('utf-8')) <= limits.path_bytes, 'path_limit', relative)
     parts = Path(relative).parts
     require(len(parts) <= limits.depth, 'directory_depth_limit', relative)
+    check = require if findings is None else lambda condition, code, detail: findings.check(condition, code, detail, 'inventory-rules', relative)
     for part in parts:
         lowered = part.casefold()
-        require(lowered not in {'watch', 'watchos', 'watchsimulator'} and not lowered.endswith(('.watchkitapp', '.watchkitextension')),
+        check(lowered not in {'watch', 'watchos', 'watchsimulator'} and not lowered.endswith(('.watchkitapp', '.watchkitextension')),
                 'watch_inventory', relative)
-        require(not lowered.endswith('.xctest') or (test_bound and part == 'QRCatcherTests.xctest'
+        check(not lowered.endswith('.xctest') or (test_bound and part == 'QRCatcherTests.xctest'
                 and (relative == TEST_BUNDLE or relative.startswith(TEST_BUNDLE + '/'))), 'release_test_bundle', relative)
         # Contents can be stripped or marker-free; declared XCTest inventory
         # itself remains forbidden outside the single actual-bound test subtree.
-        require(test_bound or symbol_bound or 'xctest' not in lowered, 'shipping_test_inventory', relative)
-        require(symbol_bound or not lowered.endswith('.dsym'), 'test_symbol_path', relative)
-        require(not lowered.endswith('.app'), 'nested_app', relative)
-        require(test_bound or symbol_bound or not any(marker.casefold() in lowered for marker in WATCH_MARKERS), 'watch_inventory', relative)
-        require(not test_bound or not lowered.endswith('.appex'), 'foreign_test_bundle', relative)
+        check(test_bound or symbol_bound or 'xctest' not in lowered, 'shipping_test_inventory', relative)
+        check(symbol_bound or not lowered.endswith('.dsym'), 'test_symbol_path', relative)
+        check(not lowered.endswith('.app'), 'nested_app', relative)
+        check(test_bound or symbol_bound or not any(marker.casefold() in lowered for marker in WATCH_MARKERS), 'watch_inventory', relative)
+        check(not test_bound or not lowered.endswith('.appex'), 'foreign_test_bundle', relative)
 
 
 def read_regular(directory_fd, name, expected, label, limits):
@@ -540,15 +653,16 @@ def read_regular(directory_fd, name, expected, label, limits):
     return data
 
 
-def check_archive_path(relative, limits, shipping_app):
+def check_archive_path(relative, limits, shipping_app, findings=None):
     require(len(relative.encode('utf-8')) <= limits.path_bytes, 'path_limit', relative)
     parts = Path(relative).parts
     require(len(parts) <= limits.depth, 'directory_depth_limit', relative)
+    check = require if findings is None else lambda condition, code, detail: findings.check(condition, code, detail, 'archive-inventory', relative)
     for index, part in enumerate(parts):
         lowered = part.casefold()
-        require('xctest' not in lowered and not (lowered.endswith('.dsym') and 'tests' in lowered),
+        check('xctest' not in lowered and not (lowered.endswith('.dsym') and 'tests' in lowered),
                 'archive_test_inventory', relative)
-        require(not lowered.endswith('.app') or str(Path(*parts[:index + 1])) == shipping_app,
+        check(not lowered.endswith('.app') or str(Path(*parts[:index + 1])) == shipping_app,
                 'archive_app_inventory', relative)
 
 
@@ -569,7 +683,19 @@ def relocation_scalar(value, label):
     return value
 
 
-def parse_test_relocations(data, label, limits, test_binary, observation=None):
+def parse_test_relocations(data, label, limits, test_binary, observation=None, findings=None):
+    rejected_stage = None
+    def check(condition, code):
+        nonlocal rejected_stage
+        if findings is None:
+            require(condition, code, label)
+        elif not condition:
+            findings.check(False, code, label, 'relocation-metadata', label)
+            if rejected_stage is None:
+                rejected_stage = observation.get('stage') if observation is not None else 'metadata'
+                if observation is not None:
+                    observation['rejection_enum'] = code
+        return bool(condition)
     if observation is not None:
         observation['stage'] = 'encoding'
     require(len(data) <= limits.plist_bytes, 'test_relocation_bytes_limit', label)
@@ -623,7 +749,7 @@ def parse_test_relocations(data, label, limits, test_binary, observation=None):
         observation['relocation_rows_observed'] = len(rows)
         observation['numeric_widths_bits'] = {'offset': 64, 'size': 32, 'addend': 64,
                                              'symObjAddr': 64, 'symBinAddr': 64, 'symSize': 32}
-    require(path_matched, 'test_relocation_binary_path', label)
+    check(path_matched, 'test_relocation_binary_path')
     architecture = Path(label).parent.name
     triple_match = re.fullmatch(r'(aarch64|arm64|x86_64)-apple-ios(?:[0-9]+(?:\.[0-9]+){0,2})?-simulator', triple)
     darwin_architecture = TEST_DARWIN_RELOCATION_TRIPLES.get(triple)
@@ -633,9 +759,11 @@ def parse_test_relocations(data, label, limits, test_binary, observation=None):
         observation['triple_classification'] = ('mach-o-architecture-only' if darwin_architecture else
                                                  'explicit-ios-simulator-metadata' if triple_match else 'unsupported')
         observation['simulator_platform_proof'] = 'not-provided-by-relocation-metadata'
-    require(triple_match is not None or darwin_architecture is not None, 'test_relocation_platform', label)
-    triple_architecture = darwin_architecture or {'arm64': 'aarch64'}.get(triple_match[1], triple_match[1])
-    require(triple_architecture == architecture, 'test_relocation_architecture', label)
+    if check(triple_match is not None or darwin_architecture is not None, 'test_relocation_platform'):
+        triple_architecture = darwin_architecture or {'arm64': 'aarch64'}.get(triple_match[1], triple_match[1])
+        check(triple_architecture == architecture, 'test_relocation_architecture')
+    elif findings is not None:
+        findings.unknown(label, 'relocation architecture equality requires a supported technical triple')
     if observation is not None:
         observation['stage'] = 'relocation-records'
     nodes = len(fields) + 1
@@ -683,9 +811,11 @@ def parse_test_relocations(data, label, limits, test_binary, observation=None):
             digits = 8 if key in {'size', 'symSize'} else 16
             require(re.fullmatch(r'0x[0-9a-fA-F]{1,' + str(digits) + '}', record[key]) is not None,
                     'unsupported_test_relocation_format', label)
-        require(int(record['size'], 16) in {4, 8}, 'test_relocation_size', label)
+        check(int(record['size'], 16) in {4, 8}, 'test_relocation_size')
     if observation is not None:
-        observation['stage'] = 'parsed-metadata-only'
+        observation['stage'] = rejected_stage or 'parsed-metadata-only'
+    if rejected_stage is not None:
+        return None
     return {'classification': 'test-symbol-relocation-metadata', 'architecture': architecture,
             'triple': triple, 'triple_classification': 'mach-o-architecture-only' if darwin_architecture else 'explicit-ios-simulator-metadata',
             'simulator_platform_proof': 'independently-validated-bound-test-mach-o-required',
@@ -693,17 +823,19 @@ def parse_test_relocations(data, label, limits, test_binary, observation=None):
             'relocation_count': len(rows)}
 
 
-def inventory(app, limits, release=True, test_bound=False, archive_app=None, initial_totals=None, symbol_observations=None):
+def inventory(app, limits, release=True, test_bound=False, archive_app=None, initial_totals=None, symbol_observations=None, findings=None):
     files = {}
     directories = set()
     plists = {}
     binaries = {}
     test_markers = set()
+    binary_count = 0
     totals = dict(initial_totals) if initial_totals is not None else {'entries': 0, 'file_bytes': 0}
     digest = hashlib.sha256()
     shipping_app = str(archive_app.relative_to(app)) if archive_app is not None else None
 
     def visit(fd, prefix):
+        nonlocal binary_count
         before = os.fstat(fd)
         # Consume at most the cap + 1, without first building an unbounded list.
         names = []
@@ -718,9 +850,9 @@ def inventory(app, limits, release=True, test_bound=False, archive_app=None, ini
             test_only = test_bound and (relative == TEST_BUNDLE or relative.startswith(TEST_BUNDLE + '/'))
             symbol_only = test_bound and (relative == TEST_SYMBOLS or relative.startswith(TEST_SYMBOLS + '/'))
             if archive_app is not None:
-                check_archive_path(relative, limits, shipping_app)
+                check_archive_path(relative, limits, shipping_app, findings)
             else:
-                check_path(relative, limits, test_only, symbol_only)
+                check_path(relative, limits, test_only, symbol_only, findings)
             item = os.stat(name, dir_fd=fd, follow_symlinks=False)
             if symbol_only and symbol_observations is not None:
                 kind = ('symlink' if stat.S_ISLNK(item.st_mode) else 'directory' if stat.S_ISDIR(item.st_mode)
@@ -755,7 +887,8 @@ def inventory(app, limits, release=True, test_bound=False, archive_app=None, ini
                 require(totals['file_bytes'] <= limits.total_bytes, 'total_bytes_limit', relative)
                 data = read_regular(fd, name, item, relative, limits)
                 if archive_app is None:
-                    scan_bytes(data, relative, release, test_only or symbol_only)
+                    scan_bytes(data, relative, release, test_only or symbol_only, findings,
+                               not release and relative in DEBUG_DETECTION_IMAGES)
                 if test_only or symbol_only:
                     for code, marker in BYTE_MARKERS:
                         if marker in data:
@@ -769,18 +902,27 @@ def inventory(app, limits, release=True, test_bound=False, archive_app=None, ini
                                                   'qualification': 'unqualified'}
                         symbol_observations.setdefault('relocations', []).append(relocation_observation)
                     try:
-                        files[relative]['relocation_map'] = parse_test_relocations(
-                            data, relative, limits, app / TEST_BUNDLE / 'QRCatcherTests', relocation_observation)
+                        relocation_map = parse_test_relocations(
+                            data, relative, limits, app / TEST_BUNDLE / 'QRCatcherTests', relocation_observation, findings)
+                        if relocation_map is not None:
+                            files[relative]['relocation_map'] = relocation_map
                     except ValidationError as exc:
                         if relocation_observation is not None:
-                            relocation_observation['rejection_enum'] = (exc.code if exc.code in TEST_RELOCATION_REJECTIONS
-                                                                         else 'UNKNOWN: relocation validation rejection')
-                        raise
+                            relocation_observation.setdefault('rejection_enum', exc.code if exc.code in TEST_RELOCATION_REJECTIONS
+                                                              else 'UNKNOWN: relocation validation rejection')
+                        if findings is None:
+                            raise
+                        findings.file_error(exc, 'relocation-metadata', relative)
                 digest.update(('F\0' + relative + '\0' + sha + '\0').encode('utf-8'))
                 if name.endswith(('.plist', '.xcprivacy')):
-                    plists[relative] = parse_plist(data, relative, limits, release,
-                                                  archive_app is not None or test_only or symbol_only)
-                    if symbol_only and relative == TEST_SYMBOLS + '/Contents/Info.plist' and symbol_observations is not None:
+                    try:
+                        plists[relative] = parse_plist(data, relative, limits, release,
+                                                      archive_app is not None or test_only or symbol_only, findings)
+                    except ValidationError as exc:
+                        if findings is None:
+                            raise
+                        findings.file_error(exc, 'plist', relative)
+                    if relative in plists and symbol_only and relative == TEST_SYMBOLS + '/Contents/Info.plist' and symbol_observations is not None:
                         keys = {}
                         for key in ('CFBundleIdentifier', 'CFBundlePackageType', 'CFBundleInfoDictionaryVersion',
                                     'CFBundleDevelopmentRegion', 'CFBundleSignature', 'CFBundleVersion',
@@ -793,20 +935,33 @@ def inventory(app, limits, release=True, test_bound=False, archive_app=None, ini
                                     if len(value) > 200:
                                         keys[key]['truncated'] = True
                         symbol_observations['plist'] = {'path': relative, 'keys': keys}
-                    if archive_app is not None:
+                    if archive_app is not None and relative in plists:
                         identifier = plists[relative].get('CFBundleIdentifier', '')
-                        require(not isinstance(identifier, str) or not (identifier.casefold().endswith('tests')
-                                or 'xctest' in identifier.casefold()), 'archive_test_metadata', relative)
+                        condition = not isinstance(identifier, str) or not (identifier.casefold().endswith('tests')
+                                or 'xctest' in identifier.casefold())
+                        if findings is None:
+                            require(condition, 'archive_test_metadata', relative)
+                        else:
+                            findings.check(condition, 'archive_test_metadata', relative, 'archive-metadata', relative)
                 if archive_app is None and data[:4] in MACH_MAGICS:
-                    require(len(binaries) < limits.binaries, 'binary_limit', relative)
+                    binary_count += 1
+                    require(binary_count <= limits.binaries, 'binary_limit', relative)
                     slice_observations = None
                     if symbol_only and relative == TEST_DWARF and symbol_observations is not None:
                         slice_observations = []
                         symbol_observations['mach_o'].append({'path': relative, 'slices': slice_observations})
-                    binaries[relative] = parse_mach_o(data, relative, limits, release, test_only or symbol_only,
-                                                    relative == TEST_DWARF and symbol_only, slice_observations)
+                    try:
+                        binaries[relative] = parse_mach_o(data, relative, limits, release, test_only or symbol_only,
+                                                        relative == TEST_DWARF and symbol_only, slice_observations, findings)
+                    except ValidationError as exc:
+                        if findings is None:
+                            raise
+                        findings.file_error(exc, 'mach-o', relative)
                 elif archive_app is None and name.endswith(('.dylib', '.so', '.o', '.a')):
-                    raise ValidationError('unsupported_shipping_code', relative)
+                    if findings is None:
+                        raise ValidationError('unsupported_shipping_code', relative)
+                    findings.add(ValidationError('unsupported_shipping_code', relative), 'mach-o', relative)
+                    findings.unknown(relative, 'unsupported shipping code blocks Mach-O qualification')
         require(stable_stat(before) == stable_stat(os.fstat(fd)), 'package_changed', prefix or '.')
 
     root_fd = os.open(app, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -839,18 +994,9 @@ def select_app(package, limits, release=True):
     require(names == ['QRCatcher.app'], 'archive_app_inventory',
             'archive Applications must contain only the metadata-bound QRCatcher.app')
     app = real_directory(applications / names[0], 'archive shipping app')
-    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        info_stat = os.stat('Info.plist', dir_fd=fd, follow_symlinks=False)
-        data = read_regular(fd, 'Info.plist', info_stat, 'archive Info.plist', limits)
-    finally:
-        os.close(fd)
-    info = parse_plist(data, 'archive Info.plist', limits, release)
-    props = info.get('ApplicationProperties')
-    require(isinstance(props, dict), 'archive_application_properties', 'archive Info.plist')
-    require(props.get('ApplicationPath') == 'Applications/' + names[0]
-            and props.get('CFBundleIdentifier') == BUNDLE_ID, 'archive_identity', 'archive application path/identity does not match its shipping app')
-    return root, app, props
+    # Archive Info.plist is read once by the complete outer inventory, then
+    # qualified alongside the independent shipping metadata below.
+    return root, app, {}
 
 
 def executable_name(info, label):
@@ -949,50 +1095,61 @@ def bind_hosted_test(xctestrun, root, app, platform, configuration, limits):
             'format_version': metadata['FormatVersion'], 'binding': bindings[0]}
 
 
-def verify_test_symbols(files, directories, plists, binaries, test_executable):
+def verify_test_symbols(files, directories, plists, binaries, test_executable, findings):
     if TEST_SYMBOLS not in directories:
         return None
-    require(TEST_SYMBOL_DIRECTORIES <= directories and TEST_SYMBOL_FILES <= files.keys(),
-            'missing_test_symbols', TEST_SYMBOLS + ': public Contents/Info.plist and unique DWARF/QRCatcherTests required')
+    def check(condition, code, detail, scope=TEST_SYMBOLS):
+        return findings.check(condition, code, detail, 'test-symbol-binding', scope)
+    check(TEST_SYMBOL_DIRECTORIES <= directories and TEST_SYMBOL_FILES <= files.keys(),
+          'missing_test_symbols', TEST_SYMBOLS + ': public Contents/Info.plist and unique DWARF/QRCatcherTests required')
     metadata = plists.get(TEST_SYMBOLS + '/Contents/Info.plist')
-    # dsymutil takes the identifier from the executable's enclosing bundle on
-    # Darwin; its public fallback is the fixed output bundle's .dSYM stem.
     identifiers = {'com.apple.xcode.dsym.' + TEST_BUNDLE_ID,
                    'com.apple.xcode.dsym.QRCatcherTests.xctest'}
     permitted = {'CFBundleDevelopmentRegion', 'CFBundleIdentifier', 'CFBundleInfoDictionaryVersion',
                  'CFBundlePackageType', 'CFBundleSignature', 'CFBundleShortVersionString',
                  'CFBundleVersion', 'Toolchain'}
-    require(isinstance(metadata, dict), 'test_symbol_metadata', TEST_SYMBOLS)
-    unsupported = sorted(set(metadata) - permitted)
-    require(not unsupported, 'test_symbol_metadata', TEST_SYMBOLS + ': unsupported plist keys/types ' +
-            ', '.join('{}:{}'.format(key[:64], type(metadata[key]).__name__) for key in unsupported[:3]))
-    require(isinstance(metadata, dict)
-            and isinstance(metadata.get('CFBundleIdentifier'), str)
-            and metadata['CFBundleIdentifier'] in identifiers
-            and metadata.get('CFBundlePackageType') == 'dSYM'
-            and metadata.get('CFBundleInfoDictionaryVersion') == '6.0'
-            and metadata.get('CFBundleDevelopmentRegion') == 'English'
-            and metadata.get('CFBundleSignature') == '????'
-            and isinstance(metadata.get('CFBundleVersion'), str) and metadata['CFBundleVersion']
-            and all(isinstance(metadata[key], str) and metadata[key]
-                    for key in ('CFBundleShortVersionString', 'Toolchain') if key in metadata),
-            'test_symbol_metadata', TEST_SYMBOLS)
-    require(TEST_DWARF in binaries, 'missing_test_symbol_mach_o', TEST_DWARF)
-    def pairs(slices, label):
-        require(all(value['uuid'] is not None for value in slices), 'missing_uuid_command', label)
+    if isinstance(metadata, dict):
+        unsupported = sorted(set(metadata) - permitted)
+        check(not unsupported, 'test_symbol_metadata', TEST_SYMBOLS + ': unsupported plist keys/types ' +
+              ', '.join('{}:{}'.format(key[:64], type(metadata[key]).__name__) for key in unsupported[:3]))
+        check(isinstance(metadata.get('CFBundleIdentifier'), str)
+              and metadata['CFBundleIdentifier'] in identifiers
+              and metadata.get('CFBundlePackageType') == 'dSYM'
+              and metadata.get('CFBundleInfoDictionaryVersion') == '6.0'
+              and metadata.get('CFBundleDevelopmentRegion') == 'English'
+              and metadata.get('CFBundleSignature') == '????'
+              and isinstance(metadata.get('CFBundleVersion'), str) and metadata['CFBundleVersion']
+              and all(isinstance(metadata[key], str) and metadata[key]
+                      for key in ('CFBundleShortVersionString', 'Toolchain') if key in metadata),
+              'test_symbol_metadata', TEST_SYMBOLS)
+    else:
+        check(False, 'test_symbol_metadata', TEST_SYMBOLS)
+        findings.unknown(TEST_SYMBOLS, 'test symbol metadata qualification requires a parsed property list')
+    if not check(TEST_DWARF in binaries, 'missing_test_symbol_mach_o', TEST_DWARF, TEST_DWARF):
+        findings.unknown(TEST_DWARF, 'CPU/subtype/UUID/target binding requires a parsed symbol image')
+        return None
+    if test_executable not in binaries:
+        findings.unknown(TEST_DWARF, 'CPU/subtype/UUID/target binding requires a parsed bound test executable')
+        return None
+    def pairs(slices):
         return {(value['cpu_type'], value['cpu_subtype']): value['uuid'] for value in slices}
-    binary_pairs = pairs(binaries[test_executable], test_executable)
-    symbol_pairs = pairs(binaries[TEST_DWARF], TEST_DWARF)
-    require(binary_pairs.keys() == symbol_pairs.keys(), 'test_symbol_architecture', TEST_DWARF)
-    require(binary_pairs == symbol_pairs, 'test_symbol_uuid', TEST_DWARF)
+    binary_pairs = pairs(binaries[test_executable])
+    symbol_pairs = pairs(binaries[TEST_DWARF])
+    binary_uuids = check(all(value is not None for value in binary_pairs.values()), 'missing_uuid_command', test_executable, test_executable)
+    symbol_uuids = check(all(value is not None for value in symbol_pairs.values()), 'missing_uuid_command', TEST_DWARF, TEST_DWARF)
+    check(binary_pairs.keys() == symbol_pairs.keys(), 'test_symbol_architecture', TEST_DWARF, TEST_DWARF)
+    if binary_uuids and symbol_uuids:
+        check(binary_pairs == symbol_pairs, 'test_symbol_uuid', TEST_DWARF, TEST_DWARF)
+    else:
+        findings.unknown(TEST_DWARF, 'UUID equality requires UUIDs on both parsed images')
     def triple_pairs(slices):
         return {(value['cpu_type'], value['cpu_subtype']): value['target_triple'] for value in slices}
-    require(triple_pairs(binaries[test_executable]) == triple_pairs(binaries[TEST_DWARF]),
-            'test_symbol_target_triple', TEST_DWARF + ': optional target triple must match the same bound binary slice')
+    check(triple_pairs(binaries[test_executable]) == triple_pairs(binaries[TEST_DWARF]),
+          'test_symbol_target_triple', TEST_DWARF + ': optional target triple must match the same bound binary slice', TEST_DWARF)
     for architecture, cpu in RELOCATION_ARCHITECTURES.items():
         if TEST_RELOCATIONS + '/' + architecture in directories:
-            require(sum(identity[0] == cpu for identity in binary_pairs) == 1,
-                    'test_relocation_architecture', TEST_RELOCATIONS + '/' + architecture)
+            check(sum(identity[0] == cpu for identity in binary_pairs) == 1,
+                  'test_relocation_architecture', TEST_RELOCATIONS + '/' + architecture, TEST_RELOCATIONS + '/' + architecture)
     resources = [{'path': path, **files[path]} for path in sorted(TEST_RELOCATION_FILES & files.keys())]
     return {'classification': 'test-symbols', 'path': TEST_SYMBOLS,
             'bound_executable': test_executable, 'metadata': metadata,
@@ -1003,25 +1160,47 @@ def verify_test_symbols(files, directories, plists, binaries, test_executable):
 
 def verify_package(package, platform='device', configuration='Release', limits=DEFAULT_LIMITS, xctestrun=None):
     observations = {}
+    findings = PackageFindings(limits)
     try:
-        return _verify_package(package, platform, configuration, limits, xctestrun, observations)
+        return _verify_package(package, platform, configuration, limits, xctestrun, observations, findings)
     except (ValidationError, OSError, UnicodeError, struct.error, RecursionError) as exc:
+        if not isinstance(exc, ValidationError):
+            exc = ValidationError('inspection_error', str(exc))
+        if exc is not findings.first:
+            findings.add(exc, 'inspection-stop', 'package')
+            findings.safe_inventory_complete = False
+            findings.complete = False
+        failure = findings.first
         if observations.get('inventory'):
             # Preserve only observations already obtained under exact binding.
             # They never qualify a failed package or cause another read/scan.
-            if not isinstance(exc, ValidationError):
-                exc = ValidationError('inspection_error', str(exc))
             # Reserve half of the existing report budget for the failure and
             # JSON formatting. Limits are unchanged; overflow loses summaries.
-            if len(json.dumps(observations, sort_keys=True, indent=2, ensure_ascii=True).encode('utf-8')) > limits.report_bytes // 2:
+            if len(json.dumps(observations, sort_keys=True, indent=2, ensure_ascii=True).encode('utf-8')) > findings.summary_budget:
                 observations = {'scope': observations['scope'], 'qualification': 'unqualified',
                                 'summaries_omitted': 'existing-report-budget'}
-            exc.symbol_observations = observations
-            raise exc
-        raise
+            failure.symbol_observations = observations
+        # Findings and existing observations share the original half-report
+        # summary budget. Saturation is explicit and can never become a pass.
+        summary = {'findings': findings.items}
+        if hasattr(failure, 'symbol_observations'):
+            summary['test_symbol_observations'] = failure.symbol_observations
+        if len(json.dumps(summary, sort_keys=True, indent=2, ensure_ascii=True).encode('utf-8')) > findings.summary_budget:
+            if hasattr(failure, 'symbol_observations'):
+                failure.symbol_observations = {'scope': observations['scope'], 'qualification': 'unqualified',
+                                               'summaries_omitted': 'existing-report-budget'}
+                summary['test_symbol_observations'] = failure.symbol_observations
+            while findings.items and len(json.dumps(summary, sort_keys=True, indent=2, ensure_ascii=True).encode('utf-8')) > findings.summary_budget:
+                findings.items.pop()
+                findings.omitted += 1
+                findings.complete = False
+        failure.package_diagnostics = dict(findings.identity, qualification='unqualified',
+            safe_inventory_complete=findings.safe_inventory_complete,
+            findings=findings.items, findings_complete=findings.complete, findings_omitted=findings.omitted)
+        raise failure
 
 
-def _verify_package(package, platform, configuration, limits, xctestrun, symbol_observations):
+def _verify_package(package, platform, configuration, limits, xctestrun, symbol_observations, findings):
     require(platform in PLATFORMS, 'unsupported_platform', platform)
     require(configuration in {'Debug', 'Release'}, 'unsupported_configuration', configuration)
     require(Path(package).suffix != '.xcarchive' or (platform == 'device' and configuration == 'Release'),
@@ -1034,120 +1213,164 @@ def _verify_package(package, platform, configuration, limits, xctestrun, symbol_
             'Python 3.9+ POSIX fd-scandir, dir_fd, and no-follow filesystem capabilities are required')
     require(all(type(value) is int and value > 0 for value in asdict(limits).values()), 'invalid_limits', 'all limits must be positive integers')
     root, app, archive_props = select_app(package, limits, configuration == 'Release')
+    findings.identity.update(package=str(root), app=str(app), platform=platform, configuration=configuration)
     binding = bind_hosted_test(xctestrun, root, app, platform, configuration, limits) if xctestrun is not None else None
     if binding is not None:
         symbol_observations.update(scope='exact-xctestrun-bound-test-symbol-companion', qualification='unqualified',
                                    path=TEST_SYMBOLS, inventory=[], plist=None, mach_o=[])
     files, directories, plists, binaries, totals, tree_sha, test_markers = inventory(
         app, limits, configuration == 'Release', binding is not None,
-        symbol_observations=symbol_observations if binding is not None else None)
+        symbol_observations=symbol_observations if binding is not None else None, findings=findings)
     outer_inventory = None
     if archive_props is not None:
         shipping_app = str(app.relative_to(root))
         for relative in files.keys() | directories:
-            check_archive_path(shipping_app + '/' + relative, limits, shipping_app)
-        outer_files, outer_dirs, _, _, combined_totals, outer_sha, _ = inventory(
-            root, limits, archive_app=app, initial_totals=totals)
+            check_archive_path(shipping_app + '/' + relative, limits, shipping_app, findings)
+        outer_files, outer_dirs, outer_plists, _, combined_totals, outer_sha, _ = inventory(
+            root, limits, archive_app=app, initial_totals=totals, findings=findings)
         outer_inventory = dict(combined_totals, files=len(files) + len(outer_files),
                                directories=len(directories) + len(outer_dirs),
                                sha256=hashlib.sha256((tree_sha + outer_sha).encode('ascii')).hexdigest(),
                                scope='complete-archive-with-strict-shipping-app')
+        archive_info = outer_plists.get('Info.plist')
+        archive_props = archive_info.get('ApplicationProperties') if isinstance(archive_info, dict) else None
+        findings.check(isinstance(archive_props, dict), 'archive_application_properties', 'archive Info.plist', 'archive-metadata', 'Info.plist')
+        if isinstance(archive_props, dict):
+            findings.check(archive_props.get('ApplicationPath') == 'Applications/QRCatcher.app'
+                           and archive_props.get('CFBundleIdentifier') == BUNDLE_ID, 'archive_identity',
+                           'archive application path/identity does not match its shipping app', 'archive-metadata', 'Info.plist')
+        else:
+            findings.unknown('Info.plist', 'archive identity/version qualification requires valid archive metadata')
+    findings.safe_inventory_complete = True
+    def check(condition, code, detail, scope='Info.plist', stage='package-metadata'):
+        return findings.check(condition, code, detail, stage, scope)
     info = plists.get('Info.plist')
-    require(isinstance(info, dict), 'missing_bundle_info', 'shipping Info.plist')
-    require(info.get('CFBundleIdentifier') == BUNDLE_ID, 'bundle_identity', 'original bundle ID must be retained')
-    require(info.get('CFBundlePackageType') == 'APPL', 'bundle_package_type', 'shipping package must be APPL')
-    require(info.get('CFBundleShortVersionString') == '1.1' and info.get('CFBundleVersion') == '2', 'bundle_version', 'expected version 1.1/build 2')
-    require(info.get('MinimumOSVersion') == '15.0', 'bundle_minimum_os', 'expected original iOS 15.0 floor')
-    families = info.get('UIDeviceFamily')
-    require(isinstance(families, list) and all(type(value) is int for value in families)
-            and sorted(families) == [1, 2], 'bundle_device_families', 'expected iPhone and iPad families [1, 2]')
     sdk_name, mach_platform = PLATFORMS[platform]
-    require(info.get('CFBundleSupportedPlatforms') == [sdk_name], 'bundle_platform', 'expected only ' + sdk_name)
-    require(info.get('NSCameraUsageDescription') == CAMERA_USAGE, 'bundle_camera_usage', 'original camera-use disclosure must be retained')
-    require('Assets.car' in files and files['Assets.car']['bytes'] > 0, 'missing_compiled_assets', 'shipping Assets.car')
-    require(plists.get('PrivacyInfo.xcprivacy') == EXPECTED_PRIVACY, 'privacy_manifest', 'original file-timestamp reasons and no collected data/tracking/domains must be retained')
-    for key in ('CFBundleIcons', 'CFBundleIcons~ipad'):
-        icons = info.get(key)
-        primary = icons.get('CFBundlePrimaryIcon') if isinstance(icons, dict) else None
-        icon_files = primary.get('CFBundleIconFiles') if isinstance(primary, dict) else None
-        require(isinstance(primary, dict) and primary.get('CFBundleIconName') == 'AppIcon'
-                and isinstance(icon_files, list) and icon_files
-                and all(isinstance(name, str) and name.startswith('AppIcon') for name in icon_files), 'bundle_icons', key)
-    for key in ('UIFileSharingEnabled', 'LSSupportsOpeningDocumentsInPlace'):
-        require((configuration == 'Release' and key not in info)
-                or (configuration == 'Debug' and info.get(key) is True), 'bundle_file_sharing', key)
-    main_executable = executable_name(info, 'shipping Info.plist')
-    require(main_executable == 'QRCatcher', 'bundle_executable', 'expected original QRCatcher executable')
-    require(main_executable in binaries, 'missing_shipping_mach_o', main_executable)
+    main_executable = 'QRCatcher'
+    families = None
+    if check(isinstance(info, dict), 'missing_bundle_info', 'shipping Info.plist'):
+        check(info.get('CFBundleIdentifier') == BUNDLE_ID, 'bundle_identity', 'original bundle ID must be retained')
+        check(info.get('CFBundlePackageType') == 'APPL', 'bundle_package_type', 'shipping package must be APPL')
+        check(info.get('CFBundleShortVersionString') == '1.1' and info.get('CFBundleVersion') == '2', 'bundle_version', 'expected version 1.1/build 2')
+        check(info.get('MinimumOSVersion') == '15.0', 'bundle_minimum_os', 'expected original iOS 15.0 floor')
+        families = info.get('UIDeviceFamily')
+        check(isinstance(families, list) and all(type(value) is int for value in families)
+              and sorted(families) == [1, 2], 'bundle_device_families', 'expected iPhone and iPad families [1, 2]')
+        check(info.get('CFBundleSupportedPlatforms') == [sdk_name], 'bundle_platform', 'expected only ' + sdk_name)
+        check(info.get('NSCameraUsageDescription') == CAMERA_USAGE, 'bundle_camera_usage', 'original camera-use disclosure must be retained')
+        for key in ('CFBundleIcons', 'CFBundleIcons~ipad'):
+            icons = info.get(key)
+            primary = icons.get('CFBundlePrimaryIcon') if isinstance(icons, dict) else None
+            icon_files = primary.get('CFBundleIconFiles') if isinstance(primary, dict) else None
+            check(isinstance(primary, dict) and primary.get('CFBundleIconName') == 'AppIcon'
+                  and isinstance(icon_files, list) and icon_files
+                  and all(isinstance(name, str) and name.startswith('AppIcon') for name in icon_files), 'bundle_icons', key)
+        for key in ('UIFileSharingEnabled', 'LSSupportsOpeningDocumentsInPlace'):
+            check((configuration == 'Release' and key not in info)
+                  or (configuration == 'Debug' and info.get(key) is True), 'bundle_file_sharing', key)
+        check(info.get('CFBundleExecutable') == main_executable, 'bundle_executable', 'expected original QRCatcher executable')
+    else:
+        findings.unknown('Info.plist', 'shipping identity/families/icons/executable metadata requires a parsed property list')
+    check('Assets.car' in files and files['Assets.car']['bytes'] > 0, 'missing_compiled_assets', 'shipping Assets.car', 'Assets.car')
+    check(plists.get('PrivacyInfo.xcprivacy') == EXPECTED_PRIVACY, 'privacy_manifest',
+          'original file-timestamp reasons and no collected data/tracking/domains must be retained', 'PrivacyInfo.xcprivacy')
+    check(main_executable in binaries, 'missing_shipping_mach_o', main_executable, main_executable)
+    if main_executable not in binaries:
+        findings.unknown(main_executable, 'shipping main-image type/platform/dependencies require a parsed Mach-O')
+    # These fixed expected identities do not promote invalid metadata to a
+    # qualified owner. Every independent parsed image still receives its gates.
     owners = {main_executable: 2}
     test_symbols = None
     if binding is not None:
         test_info = plists.get(TEST_BUNDLE + '/Info.plist')
-        require(isinstance(test_info, dict) and test_info.get('CFBundleIdentifier') == TEST_BUNDLE_ID
-                and test_info.get('CFBundlePackageType') == 'BNDL'
-                and executable_name(test_info, TEST_BUNDLE) == 'QRCatcherTests', 'test_bundle_identity', TEST_BUNDLE)
+        check(isinstance(test_info, dict) and test_info.get('CFBundleIdentifier') == TEST_BUNDLE_ID
+              and test_info.get('CFBundlePackageType') == 'BNDL'
+              and test_info.get('CFBundleExecutable') == 'QRCatcherTests', 'test_bundle_identity', TEST_BUNDLE,
+              TEST_BUNDLE + '/Info.plist', 'test-binding')
         test_executable = TEST_BUNDLE + '/QRCatcherTests'
-        require(test_executable in binaries, 'missing_test_executable', test_executable)
-        if TEST_SYMBOLS in directories:
-            symbol_observations['bound_test_binary'] = {
-                'path': test_executable,
-                'slices': [{key: value[key] for key in ('file_type', 'cpu_type', 'cpu_subtype', 'architecture', 'uuid', 'target_triple')
-                            if key != 'target_triple' or value[key] is not None}
-                           for value in binaries[test_executable]],
-            }
+        test_parsed = check(test_executable in binaries, 'missing_test_executable', test_executable, test_executable, 'test-binding')
         owners[test_executable] = 8
-        helper_names = {marker for name, code, marker in test_markers if name == test_executable and code == 'watch_presence'}
-        require({'QRWatchPhoneService', 'QRWatchSessionGate'} <= helper_names, 'missing_test_helpers', 'bound unit executable must contain its deliberate helper classes')
-        require(any('WatchConnectivity.framework/' in dependency['path'] for slice_info in binaries[test_executable]
-                    for dependency in slice_info['dependencies']), 'missing_test_watch_dependency', test_executable)
-        test_symbols = verify_test_symbols(files, directories, plists, binaries, test_executable)
-        if test_symbols is not None:
+        if test_parsed:
+            if TEST_SYMBOLS in directories:
+                symbol_observations['bound_test_binary'] = {
+                    'path': test_executable,
+                    'slices': [{key: value[key] for key in ('file_type', 'cpu_type', 'cpu_subtype', 'architecture', 'uuid', 'target_triple')
+                                if key != 'target_triple' or value[key] is not None}
+                               for value in binaries[test_executable]],
+                }
+            helper_names = {marker for name, code, marker in test_markers if name == test_executable and code == 'watch_presence'}
+            check({'QRWatchPhoneService', 'QRWatchSessionGate'} <= helper_names, 'missing_test_helpers',
+                  'bound unit executable must contain its deliberate helper classes', test_executable, 'test-binding')
+            check(any('WatchConnectivity.framework/' in dependency['path'] for slice_info in binaries[test_executable]
+                      for dependency in slice_info['dependencies']), 'missing_test_watch_dependency', test_executable, test_executable, 'test-binding')
+        else:
+            findings.unknown(test_executable, 'bound test link/type/platform and symbol binding require a parsed test executable')
+        test_symbols = verify_test_symbols(files, directories, plists, binaries, test_executable, findings)
+        if TEST_SYMBOLS in directories:
             owners[TEST_DWARF] = 0xA
     for directory in sorted(directories):
         suffix = Path(directory).suffix.casefold()
         if suffix in {'.framework', '.appex', '.bundle'}:
             nested_info = plists.get(directory + '/Info.plist')
-            require(suffix == '.bundle' or isinstance(nested_info, dict), 'orphan_bundle', directory)
+            if not check(suffix == '.bundle' or isinstance(nested_info, dict), 'orphan_bundle', directory, directory, 'bundle-ownership'):
+                findings.unknown(directory, 'bundle executable ownership requires valid bundle metadata')
             if nested_info and ('CFBundleExecutable' in nested_info or suffix != '.bundle'):
-                executable = directory + '/' + executable_name(nested_info, directory)
-                require(executable in binaries, 'orphan_bundle_executable', executable)
+                try:
+                    executable = directory + '/' + executable_name(nested_info, directory)
+                except ValidationError as exc:
+                    findings.add(exc, 'bundle-ownership', directory)
+                    findings.unknown(directory, 'bundle executable ownership requires a safe executable name')
+                    continue
+                if not check(executable in binaries, 'orphan_bundle_executable', executable, directory, 'bundle-ownership'):
+                    findings.unknown(directory, 'nested image type/platform/dependencies require a parsed declared executable')
                 owners[executable] = 6 if suffix == '.framework' else (2 if suffix == '.appex' else 8)
     for label, nested in plists.items():
         if 'CFBundleSupportedPlatforms' in nested:
-            require(nested['CFBundleSupportedPlatforms'] == [sdk_name], 'nested_bundle_platform', label)
+            check(nested['CFBundleSupportedPlatforms'] == [sdk_name], 'nested_bundle_platform', label, label, 'nested-metadata')
         if 'UIDeviceFamily' in nested:
             value = nested['UIDeviceFamily']
-            require(isinstance(value, list) and value and all(type(family) is int and family in {1, 2} for family in value), 'nested_bundle_device_families', label)
+            check(isinstance(value, list) and value and all(type(family) is int and family in {1, 2} for family in value),
+                  'nested_bundle_device_families', label, label, 'nested-metadata')
         if label != 'Info.plist' and 'CFBundleExecutable' in nested:
-            executable = str(Path(label).parent / executable_name(nested, label))
-            require(Path(label).name == 'Info.plist' and str(Path(label).parent) in directories
-                    and executable in owners, 'orphan_bundle_info', label)
+            try:
+                executable = str(Path(label).parent / executable_name(nested, label))
+            except ValidationError as exc:
+                findings.add(exc, 'nested-metadata', label)
+                findings.unknown(label, 'nested bundle ownership requires a safe executable name')
+                continue
+            check(Path(label).name == 'Info.plist' and str(Path(label).parent) in directories
+                  and executable in owners, 'orphan_bundle_info', label, label, 'nested-metadata')
     for relative, slices in binaries.items():
         test_only = binding is not None and relative.startswith(TEST_BUNDLE + '/')
-        symbol_only = test_symbols is not None and relative == TEST_DWARF
+        symbol_only = binding is not None and TEST_SYMBOLS in directories and relative == TEST_DWARF
         expected_type = owners.get(relative)
         if expected_type is None:
             framework_dylib = Path(relative).parent == Path('Frameworks') and Path(relative).suffix == '.dylib'
             debug_dylib = configuration == 'Debug' and relative in {'QRCatcher.debug.dylib', '__preview.dylib'}
             test_dylib = test_only and Path(relative).parent == Path(TEST_BUNDLE + '/Frameworks') and Path(relative).suffix == '.dylib'
-            require(framework_dylib or debug_dylib or test_dylib, 'orphan_mach_o', relative)
-            expected_type = 6
+            if check(framework_dylib or debug_dylib or test_dylib, 'orphan_mach_o', relative, relative, 'mach-o-rules'):
+                expected_type = 6
+            else:
+                findings.unknown(relative, 'image file type qualification requires a declared or closed allowed owner')
         for slice_info in slices:
-            require(slice_info['file_type'] == expected_type, 'mach_o_file_type', relative)
-            require(slice_info['platform'] == mach_platform or (symbol_only and slice_info['platform'] is None),
-                    'mach_o_platform', relative)
-            require(platform != 'device' or slice_info['architecture'] == 'arm64', 'mach_o_architecture', relative)
-            require(test_only or symbol_only or slice_info['minimum_os_encoded'] <= MINIMUM_OS, 'mach_o_minimum_os', relative)
+            if expected_type is not None:
+                check(slice_info['file_type'] == expected_type, 'mach_o_file_type', relative, relative, 'mach-o-rules')
+            check(slice_info['platform'] == mach_platform or (symbol_only and slice_info['platform'] is None),
+                  'mach_o_platform', relative, relative, 'mach-o-rules')
+            check(platform != 'device' or slice_info['architecture'] == 'arm64', 'mach_o_architecture', relative, relative, 'mach-o-rules')
+            check(test_only or symbol_only or slice_info['minimum_os_encoded'] <= MINIMUM_OS, 'mach_o_minimum_os', relative, relative, 'mach-o-rules')
             if not test_only and not symbol_only:
-                require(not any('xctest' in dependency['path'].casefold() or 'qrcatchertests' in dependency['path'].casefold()
-                                for dependency in slice_info['dependencies']), 'shipping_test_dependency', relative)
+                check(not any('xctest' in dependency['path'].casefold() or 'qrcatchertests' in dependency['path'].casefold()
+                              for dependency in slice_info['dependencies']), 'shipping_test_dependency', relative, relative, 'mach-o-rules')
             if relative == main_executable:
-                require(slice_info['minimum_os_encoded'] == MINIMUM_OS, 'mach_o_minimum_os', relative)
-    if archive_props is not None:
+                check(slice_info['minimum_os_encoded'] == MINIMUM_OS, 'mach_o_minimum_os', relative, relative, 'mach-o-rules')
+    if isinstance(archive_props, dict) and isinstance(info, dict):
         for key in ('CFBundleShortVersionString', 'CFBundleVersion'):
-            require(archive_props.get(key) == info[key], 'archive_identity', key)
+            check(archive_props.get(key) == info.get(key), 'archive_identity', key, 'Info.plist', 'archive-metadata')
+    findings.reject()
     report = {
         'schema_version': 1, 'status': 'pass',
+        'safe_inventory_complete': True, 'findings': [], 'findings_complete': True, 'findings_omitted': 0,
         'scope': 'ios-only-debug-hosted-test-package' if binding else 'ios-only-shipping-package',
         'package': str(root), 'app': str(app), 'platform': platform, 'configuration': configuration,
         'bundle_id': info['CFBundleIdentifier'], 'executable': main_executable,
@@ -1184,7 +1407,10 @@ def _verify_package(package, platform, configuration, limits, xctestrun, symbol_
 
 
 def encode_report(report, limits=DEFAULT_LIMITS):
-    encoded = (json.dumps(report, sort_keys=True, indent=2, ensure_ascii=True, allow_nan=False) + '\n').encode('utf-8')
+    try:
+        encoded = (json.dumps(report, sort_keys=True, indent=2, ensure_ascii=True, allow_nan=False) + '\n').encode('utf-8')
+    except (ValueError, TypeError) as exc:
+        raise ValidationError('report_encoding_error', 'JSON report') from exc
     require(len(encoded) <= limits.report_bytes, 'report_bytes_limit', 'JSON report')
     return encoded
 
@@ -1223,6 +1449,10 @@ def main(argv=None):
         report = {'schema_version': 1, 'status': 'fail',
                   'reason': exc.code if isinstance(exc, ValidationError) else 'inspection_error',
                   'detail': exc.detail if isinstance(exc, ValidationError) else str(exc)[:400]}
+        if isinstance(exc, ValidationError) and hasattr(exc, 'package_diagnostics'):
+            report.update(exc.package_diagnostics)
+        else:
+            report.update(safe_inventory_complete=False, findings=[], findings_complete=False, findings_omitted=0)
         if isinstance(exc, ValidationError) and hasattr(exc, 'symbol_observations'):
             report['test_symbol_observations'] = exc.symbol_observations
     encoded = encode_report(report)
@@ -1235,6 +1465,7 @@ def main(argv=None):
             report = {'schema_version': 1, 'status': 'fail',
                       'reason': exc.code if isinstance(exc, ValidationError) else 'report_write_error',
                       'detail': exc.detail if isinstance(exc, ValidationError) else str(exc)[:400]}
+            report.update(safe_inventory_complete=False, findings=[], findings_complete=False, findings_omitted=0)
             encoded = encode_report(report)
     sys.stdout.write(encoded.decode('utf-8'))
     return 0 if report['status'] == 'pass' else 1
