@@ -22,6 +22,16 @@ DEVICE = '11111111-2222-4333-8444-555555555555'
 SOURCE = 'a' * 40
 
 
+def continuation_fixture_environment(environment):
+    # These doubles exercise only the original canonical continuation. Own
+    # that selection without modifying the caller or its cleanup evidence.
+    fixture = dict(environment)
+    fixture['GITHUB_REF'] = 'refs/heads/codex/apple-platforms'
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY', 'QRCATCHER_IOS_SUPPLEMENT_ONLY'):
+        fixture.pop(key, None)
+    return fixture
+
+
 def summary(now):
     return {'result': 'Failed', 'totalTestCount': 9, 'passedTests': 8, 'failedTests': 1,
             'skippedTests': 0, 'expectedFailures': 0, 'startTime': now - 500, 'finishTime': now - 1,
@@ -91,6 +101,19 @@ class ContinuationGateTests(unittest.TestCase):
 
 
 class ContinuationShellTests(unittest.TestCase):
+    def test_fixture_selection_isolated_without_mutating_caller_or_uncertainty(self):
+        environment = {'GITHUB_REF': 'refs/heads/codex/ios-original-supplement',
+                       'IOS_FIRST_RELEASE_CANDIDATE_ONLY': 'true', 'QRCATCHER_IOS_SUPPLEMENT_ONLY': 'true',
+                       'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED': 'true', 'QRCATCHER_OWNED_PROCESS_BARRIER': '/owned/marker'}
+        before = dict(environment)
+        fixture = continuation_fixture_environment(environment)
+        self.assertEqual(environment, before)
+        self.assertEqual(fixture['GITHUB_REF'], 'refs/heads/codex/apple-platforms')
+        self.assertNotIn('IOS_FIRST_RELEASE_CANDIDATE_ONLY', fixture)
+        self.assertNotIn('QRCATCHER_IOS_SUPPLEMENT_ONLY', fixture)
+        self.assertEqual(fixture['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED'], 'true')
+        self.assertEqual(fixture['QRCATCHER_OWNED_PROCESS_BARRIER'], '/owned/marker')
+
     def run_shell(self, mode):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary).resolve(); (work / 'scripts').mkdir(); (work / 'bin').mkdir()
@@ -158,6 +181,7 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(13 if mode=='seed-failur
                    'PYTHONOPTIMIZE': str(sys.flags.optimize), 'PYTHONPATH': str(clock),
                    'QRCATCHER_FIXTURE_CLOCK_ORIGIN': str(time.monotonic_ns() / 1_000_000_000)}
             env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', None)
+            env = continuation_fixture_environment(env)
             result = subprocess.run(['bash', 'scripts/run_ios_platform_ui.sh', DEVICE, gate.RESULT, 'QRCatcherUITests'], cwd=work, env=env, capture_output=True, text=True, timeout=15)
             if not (work / 'build/ios-platform-setup.json').exists(): self.fail(result.stdout + result.stderr)
             setup = json.loads((work / 'build/ios-platform-setup.json').read_text()); calls = json.loads((work / 'calls.json').read_text())

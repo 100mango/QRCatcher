@@ -42,6 +42,24 @@ IOS_FIRST_COMPONENTS = {
         '14a5e7c88ac87fc8c4458e34aaff8d5896c7d0bce2bca8bf96946f342aba578e',
         'HANDOFFS CAPS READINESS ownership qualified_prior completed_owned_command completed_bootstatus')}
 
+# This closed supplement changes only its listed dispatch/receipt interfaces.
+# Keep the earlier reviewed identities and every actually unchanged source node.
+SUPPLEMENT_COMPONENTS = {
+    'scripts/ipad_mini_setup.py': (
+        '252c41f8cf1f7efe86543d531a170ed018a37aa3ecd03e611b6d803dd8557ea2',
+        '244823faa6f7f6b0b4d24cb813e512998e7916debbddc75b6954a2e298add5ec',
+        '33cf5f8d3db9855d6c738b8198fb1e7a54b0f9533743f2d7800bd1c726799c64',
+        'CAPS DIAGNOSTIC_CAPS ORDER ROW_SECONDS CLEANUP PENDING STOP _ACTIVE _ROW_LEASE LAYOUT FILES PHOTOS '
+        'require strict_json signature read_regular valid_uuid extended_mini_profile job_ledger_limit '
+        'Budget.current Budget.persist Budget.enter Budget.next Claim active_claim_exists active_claim_is_current '
+        'Controller.__init__ inventory test_command qualify_result _FIXTURE fixture_query row host_execute '
+        'host_commands action_gate main'),
+    'scripts/ipad_mini_state_handoff.py': (
+        'c20124a4191f9f109d53194736e2a5fff00cd29c29abcb7d8ed179737255dd4b',
+        '260d2b20f8b5ad75f88fb18fcd6c546744e6cdbc5c960ecd10ee584026b84e6e',
+        '2f40df1f1cf322cee361124ac579442d6de698153318ede82bfbd0ba76129204',
+        'HANDOFFS CAPS READINESS ownership completed_owned_command completed_bootstatus')}
+
 
 def unchanged_source_nodes_digest(text, selectors):
     nodes = {}
@@ -382,8 +400,21 @@ __weak id releaseValue; __block BOOL releaseFlag;
                 if path in IOS_FIRST_COMPONENTS:
                     old, reviewed, unchanged, selectors = IOS_FIRST_COMPONENTS[path]
                     self.assertEqual(expected, old)
+                    if path in SUPPLEMENT_COMPONENTS:
+                        prior, reviewed_supplement, unchanged, selectors = SUPPLEMENT_COMPONENTS[path]
+                        self.assertEqual(prior, reviewed)
+                        reviewed = reviewed_supplement
                     self.assertEqual(hashlib.sha256(data).hexdigest(), reviewed)
                     self.assertEqual(unchanged_source_nodes_digest(data.decode(), selectors), unchanged)
+                elif path == 'scripts/run_ios_platform_ui.sh':
+                    # Preserve the prior whole-module identity and bind the
+                    # closed selected-case extension separately. The existing
+                    # source restorer proves every old branch byte-for-byte.
+                    self.assertEqual(expected, 'f9f20c8973db08820fe2d366f3d72ffa3618fb373fe606a2a6ecdbbc4d562f06')
+                    self.assertEqual(hashlib.sha256(data).hexdigest(),
+                        '90b9dd6ac52b28363cfda844f25501b68713b438581ea9d84d9e4b3d719ee60b')
+                    from test_ipad_mini_setup import MiniSetupTests
+                    MiniSetupTests('test_nonmini_selector_and_launcher_body_byte_equivalence').test_nonmini_selector_and_launcher_body_byte_equivalence()
                 else:
                     self.assertEqual(hashlib.sha256(data).hexdigest(), expected)
         self.assertIn('self.continueAfterFailure = NO;', self.pad)

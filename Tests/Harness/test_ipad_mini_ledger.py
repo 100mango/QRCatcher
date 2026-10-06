@@ -15,7 +15,7 @@ import ios_original_release_route as ios_route
 def diagnostic(f):
     # This fixture owns the old diagnostic profile even when discovery runs
     # inside the new iOS-first CI job. Do not inherit its compiler-double input.
-    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','SYNTHETIC_IOS_PRODUCTS',ios_route.INITIAL_HASH_KEY):
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','SYNTHETIC_IOS_PRODUCTS',ios_route.INITIAL_HASH_KEY):
         os.environ.pop(key,None)
     for name in [route.CANONICAL,route.WORKFLOW]:
         path=f.root/name;path.parent.mkdir(parents=True,exist_ok=True)
@@ -210,8 +210,10 @@ class MiniLedgerTests(unittest.TestCase):
         self.assertFalse(result['actual_upload_executed']);self.assertFalse(result['platform_post_observed'])
         print('COMPLETE_LEDGER_LIFECYCLE '+json.dumps({k:v for k,v in result.items() if k not in ['ledger','ledger_raw','exported_raw','outputs','sizes']}),flush=True)
     def test_actual_diagnostic_lifecycle_owns_profile_under_poisoned_outer_ios_ci(self):
-        poison={'GITHUB_REF':ios_route.REF,'GITHUB_WORKFLOW_REF':ios_route.WORKFLOW_REF,
+        poison={'GITHUB_REF':'refs/heads/codex/ios-original-supplement',
+                'GITHUB_WORKFLOW_REF':'100mango/QRCatcher/.github/workflows/ios-original-supplement.yml@refs/heads/codex/ios-original-supplement',
                 'GITHUB_JOB':'preflight','EVIDENCE_SCOPE':'','IOS_FIRST_RELEASE_CANDIDATE_ONLY':'true',
+                'QRCATCHER_IOS_SUPPLEMENT_ONLY':'true',
                 'SYNTHETIC_IOS_PRODUCTS':'/outer/foreign-ios-products',ios_route.INITIAL_HASH_KEY:'c'*64}
         with patch.dict(os.environ,poison):
             result=full_lifecycle()

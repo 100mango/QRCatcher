@@ -37,7 +37,7 @@ class MiniFirstSummaryAllowanceTests(unittest.TestCase):
         self.assertEqual([cap for command,cap in self.f.calls],[10,10])
     def test_canonical_and_unrelated_refs_keep10(self):
         for ref in ('refs/heads/codex/apple-platforms','refs/heads/another'):
-            with patch.dict(os.environ,{'GITHUB_REF':ref}):self.assertEqual(mini.result_summary_limit(LAYOUT),10)
+            with patch.dict(os.environ,{'GITHUB_REF':ref,'QRCATCHER_IOS_SUPPLEMENT_ONLY':'false'}):self.assertEqual(mini.result_summary_limit(LAYOUT),10)
     def test_wrong_diagnostic_identity_refuses_before_reader(self):
         for key,value in [('GITHUB_REPOSITORY','other/repo'),('GITHUB_WORKFLOW_SHA','b'*40),('GITHUB_WORKFLOW_REF','wrong'),('EVIDENCE_SCOPE','ipad_pro'),('DIAGNOSTIC_ONLY','false')]:
             with self.subTest(key=key),patch.dict(os.environ,{key:value}):

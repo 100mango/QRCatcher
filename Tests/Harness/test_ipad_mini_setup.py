@@ -60,7 +60,7 @@ class Fixture:
         self.root=Path(self.tmp.name).resolve();(self.root/'build').mkdir();self.temp=self.root/'temp';self.temp.mkdir()
         self.clock=Clock(now);self.cwd=Path.cwd();self.environment=dict(os.environ)
         os.chdir(self.root)
-        for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','MINI_SIMULATOR_ID']:os.environ.pop(key,None)
+        for key in ['QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','QRCATCHER_IOS_SUPPLEMENT_ONLY','MINI_SIMULATOR_ID']:os.environ.pop(key,None)
         os.environ.update(GITHUB_WORKSPACE=str(self.root),GITHUB_SHA=SHA,GITHUB_WORKFLOW_SHA=SHA,
             GITHUB_REPOSITORY='100mango/QRCatcher',GITHUB_REF='refs/heads/codex/apple-platforms',
             GITHUB_EVENT_NAME='push',EVIDENCE_SCOPE='ipad_mini',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',
@@ -304,6 +304,10 @@ class MiniSetupTests(unittest.TestCase):
         body=(ROOT/'scripts/ipad_mini_prepare.sh').read_text();fixed=''.join('python3 Tests/Harness/'+name+'\n' for name in UNITS)
         # Normalize only the explicitly reviewed iOS-first metadata/project
         # clauses. The original canonical restoration hash stays unchanged.
+        old_ref='if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then'
+        supplement_ref='if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ] || [ "$GITHUB_REF" = refs/heads/codex/ios-original-supplement ]; then'
+        self.assertEqual(body.count(supplement_ref),3)
+        body=body.replace(supplement_ref,old_ref)
         staged='if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then\n  python3 scripts/ios_original_release_route.py prepared "$SOURCE_HEAD" "$SOURCE_TREE"\nfi\n'
         generate='if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then\n  python3 scripts/generate_project.py --profile ios-only\n  git diff --exit-code -- QRCatcher.xcodeproj QRCatcher-iOS-Only.xcodeproj\nelse\n  python3 scripts/generate_project.py\n  git diff --exit-code -- QRCatcher.xcodeproj\nfi\n'
         listing='if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then\n  xcodebuild -list -project QRCatcher-iOS-Only.xcodeproj\nelse\n  xcodebuild -list -project QRCatcher.xcodeproj\nfi\n'
@@ -322,6 +326,29 @@ class MiniSetupTests(unittest.TestCase):
     def test_nonmini_selector_and_launcher_body_byte_equivalence(self):
         selector=(ROOT/'scripts/select_ios_platform_matrix.py').read_text().replace("if os.environ.get('EVIDENCE_SCOPE') == 'ipad_mini':\n from ipad_mini_setup import configure\n configure()\n raise SystemExit(0)\n",'',1)
         launcher=(ROOT/'scripts/run_ios_platform_ui.sh').read_text().replace("if [ \"${EVIDENCE_SCOPE:-}\" = ipad_mini ] || [ \"${2:-}\" = MiniUIResults.xcresult ]; then\n  python3 -u scripts/ipad_mini_setup.py row \"$@\"\n  exit $?\nfi\n",'',1)
+        # Remove only the closed supplemental additions, then retain the
+        # historical byte fence for every old non-Mini command and branch.
+        launcher,count=re.subn(r'(?ms)^SUPPLEMENT_ONLY=false\n.*?^  SUPPLEMENT_ONLY=true\nfi\n','',launcher)
+        self.assertEqual(count,1)
+        launcher,count=re.subn(r'(?ms)^qualify_supplement_result\(\) \{\n.*?^PY\n\}\n','',launcher)
+        self.assertEqual(count,1)
+        launcher,count=re.subn(r'(?ms)^retain_supplement_seed\(\) \{\n.*?^PY\n\}\n','',launcher)
+        self.assertEqual(count,1)
+        launcher=launcher.replace('if [ "$SUPPLEMENT_ONLY" = true ]; then PROJECT=$SUPPLEMENT_PROJECT; fi\n','',1)
+        launcher=launcher.replace('SUPPLEMENT_SEED_GATE_EXIT=-1\n','',1)
+        launcher,count=re.subn(r'(?ms)^  if \[ "\$SUPPLEMENT_ONLY" = true \]; then\n    python3 - "\$SUPPLEMENT_SEED_GATE_EXIT" <<\x27PY\x27\n.*?^PY\n  fi\n','',launcher)
+        self.assertEqual(count,1)
+        reader='  SUPPLEMENT_GATE_EXIT=0\n  if [ "$SUPPLEMENT_ONLY" = true ]; then\n    if qualify_supplement_result "$OUTPUT" "$CAP" "$TEST_EXIT"; then :; else SUPPLEMENT_GATE_EXIT=$?; fi\n  fi\n'
+        self.assertEqual(launcher.count(reader),1);launcher=launcher.replace(reader,'',1)
+        selected='  if [ "$SUPPLEMENT_ONLY" = true ]; then\n    run_suite "$RESULT" 570 \'-only-testing:QRCatcherUITests/QRCatcherUITests/testDeniedCameraAndEmptyHistory\' \'-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealPickerWarmupAndCancelPreservesPreviousSelection\'\n  else\n    run_suite "$RESULT" 570 "-only-testing:QRCatcherUITests/$CLASS" \'-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealPickerWarmupAndCancelPreservesPreviousSelection\'\n  fi\n'
+        old='  run_suite "$RESULT" 570 "-only-testing:QRCatcherUITests/$CLASS" \'-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealPickerWarmupAndCancelPreservesPreviousSelection\'\n'
+        self.assertEqual(launcher.count(selected),1);launcher=launcher.replace(selected,old,1)
+        gate='if [ "$SUPPLEMENT_ONLY" = true ] && [ "$SUPPLEMENT_GATE_EXIT" -ne 0 ]; then exit "$SUPPLEMENT_GATE_EXIT"; fi\n'
+        self.assertEqual(launcher.count(gate),3);launcher=launcher.replace(gate,'')
+        launcher=launcher.replace('  if [ "$SUPPLEMENT_ONLY" = true ]; then exit "$LAYOUT_EXIT"; fi\n','',1)
+        launcher,count=re.subn(r'(?ms)^if \[ "\$SUPPLEMENT_ONLY" = true \]; then\n  set \+e\n  python3 -u scripts/run_bounded.py 210 .*?^else\n  (if python3 -u scripts/run_bounded.py 210 .*?; fi\n)fi\n',lambda match:match[1],launcher)
+        self.assertEqual(count,1)
+        launcher=launcher.replace('if [ "$SUPPLEMENT_ONLY" = true ] && [ "$SUPPLEMENT_SEED_GATE_EXIT" -ne 0 ]; then exit "$SUPPLEMENT_SEED_GATE_EXIT"; fi\n','',1)
         staged='PROJECT=QRCatcher.xcodeproj\nif [ "${GITHUB_REF:-}" = refs/heads/codex/ios-original-release ]; then\n  PROJECT=$(python3 scripts/ios_original_release_route.py project)\nfi\n'
         self.assertEqual(launcher.count(staged),1);self.assertEqual(launcher.count('-project "$PROJECT"'),1)
         launcher=launcher.replace(staged,'',1).replace('-project "$PROJECT"','-project QRCatcher.xcodeproj',1)

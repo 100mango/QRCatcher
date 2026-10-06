@@ -46,6 +46,7 @@ LAYOUT = ['-only-testing:QRCatcherUITests/QRCatcherPadUITests',
           '-skip-testing:QRCatcherUITests/QRCatcherPadUITests/testRealPhotoImportReplacesSelectionAndPreservesBothRecords']
 FILES = ['-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealFilesImportAndReopen']
 PHOTOS = ['-only-testing:QRCatcherUITests/QRCatcherPadUITests/testRealPhotoImportReplacesSelectionAndPreservesBothRecords']
+WARMUP = ['-only-testing:QRCatcherUITests/QRCatcherImageImportUITests/testRealPickerWarmupAndCancelPreservesPreviousSelection']
 
 
 def require(value, message):
@@ -95,7 +96,7 @@ def context():
     require(re.fullmatch('[0-9a-f]{40}',sha) is not None and
             os.environ.get('GITHUB_WORKFLOW_SHA')==sha and
             os.environ.get('GITHUB_REPOSITORY')=='100mango/QRCatcher' and
-            os.environ.get('GITHUB_REF') in ('refs/heads/codex/apple-platforms','refs/heads/codex/mini-managed-full-row','refs/heads/codex/ios-original-release') and
+            os.environ.get('GITHUB_REF') in ('refs/heads/codex/apple-platforms','refs/heads/codex/mini-managed-full-row','refs/heads/codex/ios-original-release','refs/heads/codex/ios-original-supplement') and
             os.environ.get('GITHUB_EVENT_NAME')=='push' and
             os.environ.get('EVIDENCE_SCOPE')=='ipad_mini', 'Wrong Mini source/workflow/scope')
     if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row':
@@ -104,6 +105,9 @@ def context():
     if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-release':
         from ios_original_release_route import current_identity
         current_identity()  # Closed original iPhone/iPad profile; no process.
+    if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-supplement' or os.environ.get('QRCATCHER_IOS_SUPPLEMENT_ONLY')=='true':
+        from ios_original_supplement_route import current_identity
+        require(current_identity().get('diagnostic_only') is True,'Closed supplemental diagnostic identity required')
     for key in ('GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT'):
         require(re.fullmatch('[1-9][0-9]{0,19}',os.environ.get(key,'')) is not None,
                 'Missing run identity')
@@ -113,7 +117,16 @@ def context():
                   'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'scope':'ipad_mini'}
 
 
+def supplement_profile():
+    if os.environ.get('GITHUB_REF')!='refs/heads/codex/ios-original-supplement' and os.environ.get('QRCATCHER_IOS_SUPPLEMENT_ONLY')!='true':
+        return False
+    from ios_original_supplement_route import current_identity
+    require(current_identity().get('diagnostic_only') is True,'Closed supplemental diagnostic identity required')
+    return True
+
+
 def ios_first_profile():
+    if supplement_profile(): return True
     if os.environ.get('GITHUB_REF')!='refs/heads/codex/ios-original-release':
         return False
     from ios_original_release_route import current_identity
@@ -158,6 +171,9 @@ def admit_full_ios_first_row(budget,deadline,stage='configure'):
 
 
 def mini_project():
+    if supplement_profile():
+        from ios_original_supplement_route import PROJECT
+        return PROJECT
     if ios_first_profile():
         from ios_original_release_route import PROJECT
         return PROJECT
@@ -309,6 +325,13 @@ class Controller:
 
     def command(self,command,cap,log=None):
         global _ACTIVE
+        selected=supplement_profile()
+        reading_selected_summary=selected and command[:3]==['xcrun','xcresulttool','get']
+        if reading_selected_summary:
+            require(command==['xcrun','xcresulttool','get','test-results','summary','--path',command[-1]] and
+                    command[-1] in ('MiniUIResults-warmup.xcresult','MiniUIResults.xcresult') and
+                    cap==result_summary_limit(command[-1]),'Closed selected Mini summary command required')
+            log=command[-1].removesuffix('.xcresult')+'-summary.log'
         require(not blocked(), 'Inherited device uncertainty')
         self.budget.next(self.phase,cap,self.deadline)
         require(_ACTIVE is None,'Concurrent Mini controller')
@@ -320,8 +343,11 @@ class Controller:
             claim.current(); self.budget.next(self.phase,cap,self.deadline)
             print('BOUNDED_COMMAND_START '+json.dumps({'seconds':cap,'command':command}),flush=True)
             began=self.budget.clock()
-            tail_cap=512*1024 if command[:3]==['xcrun','simctl','list'] else 65536
-            code,tail,operation=self.executor(command,cap,output_limit=16*1024*1024,tail_limit=tail_cap)
+            # The closed supplement retains the complete bounded native log
+            # immediately, before a later seed or Photos command can fail.
+            output_cap=65536 if reading_selected_summary else 16*1024*1024
+            tail_cap=output_cap if selected and log else 512*1024 if command[:3]==['xcrun','simctl','list'] else 65536
+            code,tail,operation=self.executor(command,cap,output_limit=output_cap,tail_limit=tail_cap)
             claim.dispatch_window=None
             print('BOUNDED_COMMAND_END '+json.dumps(operation),flush=True)
             event.update(operation)
@@ -332,7 +358,18 @@ class Controller:
                 event['output_sha256']=hashlib.sha256(tail.encode()).hexdigest()
             observed=(operation.get('state')=='completed' and operation.get('cleanup_confirmed') is True and
                       self.budget.clock() < self.deadline and self.budget.clock()<began+cap+2)
+            if selected:
+                elapsed=operation.get('elapsed_seconds')
+                observed=observed and operation.get('command')==command and operation.get('timeout_seconds')==cap and \
+                         type(operation.get('exit')) is int and operation['exit']==code and \
+                         type(elapsed) in (int,float) and math.isfinite(elapsed) and 0<=elapsed<cap+2
+                if reading_selected_summary:
+                    observed=observed and operation.get('output_bytes')==len(tail.encode())
             if log: (self.budget.root/log).write_text('BOUNDED_COMMAND_START '+json.dumps({'seconds':cap,'command':command})+'\n'+tail+'\nBOUNDED_COMMAND_END '+json.dumps(operation)+'\n')
+            if selected and log:
+                write_json(self.budget.root/'build'/(Path(log).stem+'-command.json'),operation,limit=16384)
+            if reading_selected_summary and tail:
+                (self.budget.root/'build'/(command[-1].removesuffix('.xcresult')+'-summary.json')).write_text(tail)
             require(observed,'Owned command incomplete/late/cleanup unknown')
             self.budget.persist(); return code,tail
         except BaseException:
@@ -410,6 +447,8 @@ def result_summary_limit(result):
     # diagnostic route receives it; canonical and later summaries keep10s.
     if result=='MiniUIResults-layout.xcresult' and extended_mini_profile():
         return 30
+    if result=='MiniUIResults-warmup.xcresult' and supplement_profile():
+        return 30
     return 10
 
 
@@ -478,6 +517,7 @@ def row(args,budget=None,executor=execute,stager=None):
 
 def row_body(device,budget,deadline,executor,stager):
     global _FIXTURE
+    if supplement_profile(): return supplement_row_body(device,budget,deadline,executor)
     c=Controller(budget,'mini',deadline,executor); c.record['status']='row_running'
     setup={'device':device,'test_class':'QRCatcherPadUITests','layout_and_real_picker_cancel_exit':-1,
            'photo_seed_exit':-1,'real_photo_case_exit':-1,'real_files_case_exit':-1,
@@ -535,6 +575,58 @@ def row_body(device,budget,deadline,executor,stager):
         return file_exit or code
     except BaseException as error:
         setup['stop_reason']=str(error)[:200]; c.record['status']='failed_or_unexecuted'; save(); raise
+
+
+def supplement_row_body(device,budget,deadline,executor):
+    """Two fixed original cases on the newly owned Mini; no Files/layout replay."""
+    from ipad_mini_state_handoff import ensure_owned_booted,qualified_first_bootstrap
+    c=Controller(budget,'mini',deadline,executor);c.record['status']='row_running'
+    setup={'device':device,'test_class':'QRCatcherPadUITests','layout_and_real_picker_cancel_exit':-1,
+           'selected_picker_warmup_exit':-1,'photo_seed_exit':-1,'real_photo_case_exit':-1,'real_files_case_exit':-1,
+           'real_files_timeout_seconds':240,'photo_import_gate':'blocked_or_not_requested','seed_attempts':0,
+           'timeout_does_not_prove_asset_absence':True,'independent_import_continuation':None,
+           'row_started_monotonic':c.record['started'],'row_deadline_monotonic':deadline,
+           'selected_cases':['picker_warmup','photos'],'not_selected':['layout','files'],
+           'unexecuted':['picker_warmup','photos'],'diagnostic_only':True,'full_job_accepted':False,
+           'full_original_row_accepted':False}
+    def save():
+        write_json(budget.root/'build/ios-platform-setup.json',setup,limit=4096);budget.persist()
+    save()
+    try:
+        require(not any((budget.root/name).exists() or (budget.root/name).is_symlink() for name in
+                        ['MiniUIResults-layout.xcresult','MiniUIResults-files.xcresult',
+                         'MiniUIResults-warmup.xcresult','MiniUIResults.xcresult']),
+                'Stale or unselected result bundle cannot be reused')
+        for stem in ('MiniUIResults-warmup','MiniUIResults','MiniUIResults-seed'):
+            for path in (budget.root/(stem+'.log'),budget.root/(stem+'-summary.log'),
+                         budget.root/'build'/(stem+'-command.json'),budget.root/'build'/(stem+'-summary.json'),
+                         budget.root/'build'/(stem+'-summary-command.json')):
+                require(not path.exists() and not path.is_symlink(),'Selected Mini evidence cannot retry or reuse stale paths')
+        receipt=strict_json(read_regular(budget.root/'build/ipad-mini-owned-device.json',4096))
+        ensure_owned_booted(c,device,receipt,'before_first_layout')
+        qualified_first_bootstrap(c,device,receipt)
+        admit_full_ios_first_row(budget,deadline,'layout')
+        code,_=c.command(test_command(device,WARMUP,'MiniUIResults-warmup.xcresult'),480,'MiniUIResults-warmup.log')
+        qualify_result(c,device,'MiniUIResults-warmup.xcresult',1,code)
+        setup['selected_picker_warmup_exit']=code;setup['unexecuted'].remove('picker_warmup');save()
+        if code:
+            c.record['status']='completed_failed';save();return code
+        ensure_owned_booted(c,device,receipt,'before_photos_seed')
+        setup['seed_attempts']=1;save()
+        code,_=c.command(['xcrun','simctl','addmedia',device,'Tests/Fixtures/unicode.png'],210,'MiniUIResults-seed.log')
+        setup['photo_seed_exit']=code
+        setup['photo_import_gate']='ready' if code==0 else 'blocked_or_not_requested';save()
+        if code:
+            c.record['status']='completed_failed';save();return code
+        code,_=c.command(test_command(device,PHOTOS,'MiniUIResults.xcresult'),360,'MiniUIResults.log')
+        qualify_result(c,device,'MiniUIResults.xcresult',1,code)
+        setup['real_photo_case_exit']=code;setup['unexecuted'].remove('photos');save()
+        c.record['status']='completed' if code==0 else 'completed_failed';save();return code
+    except BaseException as error:
+        last=c.record['operations'][-1] if c.record['operations'] else {}
+        if last.get('command')==['xcrun','simctl','addmedia',device,'Tests/Fixtures/unicode.png'] and type(last.get('exit')) is int:
+            setup['photo_seed_exit']=last['exit']
+        setup['stop_reason']=str(error)[:200];c.record['status']='failed_or_unexecuted';save();raise
 
 
 def host_execute(command,cap):
@@ -616,7 +708,8 @@ def summaries():
     budget=Budget(); value=strict_json(read_regular(budget.root/'build/ios-platform-evidence/manifest.json',512*1024))
     require(value.get('scope')=='ipad_mini' and value.get('commit')==budget.identity['source'] and
             str(value.get('run_id'))==budget.identity['run_id'],'Wrong summary source/run')
-    for label,count in [('ipad-mini-layout',2),('ipad-mini-files',1),('ipad-mini',1)]:
+    rows=[('ipad-mini-warmup',1),('ipad-mini',1)] if supplement_profile() else [('ipad-mini-layout',2),('ipad-mini-files',1),('ipad-mini',1)]
+    for label,count in rows:
         result=value.get('results',{}).get(label,{'not_produced':True})
         print(json.dumps({'label':label,'required_cases':count,'observed':result}),flush=True)
 

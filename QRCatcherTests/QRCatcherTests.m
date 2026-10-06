@@ -11,6 +11,7 @@
 #import "QRPrivacyViewController.h"
 #import <AVFoundation/AVFoundation.h>
 #import <math.h>
+#import <float.h>
 
 @interface QRCatchViewController (RegressionTesting)
 - (void)handlePayload:(NSString *)payload;
@@ -291,7 +292,8 @@
             constraint.relation == NSLayoutRelationLessThanOrEqual && constraint.secondItem == privacy.view.safeAreaLayoutGuide &&
             constraint.secondAttribute == NSLayoutAttributeHeight) {
             heightLimits += 1;
-            XCTAssertEqual(constraint.multiplier, 0.45);
+            XCTAssertTrue(isfinite(constraint.multiplier));
+            XCTAssertEqualWithAccuracy(constraint.multiplier, 0.45, FLT_EPSILON);
         }
     }
     XCTAssertEqual(heightLimits, 1, @"The original finite action-pane height constraint must remain installed.");

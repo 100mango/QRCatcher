@@ -136,6 +136,9 @@ def render_workflow(canonical):
 
 
 def current_identity():
+ if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-supplement':
+  from ios_original_supplement_route import current_identity as supplement_identity
+  return supplement_identity()
  canonical=read_regular(CANONICAL,128*1024).decode();workflow=read_regular(WORKFLOW,128*1024).decode()
  require(workflow==render_workflow(canonical),'Closed original iOS workflow differs')
  e=os.environ;sha=e.get('GITHUB_SHA','')

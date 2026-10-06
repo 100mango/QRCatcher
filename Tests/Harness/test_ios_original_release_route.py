@@ -138,7 +138,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
     self.assertEqual(json.loads(budget.origin_raw)['caps']['build'],180)
     self.assertEqual(json.loads(budget.origin_raw)['caps']['mini'],2220)
  def test_canonical_and_previous_mini_project_clocks_stay_explicit(self):
-  with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms'}):
+  with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms','QRCATCHER_IOS_SUPPLEMENT_ONLY':'false'}):
    self.assertEqual(mini.mini_project(),'QRCatcher.xcodeproj');self.assertEqual(mini.job_ledger_limit(),16384)
    self.assertEqual(mini.result_summary_limit('MiniUIResults-layout.xcresult'),10)
   self.assertEqual(sum(mini.CAPS.values()),2700);self.assertEqual(mini.CAPS['mini'],1620)
@@ -207,7 +207,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
   with self.fixture('platform','iphone_pro'):
    command=continuation.expected_command(base.DEVICE)
    self.assertIn(route.PROJECT,command);self.assertIn('-only-testing:QRCatcherUITests/QRCatcherUITests',command)
-  with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms'}):
+  with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms','QRCATCHER_IOS_SUPPLEMENT_ONLY':'false'}):
    self.assertIn('QRCatcher.xcodeproj',continuation.expected_command(base.DEVICE))
  def test_complete_newprofile_mini_row_keeps_four_cases_and_failed_files(self):
   for failed_files in (False,True):
@@ -273,7 +273,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
   # Execute only the actual pure environment constructor. Complete discovery
   # already runs all original33 Bash scenarios under this same outer CI ref.
   namespace={};exec(compile(ast.Module(body=functions,type_ignores=[]),str(path),'exec'),namespace)
-  environment={'GITHUB_REF':route.REF,'IOS_FIRST_RELEASE_CANDIDATE_ONLY':'true',
+  environment={'GITHUB_REF':route.REF,'IOS_FIRST_RELEASE_CANDIDATE_ONLY':'true','QRCATCHER_IOS_SUPPLEMENT_ONLY':'true',
    'GITHUB_WORKFLOW_REF':route.WORKFLOW_REF,'GITHUB_JOB':'preflight',
    'GITHUB_WORKSPACE':'/outer/workspace','GITHUB_ENV':'/outer/job-env',
    'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED':'true','EVIDENCE_SCOPE':'ipad_mini','PATH':'/owned/path'}
@@ -283,7 +283,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
    self.assertEqual(actual['GITHUB_REF'],'refs/heads/codex/apple-platforms')
    self.assertEqual(actual['GITHUB_WORKSPACE'],str(folder));self.assertEqual(actual['GITHUB_ENV'],str(folder/'fixture-github-env'))
    self.assertEqual(actual['PATH'],'/owned/path');self.assertEqual(actual['GITHUB_WORKFLOW_REF'],route.WORKFLOW_REF)
-   self.assertTrue(all(k not in actual for k in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','EVIDENCE_SCOPE')))
+   self.assertTrue(all(k not in actual for k in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','QRCATCHER_IOS_SUPPLEMENT_ONLY','QRCATCHER_OWNED_CLEANUP_UNCONFIRMED','EVIDENCE_SCOPE')))
   self.assertEqual(environment,original)
  def test_actual_newprofile_host_prepare_preserves_marker_and_default_dependency(self):
   owner=base.MiniSetupTests();owner.setUp()

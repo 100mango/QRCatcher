@@ -11,6 +11,7 @@ def launcher_fixture_environment(environment, folder):
                'GITHUB_ENV': str(folder/'fixture-github-env'),
                'GITHUB_REF': 'refs/heads/codex/apple-platforms'}
     for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY',
+                'QRCATCHER_IOS_SUPPLEMENT_ONLY',
                 'QRCATCHER_OWNED_CLEANUP_UNCONFIRMED', 'EVIDENCE_SCOPE'):
         fixture.pop(key, None)
     return fixture

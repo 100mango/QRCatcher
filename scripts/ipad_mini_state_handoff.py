@@ -73,12 +73,16 @@ def read_state(controller,expected,cap,record):
 
 
 def qualified_prior(controller,device,handoff):
-    result='MiniUIResults-layout.xcresult' if handoff=='before_files_fixture' else 'MiniUIResults-files.xcresult'
-    selectors=mini.LAYOUT if handoff=='before_files_fixture' else mini.FILES
-    cap=480 if handoff=='before_files_fixture' else 240
+    if mini.supplement_profile():
+        mini.require(handoff=='before_photos_seed','The supplement selects no Files fixture handoff')
+        result='MiniUIResults-warmup.xcresult';selectors=mini.WARMUP;cap=480
+    else:
+        result='MiniUIResults-layout.xcresult' if handoff=='before_files_fixture' else 'MiniUIResults-files.xcresult'
+        selectors=mini.LAYOUT if handoff=='before_files_fixture' else mini.FILES
+        cap=480 if handoff=='before_files_fixture' else 240
     case=mini.test_command(device,selectors,result)
     summary=['xcrun','xcresulttool','get','test-results','summary','--path',result]
-    for command,limit,exits in [(case,cap,(0,) if handoff=='before_files_fixture' else (0,65)),(summary,mini.result_summary_limit(result),(0,))]:
+    for command,limit,exits in [(case,cap,(0,) if mini.supplement_profile() or handoff=='before_files_fixture' else (0,65)),(summary,mini.result_summary_limit(result),(0,))]:
         matches=[operation for operation in controller.record['operations'] if operation.get('command')==command]
         mini.require(len(matches)==1,'Exact completed prior case/summary operation required')
         operation=matches[0];elapsed=operation.get('elapsed_seconds')
@@ -212,10 +216,19 @@ def ensure_owned_booted(controller,device,receipt,handoff):
         mini.admit_full_ios_first_row(controller.budget,controller.deadline,'first_bootstrap')
     else:
         qualified_prior(controller,device,handoff)
-        layout=controller.record.get('results',{}).get('MiniUIResults-layout.xcresult',{})
-        mini.require(layout=={'totalTestCount':2,'passedTests':2,'failedTests':0,'skippedTests':0,'expectedFailures':0},
-                     'The two original layout cases must qualify before either handoff')
-    if handoff=='before_photos_seed':
+        if mini.supplement_profile():
+            warmup=controller.record.get('results',{}).get('MiniUIResults-warmup.xcresult',{})
+            mini.require(warmup=={'totalTestCount':1,'passedTests':1,'failedTests':0,'skippedTests':0,'expectedFailures':0},
+                         'The selected original picker warmup must qualify before the seed handoff')
+            prior=controller.record.get('state_handoffs',{}).get(FIRST_HANDOFF,{})
+            mini.require(prior.get('state') in READINESS and prior.get('readiness_basis')==READINESS[prior['state']] and
+                         prior.get('selected_case_stage')=='picker_warmup',
+                         'The selected warmup bootstrap must complete first')
+        else:
+            layout=controller.record.get('results',{}).get('MiniUIResults-layout.xcresult',{})
+            mini.require(layout=={'totalTestCount':2,'passedTests':2,'failedTests':0,'skippedTests':0,'expectedFailures':0},
+                         'The two original layout cases must qualify before either handoff')
+    if handoff=='before_photos_seed' and not mini.supplement_profile():
         files=controller.record.get('results',{}).get('MiniUIResults-files.xcresult',{})
         mini.require(files.get('totalTestCount')==1 and files.get('skippedTests')==0 and files.get('expectedFailures')==0 and
                      type(files.get('passedTests')) is int and type(files.get('failedTests')) is int and
@@ -233,6 +246,7 @@ def ensure_owned_booted(controller,device,receipt,handoff):
         record['row_started_monotonic']=controller.record['started']
         record['automation_session_stability_claimed']=False
         record['full_row_reservation_seconds']=mini.IOS_FIRST_RESERVATIONS['first_bootstrap']
+        if mini.supplement_profile():record['selected_case_stage']='picker_warmup'
     records[handoff]=record;controller.budget.persist()
     operation_start=len(controller.record['operations'])
     try:

@@ -19,6 +19,12 @@ class LauncherInventoryTests(unittest.TestCase):
             self.assertIn((basename+'-files.xcresult',label+'-files'),rows)
             self.assertIn(basename+'-files.log',logs)
 
+    def test_new_warmup_tuple_is_literal_and_processing_is_profile_gated(self):
+        source=(ROOT/'scripts/export_ios_platform_screenshots.py').read_text()
+        rows,_=inventory(ast.parse(source))
+        self.assertEqual(rows.count(('MiniUIResults-warmup.xcresult','ipad-mini-warmup')),1)
+        self.assertIn("if label=='ipad-mini-warmup' and not selected_identity:continue",source)
+
     def test_unrelated_dynamic_name_cap_inventory_is_not_evaluated(self):
         source="for name,cap in [('ipad-mini-job-state.json',job_ledger_limit())]:\n pass\nfor result,label in [('kept.xcresult','kept')]:\n pass\nfor name in ['ios-test-build.log','kept.log']:\n pass\n"
         self.assertEqual(inventory(ast.parse(source)),([('kept.xcresult','kept')],['ios-test-build.log','kept.log']))

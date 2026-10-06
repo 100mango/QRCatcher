@@ -1,0 +1,302 @@
+name: Original iOS targeted supplemental diagnostics
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-apple-platforms
+  cancel-in-progress: false
+env:
+  IOS_FIRST_RELEASE_CANDIDATE_ONLY: 'true'
+  QRCATCHER_IOS_SUPPLEMENT_ONLY: 'true'
+jobs:
+  preflight:
+    name: Compile and verify setup before runtime matrix
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify exact source and prepare bounded build inputs
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        python3 scripts/ios_original_release_route.py validate
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        git rev-parse 'HEAD^{tree}'
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 -m unittest discover -s Tests/Harness -p 'test_*.py' -v
+        python3 scripts/verify_portable_source.py
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py --profile ios-only
+        git diff --exit-code -- QRCatcher.xcodeproj QRCatcher-iOS-Only.xcodeproj
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Compile original iOS tests and verify unsigned Release archive isolation
+      timeout-minutes: 16
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/compile_ios_original_preflight.py
+    - name: Retain bounded unsigned iOS package proof
+      id: ios_package_evidence
+      timeout-minutes: 1
+      if: ${{ always() && env.QRCATCHER_IOS_ORIGINAL_INITIAL_PROVENANCE_SHA256 != '' }}
+      run: python3 scripts/ios_original_release_route.py collect-preflight
+    - name: Upload bounded unsigned iOS package proof
+      timeout-minutes: 1
+      if: ${{ always() && steps.ios_package_evidence.outcome == 'success' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-ios-supplement-package-evidence
+        path: build/ios-original-preflight-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Verify preflight source stayed unchanged
+      if: ${{ always() }}
+      run: git diff --exit-code HEAD --
+  platform:
+    needs: preflight
+    runs-on: xcode-27
+    timeout-minutes: ${{ matrix.scope == 'ipad_mini' && 50 || 45 }}
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+      EVIDENCE_SCOPE: ${{ matrix.scope }}
+    steps:
+    - name: Capture original Mini job clock before checkout
+      id: mini_clock
+      if: ${{ matrix.scope == 'ipad_mini' }}
+      timeout-minutes: 1
+      run: |
+        python3 - <<'PY_ORIGIN'
+        import time
+        started=time.monotonic()
+        import json,os,re
+        from pathlib import Path
+        def require(value):
+            if not value:raise ValueError('Invalid original Mini workflow clock binding')
+        require(started>0)
+        require(os.environ['GITHUB_REPOSITORY']=='100mango/QRCatcher')
+        require(os.environ['GITHUB_REF']=='refs/heads/codex/ios-original-supplement')
+        require(os.environ.get('GITHUB_WORKFLOW_REF')=='100mango/QRCatcher/.github/workflows/ios-original-supplement.yml@refs/heads/codex/ios-original-supplement')
+        require(os.environ.get('GITHUB_EVENT_NAME')=='push' and os.environ.get('IOS_FIRST_RELEASE_CANDIDATE_ONLY')=='true')
+        require(os.environ.get('GITHUB_JOB')=='platform' and os.environ.get('EVIDENCE_SCOPE')=='ipad_mini')
+        require(os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA'])
+        require(re.fullmatch('[0-9a-f]{40}',os.environ['GITHUB_SHA']))
+        require(all(re.fullmatch('[1-9][0-9]{0,19}',os.environ[k]) for k in ['GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT']))
+        root=Path(os.environ['RUNNER_TEMP'])
+        require(root.is_absolute() and root.resolve(strict=True)==root)
+        path=root/('qrcatcher-mini-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'.json')
+        value={'version':1,'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'scope':'ipad_mini','started_monotonic':started,
+               'caps':{'checkout_main':60,'prepare':120,'build':180,'mini':2220,'export':180,'validate':30,'upload':60,'summary':30,'final':30,'checkout_post':60,'overhead':30}}
+        fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())
+        with open(os.environ['GITHUB_ENV'],'a') as out:out.write('QRCATCHER_MINI_JOB_ORIGIN='+str(path)+'\n')
+        require(time.monotonic()-started<30)
+        PY_ORIGIN
+    - name: Checkout Mini exact source with bounded main and post
+      if: ${{ matrix.scope == 'ipad_mini' && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      if: ${{ matrix.scope != 'ipad_mini' }}
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify Mini exact source inside original job budget
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 2
+      run: python3 -u scripts/ipad_mini_setup.py phase prepare
+    - name: Verify exact source and stable toolchain
+      id: ios_original_source
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && matrix.scope != 'ipad_mini' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        python3 scripts/ios_original_release_route.py validate
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Tested commit: $(git rev-parse HEAD)"
+        echo "Tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 Tests/Harness/test_ios_launcher.py
+        python3 Tests/Harness/test_watch_process.py
+        python3 Tests/Harness/test_required_reason_symbols.py
+        python3 Tests/Harness/test_atomic_json.py
+        python3 Tests/Harness/test_vision_ui_cases.py
+        python3 Tests/Harness/test_embedded_watch_gate.py
+        python3 scripts/verify_portable_source.py
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py --profile ios-only
+        git diff --exit-code -- QRCatcher.xcodeproj QRCatcher-iOS-Only.xcodeproj
+        plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
+        xcodebuild -list -project QRCatcher-iOS-Only.xcodeproj
+
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Compile Mini tests inside original job budget
+      id: mini_test_build
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_clock.outcome == 'success' && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/ipad_mini_setup.py phase build
+    - name: Compile iOS tests before this device boots
+      id: ios_test_build
+      if: ${{ ((startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled())) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && matrix.scope != 'ipad_mini' && steps.ios_original_source.outcome == 'success' }}
+      timeout-minutes: 8
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -o pipefail
+        python3 -u scripts/run_bounded.py 435 xcodebuild build-for-testing -project QRCatcher-iOS-Only.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination 'generic/platform=iOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO | tee ios-test-build.log
+        python3 -u scripts/run_bounded.py 20 python3 scripts/ios_original_release_route.py debug-package
+    - name: Configure one newly owned Mini without manual boot or install
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_test_build.outcome == 'success' && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/select_ios_platform_matrix.py
+    - name: Select this fresh VM phone or iPad device
+      if: ${{ ((startsWith(matrix.scope, 'iphone_') || startsWith(matrix.scope, 'ipad_')) && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && matrix.scope != 'ipad_mini' && steps.ios_original_source.outcome == 'success' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 scripts/select_ios_platform_matrix.py
+    - name: Run iOS codec equivalence and existing unit regression
+      if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
+      timeout-minutes: 15
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -o pipefail
+        python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$SIMULATOR_ID" || true
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/run_bounded.py 300 xcrun simctl bootstatus "$SIMULATOR_ID" -b
+        set +e
+        python3 -u scripts/run_bounded.py 855 xcodebuild test-without-building -project QRCatcher-iOS-Only.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -only-testing:QRCatcherTests -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 -resultBundlePath iOSUnitResults.xcresult CODE_SIGNING_ALLOWED=NO | tee ios-unit.log
+        UNIT_EXIT=${PIPESTATUS[0]}
+        set -e
+        python3 scripts/ios_original_supplement_route.py retain-hosted "$SIMULATOR_ID" "$UNIT_EXIT"
+        exit "$UNIT_EXIT"
+    - name: Run large-phone UI regression
+      if: ${{ ((matrix.scope == 'iphone_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
+      timeout-minutes: 20
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$SIMULATOR_ID" PhoneUIResults.xcresult QRCatcherUITests
+    - name: Run compact-phone UI regression
+      if: ${{ ((matrix.scope == 'iphone_se3') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
+      timeout-minutes: 22
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$COMPACT_SIMULATOR_ID" CompactPhoneUIResults.xcresult QRCatcherUITests
+    - name: Run native 13-inch iPad workflows
+      if: ${{ ((matrix.scope == 'ipad_pro') && (!cancelled() && steps.ios_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' && steps.ios_original_source.outcome == 'success' }}
+      timeout-minutes: 18
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$IPAD_SIMULATOR_ID" PadUIResults.xcresult QRCatcherPadUITests
+    - name: Run native iPad mini workflows
+      if: ${{ ((matrix.scope == 'ipad_mini') && (!cancelled() && steps.mini_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 37
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests
+    - name: Export bounded complete Mini row evidence
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/ipad_mini_setup.py phase export
+    - name: Export bounded phone and iPad evidence
+      if: ${{ (matrix.scope != 'macos' && !startsWith(matrix.scope, 'visionos_')) && (always()) && matrix.scope != 'ipad_mini' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/export_ios_platform_screenshots.py
+    - name: Validate Mini and whole-run evidence allocation
+      id: mini_evidence_budget
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase validate
+    - name: Validate isolated platform and whole-run evidence allocation
+      id: platform_evidence_budget
+      if: ${{ (matrix.scope != 'macos') && (always()) && matrix.scope != 'ipad_mini' }}
+      run: python3 scripts/validate_evidence_budget.py build/ios-platform-evidence --scope "$EVIDENCE_SCOPE" --report build/platform-evidence-budget.json
+    - name: Admit complete Mini artifact action inside original clock
+      id: mini_upload_admit
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_evidence_budget.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py upload-enter
+    - name: Retain small phone and iPad evidence
+      id: platform_upload
+      timeout-minutes: ${{ matrix.scope == 'ipad_mini' && 1 || 45 }}
+      if: ${{ (matrix.scope != 'macos') && always() && ((matrix.scope == 'ipad_mini' && steps.mini_evidence_budget.outcome == 'success' && steps.mini_upload_admit.outcome == 'success') || (matrix.scope != 'ipad_mini' && steps.platform_evidence_budget.outcome == 'success')) }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-ios-supplement-${{ matrix.scope }}-evidence
+        path: build/ios-platform-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Observe Mini artifact action without claiming host-group cleanup
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.platform_upload.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py upload-exit
+    - name: Summarize all four Mini cases from exact exported results
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase summary
+    - name: Summarize executed evidence
+      if: ${{ always() && matrix.scope != 'ipad_mini' }}
+      timeout-minutes: 3
+      run: |
+        for RESULT in WatchUnitResults.xcresult WatchUIResults.xcresult TVTestResults.xcresult TVAuthorizedUIResults.xcresult TVRevokedUIResults.xcresult VisionTestResults.xcresult VisionUIResults.xcresult VisionPhotosUIResults.xcresult VisionFilesUIResults.xcresult VisionChineseUIResults.xcresult VisionLargestUIResults.xcresult MacTestResults.xcresult MacSandboxResults.xcresult iOSUnitResults.xcresult PhoneUIResults.xcresult CompactPhoneUIResults.xcresult PadUIResults.xcresult MiniUIResults.xcresult; do
+          if [ -f "$RESULT/Info.plist" ]; then xcrun xcresulttool get test-results summary --path "$RESULT"; fi
+        done
+        echo 'This diagnostic runs only declared missing cases. Historical components keep their original source/run/attempt; no original full-row or release pass is claimed. Physical camera, signing and submission remain separate.' >> "$GITHUB_STEP_SUMMARY"
+    - name: Verify final Mini source while preserving checkout-post reserve
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase final
+    - name: Verify source stayed unchanged
+      if: ${{ always() && matrix.scope != 'ipad_mini' }}
+      run: |
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        echo "Final tested tree: $(git rev-parse 'HEAD^{tree}')"
+        shasum -a 256 .github/workflows/apple-platforms.yml
+    name: ${{ matrix.scope }} · missing-case diagnostics
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scope:
+        - iphone_pro
+        - iphone_se3
+        - ipad_pro
+        - ipad_mini
+'on':
+  push:
+    branches:
+    - codex/ios-original-supplement

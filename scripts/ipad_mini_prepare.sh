@@ -13,7 +13,7 @@ echo "Tested tree: $SOURCE_TREE"
 if [ "$GITHUB_REF" = refs/heads/codex/mini-managed-full-row ]; then
   python3 scripts/diagnostic_mini_managed_route.py prepared "$SOURCE_HEAD" "$SOURCE_TREE"
 fi
-if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ] || [ "$GITHUB_REF" = refs/heads/codex/ios-original-supplement ]; then
   python3 scripts/ios_original_release_route.py prepared "$SOURCE_HEAD" "$SOURCE_TREE"
 fi
 shasum -a 256 .github/workflows/apple-platforms.yml
@@ -26,7 +26,7 @@ python3 scripts/materialize_qr_fixtures.py
 python3 scripts/materialize_mac_icons.py
 python3 scripts/materialize_ipad_icons.py
 xcrun swift scripts/materialize_native_icons.swift
-if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ] || [ "$GITHUB_REF" = refs/heads/codex/ios-original-supplement ]; then
   python3 scripts/generate_project.py --profile ios-only
   git diff --exit-code -- QRCatcher.xcodeproj QRCatcher-iOS-Only.xcodeproj
 else
@@ -34,7 +34,7 @@ else
   git diff --exit-code -- QRCatcher.xcodeproj
 fi
 plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
-if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ] || [ "$GITHUB_REF" = refs/heads/codex/ios-original-supplement ]; then
   xcodebuild -list -project QRCatcher-iOS-Only.xcodeproj
 else
   xcodebuild -list -project QRCatcher.xcodeproj
