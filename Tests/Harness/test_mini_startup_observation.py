@@ -29,7 +29,11 @@ def preprocess(text, debug):
     cc = shutil.which('cc')
     if not cc:
         raise RuntimeError('A standard portable C preprocessor is required')
-    result = subprocess.run([cc, '-E', '-P', '-x', 'c', '-DDEBUG=' + str(debug), '-'],
+    # This is a conditional-source proof, not native compilation. Darwin cc
+    # otherwise expands its built-in __weak/__block macros while GCC leaves
+    # those original tokens intact. Disable only host predefined macros;
+    # explicit DEBUG and any source #define remain active and observable.
+    result = subprocess.run([cc, '-E', '-P', '-x', 'c', '-undef', '-DDEBUG=' + str(debug), '-'],
                             input=text, capture_output=True, text=True, check=True)
     return result.stdout
 
@@ -160,6 +164,55 @@ class MiniStartupObservationTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.folder.cleanup()
+
+    def test_actual_preprocessor_preserves_owned_tokens_without_darwin_predefines(self):
+        # Runs through the actual cc on Linux and the actual Apple cc on the
+        # Xcode runner. These tokens must remain original source tokens, and
+        # disabling host macros must preserve explicit DEBUG conditionals.
+        source = """#if defined(__weak) || defined(__block) || defined(__APPLE__)
+#error Host predefined macros leaked into the conditional-source proof
+#endif
+#if DEBUG
+__weak id ownedValue; __block BOOL ownedFlag;
+#else
+__weak id releaseValue; __block BOOL releaseFlag;
+#endif
+"""
+        self.assertEqual(normalized_digest(preprocess(source, 1)),
+                         normalized_digest('__weak id ownedValue; __block BOOL ownedFlag;'))
+        self.assertEqual(normalized_digest(preprocess(source, 0)),
+                         normalized_digest('__weak id releaseValue; __block BOOL releaseFlag;'))
+
+    def test_explicit_source_definitions_and_changed_owned_tokens_remain_observable(self):
+        source = '#define __weak CHANGED_OWNED_TOKEN\n__weak id value; __block BOOL flag;\n'
+        self.assertEqual(normalized_digest(preprocess(source, 1)),
+                         normalized_digest('CHANGED_OWNED_TOKEN id value; __block BOOL flag;'))
+        for path, before, after in [('QRCatcher/QRCatchViewController.m', '__weak', '__strong'),
+                                    (PAD_PATH, '__block', '__changed_block')]:
+            source = remove_observation(self.sources[path], path)
+            self.assertIn(before, source)
+            self.assertNotEqual(normalized_digest(preprocess(source, 1)),
+                                normalized_digest(preprocess(source.replace(before, after), 1)))
+
+    def test_exact_darwin_expansions_reproduce_all_retained_mac_failure_hashes(self):
+        # The failed Mac job retained four exact hashes. Its preprocessor bytes
+        # were not retained. These two verified Darwin definitions reproduce
+        # all four from retained local bytes; this is not an Apple compiler run.
+        darwin = '#define __weak __attribute__((objc_gc(weak)))\n' + \
+                 '#define __block __attribute__((__blocks__(byref)))\n'
+        observed = {
+            ('QRCatcher/QRCatchViewController.m', 0):
+                '54250d589207b52967088bf700832875aec6be094a6575866310565f68934f9b',
+            ('QRCatcher/QRCatchViewController.m', 1):
+                '23931e96ea7f44f206ff405e8426292a161ba52206ca8aaac001efd7373ff27d',
+            (PAD_PATH, 0): 'b68bdd6b4ecf123ad0428e8ba5a5dab84b62e8aef10fa953a0f2ee461caefa3c',
+            (PAD_PATH, 1): 'b68bdd6b4ecf123ad0428e8ba5a5dab84b62e8aef10fa953a0f2ee461caefa3c'}
+        for (path, debug), expected in observed.items():
+            with self.subTest(path=path, debug=debug):
+                source = self.sources[path]
+                if debug:
+                    source = remove_observation(source, path)
+                self.assertEqual(normalized_digest(preprocess(darwin + source, debug)), expected)
 
     def test_exact_source_contract(self):
         self.assertTrue(source_contract(self.app, self.pad, self.view, self.main))
