@@ -6,6 +6,7 @@
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, strong) id cameraMonitor;
 - (void)assertChineseHistoryResultKeepsCompletePayloadAndRepeatedCancel;
+- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese;
 @end
 @implementation QRCatcherUITests
 + (void)load { NSLog(@"QRCatcher UI regression bundle loaded"); }
@@ -41,6 +42,38 @@
     [self addAttachment:attachment];
     // The workflow exports/streams named attachments after XCTest finishes.
     // Console transport must not consume the app's execution-time allowance.
+}
+- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese {
+    XCUIElementQuery *bodies = [self.app.staticTexts matchingIdentifier:@"privacy.body"];
+    XCUIElement *body = bodies.firstMatch;
+    XCTAssertTrue([body waitForExistenceWithTimeout:5]);
+    XCTAssertEqual(bodies.count, 1);
+    NSString *approved = Chinese ? @"Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片、相机画面、二维码或颜色数据，开发者不收集或上传这些数据。用户主动分享、打开链接，以及系统 iCloud 同步等行为由相应服务处理。如有隐私问题，请联系 100mango@gmail.com。本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。" : @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";
+    XCTAssertEqualObjects(body.label, approved);
+    XCTAssertEqual(self.app.webViews.count, 0, @"The default local policy must not create a web document.");
+    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+    XCUIElement *content = self.app.scrollViews[@"privacy.content"];
+    XCUIElement *actions = self.app.scrollViews[@"privacy.actionScroll"];
+    CGRect viewport = CGRectIntersection(self.app.frame, content.frame);
+    XCTAssertFalse(CGRectIsEmpty(viewport));
+    XCTAssertGreaterThan(CGRectGetHeight(body.frame), 0);
+    XCTAssertGreaterThan(CGRectGetWidth(body.frame), 0);
+    XCTAssertGreaterThanOrEqual(CGRectGetMinX(body.frame), CGRectGetMinX(viewport));
+    XCTAssertLessThanOrEqual(CGRectGetMaxX(body.frame), CGRectGetMaxX(viewport));
+    CGRect beginning = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMinY(body.frame), CGRectGetWidth(body.frame), MIN(20, CGRectGetHeight(body.frame)));
+    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"The approved text must begin visibly in the real scroll pane.");
+    XCUIElement *external = self.app.buttons[@"privacy.externalPolicy"];
+    XCTAssertEqualObjects(external.label, Chinese ? @"在浏览器打开" : @"Open in Browser");
+    for (NSUInteger attempt = 0; attempt < 2; attempt++) {
+        if (external.hittable && CGRectContainsRect(actions.frame, external.frame)) break;
+        [actions swipeUp];
+    }
+    XCTAssertTrue(external.hittable);
+    XCTAssertTrue(CGRectContainsRect(actions.frame, external.frame));
+    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"Action scrolling must preserve the visible local text.");
+    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.close"].hittable);
+    NSError *error = nil;
+    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"Offline privacy accessibility audit: %@", error);
 }
 - (void)testProductionCameraAllowThenResetAndDeny {
     self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
@@ -148,10 +181,21 @@
     [privacy tap];
     XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];
     XCTAssertTrue([done waitForExistenceWithTimeout:15]);
-    XCUIElement *policyBody = [self.app.webViews.staticTexts containingPredicate:[NSPredicate predicateWithFormat:@"label CONTAINS %@", @"process photos, camera images"]].firstMatch;
-    XCTAssertTrue([policyBody waitForExistenceWithTimeout:25], @"The policy must load its approved body, not merely display a Close button.");
+    [self assertOfflinePrivacyForChinese:NO];
     NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
     [self logSyntheticScreenshot:@"privacy-open-diagnostic"];
+    [self.app.buttons[@"privacy.externalPolicy"] tap];
+    XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];
+    NSPredicate *browserForeground = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        (void)object; (void)bindings;
+        return browser.state == XCUIApplicationStateRunningForeground &&
+            (self.app.state == XCUIApplicationStateRunningBackground || self.app.state == XCUIApplicationStateRunningBackgroundSuspended);
+    }];
+    XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];
+    XCTAssertEqual([XCTWaiter waitForExpectations:@[openedOutside] timeout:10], XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");
+    [self.app activate];
+    XCTAssertTrue([done waitForExistenceWithTimeout:10]);
+    [self assertOfflinePrivacyForChinese:NO];
     [done tap];
     BOOL returnedToScanner = [self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5];
     if (!returnedToScanner) {
@@ -220,6 +264,11 @@
     [self.app swipeUp]; [self.app swipeUp];
     XCTAssertTrue(self.app.buttons[@"scan.again"].hittable);
     XCTAssertTrue(self.app.tabBars.buttons[@"history.tab"].hittable);
+    [self.app.navigationBars.buttons[@"privacy.policy"] tap];
+    XCTAssertTrue([self.app.navigationBars.buttons[@"privacy.close"] waitForExistenceWithTimeout:15]);
+    [self assertOfflinePrivacyForChinese:NO];
+    [self.app.navigationBars.buttons[@"privacy.close"] tap];
+    XCTAssertTrue([self.app.tabBars.buttons[@"history.tab"] waitForExistenceWithTimeout:5]);
     XCTAssertEqualObjects(self.app.buttons[@"scan.copy"].label, @"Copy Result");
     [self.app.tabBars.buttons[@"history.tab"] tap];
     XCUIElement *record = self.app.tables.cells.firstMatch;
@@ -335,5 +384,10 @@
         XCTAssertEqual([XCTWaiter waitForExpectations:@[closed] timeout:5], XCTWaiterResultCompleted);
         XCTAssertTrue(self.app.tables[@"history.table"].cells.firstMatch.staticTexts[payload].exists);
     }
+    [self.app.navigationBars.buttons[@"privacy.policy"] tap];
+    XCTAssertTrue([self.app.navigationBars.buttons[@"privacy.close"] waitForExistenceWithTimeout:15]);
+    [self assertOfflinePrivacyForChinese:YES];
+    [self.app.navigationBars.buttons[@"privacy.close"] tap];
+    XCTAssertTrue([self.app.tables[@"history.table"].cells.firstMatch.staticTexts[payload] waitForExistenceWithTimeout:5]);
 }
 @end

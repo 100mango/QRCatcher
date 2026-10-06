@@ -334,6 +334,31 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
     XCTAssertEqual(self.app.tables[@"history.table"].cells.count, 1);
     [self.app.navigationBars.buttons[@"privacy.policy"].firstMatch tap];
     XCTAssertTrue([self.app.navigationBars.buttons[@"privacy.close"] waitForExistenceWithTimeout:15]);
+    XCUIElement *policyBody = self.app.staticTexts[@"privacy.body"];
+    XCTAssertTrue([policyBody waitForExistenceWithTimeout:5]);
+    NSString *approvedPolicy = @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";
+    XCTAssertEqualObjects(policyBody.label, approvedPolicy);
+    XCTAssertEqual(self.app.webViews.count, 0);
+    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);
+    CGRect policyViewport = CGRectIntersection(self.app.frame, self.app.scrollViews[@"privacy.content"].frame);
+    XCTAssertFalse(CGRectIsEmpty(policyViewport));
+    XCTAssertGreaterThan(CGRectGetHeight(policyBody.frame), 0);
+    XCTAssertGreaterThan(CGRectGetWidth(policyBody.frame), 0);
+    XCTAssertGreaterThanOrEqual(CGRectGetMinX(policyBody.frame), CGRectGetMinX(policyViewport));
+    XCTAssertLessThanOrEqual(CGRectGetMaxX(policyBody.frame), CGRectGetMaxX(policyViewport));
+    CGRect policyBeginning = CGRectMake(CGRectGetMinX(policyBody.frame), CGRectGetMinY(policyBody.frame), CGRectGetWidth(policyBody.frame), MIN(20, CGRectGetHeight(policyBody.frame)));
+    XCTAssertTrue(CGRectContainsRect(policyViewport, policyBeginning));
+    XCUIElement *externalPolicy = self.app.buttons[@"privacy.externalPolicy"];
+    XCUIElement *policyActions = self.app.scrollViews[@"privacy.actionScroll"];
+    for (NSUInteger attempt = 0; attempt < 2; attempt++) {
+        if (externalPolicy.hittable && CGRectContainsRect(policyActions.frame, externalPolicy.frame)) break;
+        [policyActions swipeUp];
+    }
+    XCTAssertTrue(externalPolicy.hittable);
+    XCTAssertTrue(CGRectContainsRect(policyActions.frame, externalPolicy.frame));
+    XCTAssertTrue(CGRectContainsRect(policyViewport, policyBeginning));
+    NSError *policyError = nil;
+    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&policyError], @"iPad largest-text offline privacy accessibility audit: %@", policyError);
     [self.app.navigationBars.buttons[@"privacy.close"] tap];
     XCTAssertTrue([self.app.tables[@"history.table"] waitForExistenceWithTimeout:5]);
     [self capture:@"ipad-large-text"];

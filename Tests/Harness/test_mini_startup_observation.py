@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from test_ios_offline_privacy import restore_pad_for_historical_observer
 
 ROOT = Path(__file__).resolve().parents[2]
 APP_PATH = 'QRCatcher/AppDelegate.m'
@@ -210,6 +211,8 @@ __weak id releaseValue; __block BOOL releaseFlag;
         for (path, debug), expected in observed.items():
             with self.subTest(path=path, debug=debug):
                 source = self.sources[path]
+                if path == PAD_PATH:
+                    source = restore_pad_for_historical_observer(source)
                 if debug:
                     source = remove_observation(source, path)
                 self.assertEqual(normalized_digest(preprocess(darwin + source, debug)), expected)
@@ -254,6 +257,8 @@ __weak id releaseValue; __block BOOL releaseFlag;
             PAD_PATH: 'ebf9889c1edbd3f41854862bd0327e87e6b5051da78106610e08154ba9205249'}
         for path, text in self.sources.items():
             with self.subTest(path=path):
+                if path == PAD_PATH:
+                    text = restore_pad_for_historical_observer(text)
                 release = preprocess(text, 0)
                 for token in ['QRStartup', 'startupObservation', 'mini_startup_v1',
                               '-mini-startup', 'IPAD_MINI_STARTUP_OBSERVATION', 'CFAbsoluteTimeGetCurrent']:
@@ -264,7 +269,10 @@ __weak id releaseValue; __block BOOL releaseFlag;
         expected = DEBUG_PRESERVATION_DIGESTS
         for path in [APP_PATH, 'QRCatcher/main.m', 'QRCatcher/QRCatchViewController.m', PAD_PATH]:
             with self.subTest(path=path):
-                text = preprocess(remove_observation(self.sources[path], path), 1)
+                source = self.sources[path]
+                if path == PAD_PATH:
+                    source = restore_pad_for_historical_observer(source)
+                text = preprocess(remove_observation(source, path), 1)
                 self.assertEqual(normalized_digest(text), expected[path])
         files = (ROOT / 'QRCatcherUITests/QRCatcherImageImportUITests.m').read_bytes()
         self.assertEqual(hashlib.sha256(files).hexdigest(),
@@ -336,12 +344,13 @@ __weak id releaseValue; __block BOOL releaseFlag;
         self.assertIn('performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil', self.pad)
 
     def test_assertion_wait_decoder_and_release_guard_mutations_fail_preservation(self):
+        historical_pad = restore_pad_for_historical_observer(self.pad)
         for before, after in [
                 ('XCTAssertEqual(history.cells.count, 1);', 'XCTAssertEqual(history.cells.count, 0);'),
                 ('waitForExistenceWithTimeout:15', 'waitForExistenceWithTimeout:150'),
                 ('XCUIAccessibilityAuditTypeAll', 'XCUIAccessibilityAuditTypeContrast')]:
-            changed = self.pad.replace(before, after, 1)
-            self.assertNotEqual(changed, self.pad)
+            changed = historical_pad.replace(before, after, 1)
+            self.assertNotEqual(changed, historical_pad)
             digest = normalized_digest(preprocess(remove_observation(changed, PAD_PATH), 1))
             self.assertNotEqual(digest, DEBUG_PRESERVATION_DIGESTS[PAD_PATH])
         changed = self.view.replace('[[QRCodeCodec payloadsInImage:QR] firstObject]', '@"fake-decode"', 1)

@@ -277,7 +277,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
    self.assertFalse((f.root/'build/ipad-mini-host-inflight.json').exists())
    state=json.loads((f.root/'build/ipad-mini-job-state.json').read_text())
    self.assertEqual(state['phases']['prepare']['status'],'completed')
-   self.assertEqual(state['deadline_monotonic']-state['started_monotonic'],3000)
+   self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.DIAGNOSTIC_CAPS.values()))
    record=json.loads((f.root/route.RECEIPT).read_text());self.assertEqual(record['project'],route.PROJECT)
    leases=[json.loads(line) for line in Path(str(log)+'.lease.jsonl').read_text().splitlines()]
    self.assertEqual(len({r['sha256'] for r in leases}),1)
@@ -285,6 +285,30 @@ class OriginalIOSRouteTests(unittest.TestCase):
    self.assertNotIn('SHELL_ARGUMENT_ROUTING_PASS',result.stdout)
    self.assertTrue(base.preflight_contract(self.workflow))
   finally:owner.tearDown()
+ def test_exact_original_deadline_survives_short_uptime_rounding_and_rejects_one_second_change(self):
+  with self.fixture() as root:
+   runner=root/'runner';runner.mkdir()
+   origin=runner/'qrcatcher-mini-123-1.json'
+   # This fixed IEEE-754 start reproduces the actual Mac subtraction result;
+   # compare the producer's exact addition, without any clock tolerance.
+   start=3071.9999999999995
+   with patch.dict(os.environ,{'RUNNER_TEMP':str(runner),'QRCATCHER_MINI_JOB_ORIGIN':str(origin)}):
+    _,identity=mini.context()
+    origin.write_text(json.dumps({'version':1,**identity,'caps':mini.DIAGNOSTIC_CAPS,'started_monotonic':start}))
+    with patch.object(mini,'execute',side_effect=AssertionError('clock validation must not execute a command')):
+     budget=mini.Budget(clock=lambda:start+1)
+     state=budget.state
+     self.assertEqual(state['deadline_monotonic']-state['started_monotonic'],3000.0000000000005)
+     self.assertNotEqual(state['deadline_monotonic']-state['started_monotonic'],3000)
+     self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.DIAGNOSTIC_CAPS.values()))
+     budget.persist()
+     readback=mini.Budget(clock=lambda:start+1)
+     self.assertEqual(readback.state,state)
+     for change in (-1,1):
+      changed={**state,'deadline_monotonic':state['deadline_monotonic']+change}
+      (root/'build/ipad-mini-job-state.json').write_text(json.dumps(changed))
+      with self.assertRaisesRegex(ValueError,'Reset or stale phase state'):
+       mini.Budget(clock=lambda:start+1)
 
 
 if __name__=='__main__':unittest.main()

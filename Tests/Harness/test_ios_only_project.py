@@ -264,7 +264,7 @@ class IOSOnlyProjectTests(unittest.TestCase):
 
     def test_native_unit_source_inventory_preserves_twelve_seven_seven_four_cases(self):
         expected = {
-            'QRCatcherTests.m': (12, 'b28ee936ac6d49eb323564282621f4d8c7ac3d162c894bf486d12a5f545c57e3'),
+            'QRCatcherTests.m': (12, '9c48f6dac92deff8383127febef1e302f4b9315ea184c2b6adcdf80ab3f63612'),
             'QRBoundedImageImportTests.m': (7, '8d103b5fcdd05f2abe69a05a0c3ed54799933825f7a9825412be11a89de06dbe'),
             'QRPhoneResultTests.m': (7, '6150384ea1b9e5aa490481163bac895b47cd653735d11a426946c4f51dac0555'),
             'QRWatchPhoneServiceTests.m': (4, '010ce18be9d3991a142dbe1dca3fd167aaf10f371ad0417987895a71982c8c5f')}

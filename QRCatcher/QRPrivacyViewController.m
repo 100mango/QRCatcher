@@ -1,131 +1,120 @@
 #import "QRPrivacyViewController.h"
-#import <WebKit/WebKit.h>
-@interface QRPrivacyViewController () <WKNavigationDelegate>
-@property (nonatomic, strong) WKWebView *webView;
-@property (nonatomic, strong) UIStackView *errorView;
-@property (nonatomic, strong) UIScrollView *errorScroll;
-@property (nonatomic, strong) UIActivityIndicatorView *activity;
+#import "QRActionButton.h"
+
+@interface QRPrivacyViewController ()
+@property (nonatomic, strong) UIButton *externalButton;
+@property (nonatomic, strong) UILabel *errorMessage;
 @property (nonatomic) BOOL closing;
+@property (nonatomic) BOOL opening;
 @end
+
 @implementation QRPrivacyViewController
+- (UILabel *)label:(NSString *)text identifier:(NSString *)identifier style:(UIFontTextStyle)style {
+    UILabel *label = [UILabel new];
+    label.text = NSLocalizedString(text, nil);
+    label.numberOfLines = 0;
+    label.lineBreakMode = NSLineBreakByWordWrapping;
+    label.font = [UIFont preferredFontForTextStyle:style];
+    label.adjustsFontForContentSizeCategory = YES;
+    label.textColor = UIColor.labelColor;
+    label.accessibilityIdentifier = identifier;
+    return label;
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = NSLocalizedString(@"Privacy Policy", nil);
     self.view.backgroundColor = UIColor.systemBackgroundColor;
+    self.view.accessibilityViewIsModal = YES;
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"Close", nil) style:UIBarButtonItemStyleDone target:self action:@selector(close)];
     self.navigationItem.leftBarButtonItem.accessibilityIdentifier = @"privacy.close";
-    WKWebViewConfiguration *configuration = [WKWebViewConfiguration new];
-    configuration.websiteDataStore = WKWebsiteDataStore.nonPersistentDataStore;
-    configuration.defaultWebpagePreferences.allowsContentJavaScript = NO;
-    self.webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration];
-    self.webView.navigationDelegate = self;
-    self.webView.accessibilityIdentifier = @"privacy.content";
-    self.webView.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.webView];
-    self.activity = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
-    self.activity.hidesWhenStopped = YES;
-    self.activity.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.activity];
-    UILabel *message = [UILabel new];
-    message.text = NSLocalizedString(@"The privacy policy could not load. Check your connection and try again.", nil);
-    message.accessibilityIdentifier = @"privacy.error";
-    message.numberOfLines = 0;
-    message.textAlignment = NSTextAlignmentCenter;
-    message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-    message.adjustsFontForContentSizeCategory = YES;
-    UIButton *retry = [UIButton buttonWithType:UIButtonTypeSystem];
-    [retry setTitle:NSLocalizedString(@"Retry", nil) forState:UIControlStateNormal];
-    retry.accessibilityIdentifier = @"privacy.retry";
-    retry.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-    retry.titleLabel.adjustsFontForContentSizeCategory = YES;
-    retry.titleLabel.numberOfLines = 0;
-    [retry addTarget:self action:@selector(loadPolicy) forControlEvents:UIControlEventTouchUpInside];
-    [retry.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
-    self.errorView = [[UIStackView alloc] initWithArrangedSubviews:@[message, retry]];
-    self.errorView.axis = UILayoutConstraintAxisVertical;
-    self.errorView.spacing = 16;
-    self.errorView.translatesAutoresizingMaskIntoConstraints = NO;
-    self.errorView.hidden = YES;
-    self.errorScroll = [UIScrollView new];
-    self.errorScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    self.errorScroll.hidden = YES;
-    [self.view addSubview:self.errorScroll];
-    [self.errorScroll addSubview:self.errorView];
+
+    // Keep the approved policy wording local. Opening this controller does not
+    // construct a WebView, request a document, or fall back to an online page.
+    UILabel *body = [self label:@"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings." identifier:@"privacy.body" style:UIFontTextStyleBody];
+    UILabel *services = [self label:@"System backups, file providers, the clipboard, and services you choose may handle data according to your settings." identifier:@"privacy.systemServices" style:UIFontTextStyleBody];
+    UILabel *website = [self label:@"GitHub Pages records visitor IP addresses for security." identifier:@"privacy.websiteNotice" style:UIFontTextStyleFootnote];
+    self.errorMessage = [self label:@"This website could not be opened." identifier:@"privacy.error" style:UIFontTextStyleBody];
+    self.errorMessage.hidden = YES;
+    UIStackView *text = [[UIStackView alloc] initWithArrangedSubviews:@[body, services, self.errorMessage]];
+    text.axis = UILayoutConstraintAxisVertical;
+    text.spacing = 16;
+    text.translatesAutoresizingMaskIntoConstraints = NO;
+    UIScrollView *content = [UIScrollView new];
+    content.accessibilityIdentifier = @"privacy.content";
+    content.translatesAutoresizingMaskIntoConstraints = NO;
+    content.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    [self.view addSubview:content];
+    [content addSubview:text];
+
+    self.externalButton = [QRActionButton buttonWithType:UIButtonTypeSystem];
+    [self.externalButton setTitle:NSLocalizedString(@"Open in Browser", nil) forState:UIControlStateNormal];
+    self.externalButton.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    self.externalButton.titleLabel.adjustsFontForContentSizeCategory = YES;
+    self.externalButton.titleLabel.numberOfLines = 0;
+    self.externalButton.titleLabel.adjustsFontSizeToFitWidth = NO;
+    self.externalButton.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    self.externalButton.titleLabel.textAlignment = NSTextAlignmentCenter;
+    self.externalButton.accessibilityIdentifier = @"privacy.externalPolicy";
+    [self.externalButton setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
+    [self.externalButton addTarget:self action:@selector(openPolicyInBrowser) forControlEvents:UIControlEventTouchUpInside];
+    [self.externalButton.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+    UIStackView *actions = [[UIStackView alloc] initWithArrangedSubviews:@[website, self.externalButton]];
+    actions.axis = UILayoutConstraintAxisVertical;
+    actions.spacing = 8;
+    actions.translatesAutoresizingMaskIntoConstraints = NO;
+    UIScrollView *actionScroll = [UIScrollView new];
+    actionScroll.accessibilityIdentifier = @"privacy.actionScroll";
+    actionScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    actionScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    [self.view addSubview:actionScroll];
+    [actionScroll addSubview:actions];
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    NSLayoutConstraint *naturalActions = [actionScroll.heightAnchor constraintEqualToAnchor:actions.heightAnchor constant:16];
+    naturalActions.priority = UILayoutPriorityDefaultHigh;
     [NSLayoutConstraint activateConstraints:@[
-        [self.webView.topAnchor constraintEqualToAnchor:safe.topAnchor],
-        [self.webView.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
-        [self.webView.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [self.webView.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        [self.activity.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
-        [self.activity.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor],
-        [self.errorScroll.topAnchor constraintEqualToAnchor:safe.topAnchor],
-        [self.errorScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor],
-        [self.errorScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [self.errorScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        [self.errorView.topAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.topAnchor constant:24],
-        [self.errorView.bottomAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.bottomAnchor constant:-24],
-        [self.errorView.leadingAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.leadingAnchor constant:24],
-        [self.errorView.trailingAnchor constraintEqualToAnchor:self.errorScroll.contentLayoutGuide.trailingAnchor constant:-24],
-        [self.errorView.widthAnchor constraintEqualToAnchor:self.errorScroll.frameLayoutGuide.widthAnchor constant:-48]
+        [content.topAnchor constraintEqualToAnchor:safe.topAnchor],
+        [content.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
+        [content.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [content.bottomAnchor constraintEqualToAnchor:actionScroll.topAnchor constant:-16],
+        [actionScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
+        [actionScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [actionScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-16],
+        [actionScroll.heightAnchor constraintGreaterThanOrEqualToConstant:44],
+        [actionScroll.heightAnchor constraintLessThanOrEqualToAnchor:safe.heightAnchor multiplier:0.45],
+        naturalActions,
+        [text.topAnchor constraintEqualToAnchor:content.contentLayoutGuide.topAnchor constant:24],
+        [text.bottomAnchor constraintEqualToAnchor:content.contentLayoutGuide.bottomAnchor constant:-24],
+        [text.leadingAnchor constraintEqualToAnchor:content.contentLayoutGuide.leadingAnchor constant:24],
+        [text.trailingAnchor constraintEqualToAnchor:content.contentLayoutGuide.trailingAnchor constant:-24],
+        [text.widthAnchor constraintEqualToAnchor:content.frameLayoutGuide.widthAnchor constant:-48],
+        [actions.topAnchor constraintEqualToAnchor:actionScroll.contentLayoutGuide.topAnchor constant:8],
+        [actions.bottomAnchor constraintEqualToAnchor:actionScroll.contentLayoutGuide.bottomAnchor constant:-8],
+        [actions.leadingAnchor constraintEqualToAnchor:actionScroll.contentLayoutGuide.leadingAnchor constant:24],
+        [actions.trailingAnchor constraintEqualToAnchor:actionScroll.contentLayoutGuide.trailingAnchor constant:-24],
+        [actions.widthAnchor constraintEqualToAnchor:actionScroll.frameLayoutGuide.widthAnchor constant:-48]
     ]];
-    [self loadPolicy];
 }
-- (void)loadPolicy {
-    if (self.closing) return;
-    self.errorView.hidden = YES;
-    self.errorScroll.hidden = YES;
-    self.webView.hidden = NO;
-    [self.activity startAnimating];
+- (void)openExternalURL:(NSURL *)URL completion:(void (^)(BOOL))completion {
+    [UIApplication.sharedApplication openURL:URL options:@{} completionHandler:completion];
+}
+- (void)openPolicyInBrowser {
+    if (self.closing || self.opening) return;
+    self.opening = YES;
+    self.externalButton.enabled = NO;
+    self.errorMessage.hidden = YES;
     NSURL *URL = [NSURL URLWithString:@"https://100mango.github.io/app-privacy/"];
-    [self.webView loadRequest:[NSURLRequest requestWithURL:URL cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:20]];
-}
-- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
-    [self.activity stopAnimating];
-}
-- (void)showLoadError:(NSError *)error {
-    if (self.closing || ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled)) return;
-    [self.activity stopAnimating];
-    self.errorView.hidden = NO;
-    self.errorScroll.hidden = NO;
-    self.webView.hidden = YES;
-}
-- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self showLoadError:error]; }
-- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self showLoadError:error]; }
-- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    [self showLoadError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorUnknown userInfo:nil]];
-}
-- (BOOL)isApprovedDocumentURL:(NSURL *)URL {
-    NSURLComponents *parts = [NSURLComponents componentsWithURL:URL resolvingAgainstBaseURL:NO];
-    return [parts.scheme.lowercaseString isEqualToString:@"https"] &&
-        [parts.host.lowercaseString isEqualToString:@"100mango.github.io"] &&
-        [parts.path isEqualToString:@"/app-privacy/"] && !parts.query.length && !parts.user.length && !parts.password.length &&
-        (!parts.port || parts.port.integerValue == 443);
-}
-- (void)webView:(WKWebView *)webView decidePolicyForNavigationResponse:(WKNavigationResponse *)response decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
-    NSHTTPURLResponse *HTTP = [response.response isKindOfClass:NSHTTPURLResponse.class] ? (NSHTTPURLResponse *)response.response : nil;
-    BOOL allowed = [self isApprovedDocumentURL:response.response.URL] && response.canShowMIMEType &&
-        [response.response.MIMEType.lowercaseString isEqualToString:@"text/html"] && HTTP.statusCode >= 200 && HTTP.statusCode < 300;
-    if (!allowed && response.forMainFrame) {
-        [self showLoadError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorBadServerResponse userInfo:nil]];
-    }
-    decisionHandler(allowed ? WKNavigationResponsePolicyAllow : WKNavigationResponsePolicyCancel);
-}
-- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)action decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
-    NSURLComponents *parts = [NSURLComponents componentsWithURL:action.request.URL resolvingAgainstBaseURL:NO];
-    BOOL approvedContact = [parts.scheme.lowercaseString isEqualToString:@"mailto"] &&
-        [parts.path.lowercaseString isEqualToString:@"100mango@gmail.com"] && !parts.query.length && !parts.fragment.length &&
-        !parts.host.length && !parts.user.length && !parts.password.length && !parts.port;
-    if (approvedContact && action.navigationType == WKNavigationTypeLinkActivated) {
-        [UIApplication.sharedApplication openURL:action.request.URL options:@{} completionHandler:nil];
-    }
-    BOOL approvedDocument = [self isApprovedDocumentURL:action.request.URL];
-    decisionHandler(approvedDocument ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+    __weak typeof(self) weakSelf = self;
+    [self openExternalURL:URL completion:^(BOOL opened) {
+        QRPrivacyViewController *strongSelf = weakSelf;
+        if (!strongSelf || strongSelf.closing) return;
+        strongSelf.opening = NO;
+        strongSelf.externalButton.enabled = YES;
+        strongSelf.errorMessage.hidden = opened;
+    }];
 }
 - (void)close {
     if (self.closing) return;
     self.closing = YES;
-    [self.webView stopLoading];
     void (^cleanup)(void) = self.dismissalHandler;
     if (cleanup) cleanup();
     UIViewController *presentation = self.navigationController ?: self;

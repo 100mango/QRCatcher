@@ -111,7 +111,13 @@ class PhoneResultContractTests(unittest.TestCase):
         self.assertIn('XCTAssertEqualObjects(after, before', pair)
         self.assertIn('result.buttons[@"history.result.cancel"]', pair)
         self.assertIn('canCancel', pair)
-        self.assertEqual(UI.count('XCUIAccessibilityAuditTypeAll'), 4)
+        # The admitted offline policy adds its own all-types audit. Preserve
+        # the exact four existing result/history audits independently.
+        privacy = UI.split('- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese {', 1)[1].split('- (void)testProductionCameraAllowThenResetAndDeny', 1)[0]
+        self.assertEqual(privacy.count('XCUIAccessibilityAuditTypeAll'), 1)
+        self.assertIn('issueHandler:nil', privacy)
+        self.assertIn('Offline privacy accessibility audit:', privacy)
+        self.assertEqual(UI.replace(privacy, '', 1).count('XCUIAccessibilityAuditTypeAll'), 4)
 
     def test_largest_text_asserts_both_real_endpoints_and_separate_actions(self):
         case = UI.split('- (void)testLargeTextLayoutKeepsControlsReachable', 1)[1].split('- (void)testAccessibilityOfResultAndHistory', 1)[0]

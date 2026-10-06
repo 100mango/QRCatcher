@@ -9,7 +9,6 @@
 #import "QRCatchViewController.h"
 #import "QRURLViewController.h"
 #import "QRPrivacyViewController.h"
-#import <WebKit/WebKit.h>
 #import <AVFoundation/AVFoundation.h>
 
 @interface QRCatchViewController (RegressionTesting)
@@ -17,18 +16,25 @@
 - (void)copyResult;
 - (void)shareResult;
 @end
-@interface QRPrivacyViewController (RegressionTesting) <WKNavigationDelegate>
-- (void)loadPolicy;
+@interface QRPrivacyViewController (RegressionTesting)
+- (void)openExternalURL:(NSURL *)URL completion:(void (^)(BOOL))completion;
 - (void)close;
 @end
-// WKNavigationResponse has no public initializer. Supply transport facts to the
-// actual navigation delegate, without substituting its error-handling behavior.
-@interface QRTestNavigationResponse : NSObject
-@property (nonatomic, strong) NSURLResponse *response;
-@property (nonatomic, getter=isForMainFrame) BOOL forMainFrame;
-@property (nonatomic) BOOL canShowMIMEType;
+// Observe the app-owned external-opening boundary without opening a browser.
+// The real UIButton action, pending guard and completion behavior still run.
+@interface QRTestPrivacyController : QRPrivacyViewController
+@property (nonatomic, strong) NSMutableArray<NSURL *> *openedURLs;
+@property (nonatomic, copy) void (^pendingCompletion)(BOOL);
 @end
-@implementation QRTestNavigationResponse
+@implementation QRTestPrivacyController
+- (instancetype)init {
+    if ((self = [super initWithNibName:nil bundle:nil])) _openedURLs = [NSMutableArray new];
+    return self;
+}
+- (void)openExternalURL:(NSURL *)URL completion:(void (^)(BOOL))completion {
+    [self.openedURLs addObject:URL];
+    self.pendingCompletion = completion;
+}
 @end
 @interface QRCatcherTests : XCTestCase
 @end
@@ -254,41 +260,54 @@
         [NSFileManager.defaultManager removeItemAtURL:URL error:nil];
     }
 }
-- (void)testPrivacyHTTPFailuresAndWebProcessTerminationOfferRetry {
-    QRPrivacyViewController *privacy = [QRPrivacyViewController new];
+- (void)testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent {
+    QRTestPrivacyController *privacy = [QRTestPrivacyController new];
     [privacy loadViewIfNeeded];
-    WKWebView *web = (WKWebView *)[self viewWithIdentifier:@"privacy.content" inView:privacy.view];
-    [web stopLoading];
-    UIView *error = [self viewWithIdentifier:@"privacy.error" inView:privacy.view].superview;
-    UIButton *retry = (UIButton *)[self viewWithIdentifier:@"privacy.retry" inView:privacy.view];
-    XCTAssertFalse(web.configuration.websiteDataStore.persistent);
-    XCTAssertFalse(web.configuration.defaultWebpagePreferences.allowsContentJavaScript);
-    for (NSNumber *code in @[@200, @404, @500]) {
-        [privacy loadPolicy]; [web stopLoading];
-        QRTestNavigationResponse *response = [QRTestNavigationResponse new];
-        response.response = [[NSHTTPURLResponse alloc] initWithURL:[NSURL URLWithString:@"https://100mango.github.io/app-privacy/"] statusCode:code.integerValue HTTPVersion:@"HTTP/1.1" headerFields:@{@"Content-Type": @"text/html"}];
-        response.forMainFrame = YES; response.canShowMIMEType = YES;
-        __block WKNavigationResponsePolicy decision = WKNavigationResponsePolicyCancel;
-        [privacy webView:web decidePolicyForNavigationResponse:(WKNavigationResponse *)response decisionHandler:^(WKNavigationResponsePolicy value) { decision = value; }];
-        XCTAssertEqual(decision, code.integerValue == 200 ? WKNavigationResponsePolicyAllow : WKNavigationResponsePolicyCancel);
-        XCTAssertEqual(error.hidden, code.integerValue == 200);
-        if (code.integerValue != 200) {
-            XCTAssertTrue(web.hidden);
-            XCTAssertEqualObjects(retry.currentTitle, NSLocalizedString(@"Retry", nil));
-            [retry sendActionsForControlEvents:UIControlEventTouchUpInside];
-            XCTAssertTrue(error.hidden); XCTAssertFalse(web.hidden);
-            [web stopLoading];
-        }
-    }
-    [privacy webViewWebContentProcessDidTerminate:web];
-    XCTAssertFalse(error.hidden); XCTAssertTrue(web.hidden);
-    [retry sendActionsForControlEvents:UIControlEventTouchUpInside];
-    XCTAssertTrue(error.hidden); XCTAssertFalse(web.hidden); [web stopLoading];
+    UILabel *body = (UILabel *)[self viewWithIdentifier:@"privacy.body" inView:privacy.view];
+    UILabel *notice = (UILabel *)[self viewWithIdentifier:@"privacy.websiteNotice" inView:privacy.view];
+    UIView *error = [self viewWithIdentifier:@"privacy.error" inView:privacy.view];
+    UIButton *open = (UIButton *)[self viewWithIdentifier:@"privacy.externalPolicy" inView:privacy.view];
+    NSString *approved = @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";
+    XCTAssertTrue([body isKindOfClass:UILabel.class]);
+    XCTAssertEqualObjects(body.text, NSLocalizedString(approved, nil));
+    XCTAssertEqual(body.numberOfLines, 0);
+    XCTAssertTrue(body.adjustsFontForContentSizeCategory);
+    XCTAssertTrue(notice.adjustsFontForContentSizeCategory);
+    XCTAssertEqualObjects(notice.text, NSLocalizedString(@"GitHub Pages records visitor IP addresses for security.", nil));
+    XCTAssertTrue([[self viewWithIdentifier:@"privacy.content" inView:privacy.view] isKindOfClass:UIScrollView.class]);
+    XCTAssertNotNil(open);
+    XCTAssertTrue(open.titleLabel.adjustsFontForContentSizeCategory);
+    XCTAssertNil([self viewWithIdentifier:@"privacy.retry" inView:privacy.view]);
+    XCTAssertEqual(privacy.openedURLs.count, 0, @"Loading the local policy must not request a website.");
+    XCTAssertTrue(error.hidden);
+    [open sendActionsForControlEvents:UIControlEventTouchUpInside];
+    [open sendActionsForControlEvents:UIControlEventTouchUpInside];
+    XCTAssertEqual(privacy.openedURLs.count, 1, @"An in-flight explicit action must not open twice.");
+    XCTAssertEqualObjects(privacy.openedURLs.firstObject.absoluteString, @"https://100mango.github.io/app-privacy/");
+    XCTAssertFalse(open.enabled);
+    XCTAssertNotNil(privacy.pendingCompletion);
+    privacy.pendingCompletion(NO);
+    XCTAssertTrue(open.enabled);
+    XCTAssertFalse(error.hidden);
+    XCTAssertEqualObjects(body.text, NSLocalizedString(approved, nil));
+    [open sendActionsForControlEvents:UIControlEventTouchUpInside];
+    XCTAssertEqual(privacy.openedURLs.count, 2);
+    privacy.pendingCompletion(YES);
+    XCTAssertTrue(error.hidden);
+    XCTAssertTrue(open.enabled);
+    XCTAssertEqualObjects(body.text, NSLocalizedString(approved, nil));
+    [open sendActionsForControlEvents:UIControlEventTouchUpInside];
     __block NSInteger cleanupCount = 0;
     privacy.dismissalHandler = ^{ cleanupCount += 1; };
     [privacy close]; [privacy close];
     XCTAssertEqual(cleanupCount, 1);
-    [privacy webViewWebContentProcessDidTerminate:web];
-    XCTAssertTrue(error.hidden, @"Late WebKit callbacks must not replace a dismissed screen with an error.");
+    privacy.pendingCompletion(NO);
+    [open sendActionsForControlEvents:UIControlEventTouchUpInside];
+    XCTAssertEqual(privacy.openedURLs.count, 3);
+    XCTAssertTrue(error.hidden, @"A late browser completion cannot change a dismissed screen.");
+    QRTestPrivacyController *reopened = [QRTestPrivacyController new];
+    [reopened loadViewIfNeeded];
+    XCTAssertEqual(reopened.openedURLs.count, 0);
+    XCTAssertEqualObjects(((UILabel *)[self viewWithIdentifier:@"privacy.body" inView:reopened.view]).text, NSLocalizedString(approved, nil));
 }
 @end
