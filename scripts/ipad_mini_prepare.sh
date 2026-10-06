@@ -13,6 +13,9 @@ echo "Tested tree: $SOURCE_TREE"
 if [ "$GITHUB_REF" = refs/heads/codex/mini-managed-full-row ]; then
   python3 scripts/diagnostic_mini_managed_route.py prepared "$SOURCE_HEAD" "$SOURCE_TREE"
 fi
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+  python3 scripts/ios_original_release_route.py prepared "$SOURCE_HEAD" "$SOURCE_TREE"
+fi
 shasum -a 256 .github/workflows/apple-platforms.yml
 sw_vers
 xcodebuild -version
@@ -23,10 +26,19 @@ python3 scripts/materialize_qr_fixtures.py
 python3 scripts/materialize_mac_icons.py
 python3 scripts/materialize_ipad_icons.py
 xcrun swift scripts/materialize_native_icons.swift
-python3 scripts/generate_project.py
-git diff --exit-code -- QRCatcher.xcodeproj
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+  python3 scripts/generate_project.py --profile ios-only
+  git diff --exit-code -- QRCatcher.xcodeproj QRCatcher-iOS-Only.xcodeproj
+else
+  python3 scripts/generate_project.py
+  git diff --exit-code -- QRCatcher.xcodeproj
+fi
 plutil -lint QRCatcherMac/Info.plist QRCatcherVision/Info.plist QRCatcher/Info.plist QRCatcher/PrivacyInfo.xcprivacy
-xcodebuild -list -project QRCatcher.xcodeproj
+if [ "$GITHUB_REF" = refs/heads/codex/ios-original-release ]; then
+  xcodebuild -list -project QRCatcher-iOS-Only.xcodeproj
+else
+  xcodebuild -list -project QRCatcher.xcodeproj
+fi
 
 python3 scripts/validate_evidence_budget.py --validate-allocation
 git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m

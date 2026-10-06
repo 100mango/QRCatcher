@@ -318,10 +318,10 @@ __weak id releaseValue; __block BOOL releaseFlag;
 
     def test_original_caps_source_device_fixture_audit_fences_and_decoders_are_unchanged(self):
         frozen = {
-            'scripts/ipad_mini_setup.py': 'b761d51de1d8c0ce05e05a10415f97b18acc43dd54e7f6d108d0d4cdb697fcaf',
+            'scripts/ipad_mini_setup.py': 'c0f1636b7553b666d5bfeac094c865494ed6285eb7bd033eedff43ac3a4f63c8',
             'scripts/diagnostic_mini_managed_route.py': 'a9944fff240355c6d0b2b2346dc8f7b4cf7c8f34475ba7a6b94d2765421c5c4a',
-            'scripts/ipad_mini_state_handoff.py': '32d9fb7e78abbd6b7b0ba6b9ced1b79e2e96faf71ebc8acf3e5d656955cea8d8',
-            'scripts/run_ios_platform_ui.sh': '37e2ae553a0fb92954a436d32372a3780c9dc21054253f298537ec53ba1c10cd',
+            'scripts/ipad_mini_state_handoff.py': '2295b9b5909b8954948bc02e2d9bff6ae75ccf4d4ed44adae1f8ea9922edf390',
+            'scripts/run_ios_platform_ui.sh': 'f9f20c8973db08820fe2d366f3d72ffa3618fb373fe606a2a6ecdbbc4d562f06',
             '.github/workflows/mini-managed-full-row.yml': '78505deae347d7dfb00a211f88478e6cf3a5f8977d2d64b3af4012fda0ba6332',
             '.github/workflows/apple-platforms.yml': '1c3b0759c211b54ec30bd8d19cac9e7a4f03b77dea94ae81146910f10ff202d4',
             'QRCatcher/QRCodeCodec.m': '7f17ac2ac34c4daff264c80d2dd59aa7b1d95b606c01b198b4795714193ef37d',

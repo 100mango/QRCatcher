@@ -1,5 +1,10 @@
 #import "AppDelegate.h"
+#ifndef QRCATCHER_IOS_ONLY_RELEASE
+#define QRCATCHER_IOS_ONLY_RELEASE 0
+#endif
+#if !QRCATCHER_IOS_ONLY_RELEASE
 #import "QRWatchPhoneService.h"
+#endif
 
 #if DEBUG
 #import <CoreFoundation/CFDate.h>
@@ -130,11 +135,17 @@ void QRStartupObservationScheduleMainQueueTurn(void) {
     self.historyStore = [[QRHistoryStore alloc] initWithURL:URL];
 #if DEBUG
     QRStartupObservationMark(QRStartupStoreReturn);
+#endif
+#if !QRCATCHER_IOS_ONLY_RELEASE
+#if DEBUG
     QRStartupObservationMark(QRStartupWatchEnter);
 #endif
     [[QRWatchPhoneService shared] activate];
 #if DEBUG
     QRStartupObservationMark(QRStartupWatchReturn);
+#endif
+#endif
+#if DEBUG
     QRStartupObservationMark(QRStartupDelegateReturn);
 #endif
     return YES;

@@ -88,12 +88,15 @@ def context():
     require(re.fullmatch('[0-9a-f]{40}',sha) is not None and
             os.environ.get('GITHUB_WORKFLOW_SHA')==sha and
             os.environ.get('GITHUB_REPOSITORY')=='100mango/QRCatcher' and
-            os.environ.get('GITHUB_REF') in ('refs/heads/codex/apple-platforms','refs/heads/codex/mini-managed-full-row') and
+            os.environ.get('GITHUB_REF') in ('refs/heads/codex/apple-platforms','refs/heads/codex/mini-managed-full-row','refs/heads/codex/ios-original-release') and
             os.environ.get('GITHUB_EVENT_NAME')=='push' and
             os.environ.get('EVIDENCE_SCOPE')=='ipad_mini', 'Wrong Mini source/workflow/scope')
     if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row':
         from diagnostic_mini_managed_route import current_identity
         current_identity()  # Exact diagnostic source/workflow/ref; no process.
+    if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-release':
+        from ios_original_release_route import current_identity
+        current_identity()  # Closed original iPhone/iPad profile; no process.
     for key in ('GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT'):
         require(re.fullmatch('[1-9][0-9]{0,19}',os.environ.get(key,'')) is not None,
                 'Missing run identity')
@@ -103,12 +106,33 @@ def context():
                   'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'scope':'ipad_mini'}
 
 
-def job_ledger_limit():
-    # Only the existing exact diagnostic route gets the explicit32KiB ledger.
-    # All other read/output/evidence limits and canonical16KiB stay unchanged.
+def ios_first_profile():
+    if os.environ.get('GITHUB_REF')!='refs/heads/codex/ios-original-release':
+        return False
+    from ios_original_release_route import current_identity
+    current_identity()  # Explicit new source/workflow/ref/job/scope binding.
+    return True
+
+
+def extended_mini_profile():
     if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row':
         from diagnostic_mini_managed_route import current_identity
         current_identity()
+        return True
+    return ios_first_profile()
+
+
+def mini_project():
+    if ios_first_profile():
+        from ios_original_release_route import PROJECT
+        return PROJECT
+    return 'QRCatcher.xcodeproj'
+
+
+def job_ledger_limit():
+    # Only the existing exact diagnostic route gets the explicit32KiB ledger.
+    # All other read/output/evidence limits and canonical16KiB stay unchanged.
+    if extended_mini_profile():
         return 32768
     return 16384
 
@@ -116,7 +140,7 @@ def job_ledger_limit():
 class Budget:
     def __init__(self, clock=time.monotonic):
         self.clock = clock; self.root,self.identity = context()
-        self.caps = DIAGNOSTIC_CAPS if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row' else CAPS
+        self.caps = DIAGNOSTIC_CAPS if extended_mini_profile() else CAPS
         self.job_seconds = sum(self.caps.values())
         self.ledger_limit = job_ledger_limit()
         tmp = Path(os.environ['RUNNER_TEMP'])
@@ -332,16 +356,24 @@ def configure(budget=None,executor=execute):
 
 def test_command(device,selectors,result):
     require(valid_uuid(device),'Invalid destination')
-    return ['xcodebuild','test-without-building','-project','QRCatcher.xcodeproj','-scheme','QRCatcher',
+    return ['xcodebuild','test-without-building','-project',mini_project(),'-scheme','QRCatcher',
             '-configuration','Debug','-derivedDataPath','build/iOS','-destination','platform=iOS Simulator,id='+device,
             '-parallel-testing-enabled','NO','-collect-test-diagnostics','never','-test-timeouts-enabled','YES',
             '-default-test-execution-time-allowance','180','-maximum-test-execution-time-allowance','240',
             'CODE_SIGNING_ALLOWED=NO',*selectors,'-resultBundlePath',result]
 
 
+def result_summary_limit(result):
+    # The observed first Mini reader needs a complete30s window. Only the exact
+    # diagnostic route receives it; canonical and later summaries keep10s.
+    if result=='MiniUIResults-layout.xcresult' and extended_mini_profile():
+        return 30
+    return 10
+
+
 def qualify_result(controller,device,result,expected,exit_code):
     """A returned Xcode process is not proof that the requested cases executed."""
-    code,raw=controller.command(['xcrun','xcresulttool','get','test-results','summary','--path',result],10)
+    code,raw=controller.command(['xcrun','xcresulttool','get','test-results','summary','--path',result],result_summary_limit(result))
     require(code==0,'Result summary unavailable'); value=strict_json(raw)
     require(isinstance(value,dict),'Invalid result summary')
     counts={key:value.get(key) for key in ['totalTestCount','passedTests','failedTests','skippedTests','expectedFailures']}
@@ -423,7 +455,7 @@ def row_body(device,budget,deadline,executor,stager):
         setup['layout_and_real_picker_cancel_exit']=code; setup['unexecuted'].remove('layout'); save()
         if code:
             c.record['status']='completed_failed'; save(); return code
-        if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row':
+        if extended_mini_profile():
             from ipad_mini_state_handoff import ensure_owned_booted
             original_receipt=strict_json(read_regular(budget.root/'build/ipad-mini-owned-device.json',4096))
             ensure_owned_booted(c,device,original_receipt,'before_files_fixture')
@@ -441,7 +473,7 @@ def row_body(device,budget,deadline,executor,stager):
         setup['real_files_case_exit']=code; setup['unexecuted'].remove('files'); save()
         file_exit=code
         # Timely complete failed cases remain red while independent Photos runs.
-        if os.environ.get('GITHUB_REF')=='refs/heads/codex/mini-managed-full-row':
+        if extended_mini_profile():
             ensure_owned_booted(c,device,original_receipt,'before_photos_seed')
         code,_=c.command(['xcrun','simctl','addmedia',device,'Tests/Fixtures/unicode.png'],210)
         setup['photo_seed_exit']=code; setup['seed_attempts']=1; setup['photo_import_gate']='ready' if code==0 else 'blocked_or_not_requested'; save()
@@ -481,11 +513,13 @@ def host_execute(command,cap):
 
 
 def host_commands():
+    embedding=([sys.executable,'scripts/ios_original_release_route.py','debug-package'] if ios_first_profile()
+               else [sys.executable,'scripts/verify_embedded_watch.py','simulator'])
     return {'prepare':['bash','scripts/ipad_mini_prepare.sh'],
-            'build':['xcodebuild','build-for-testing','-project','QRCatcher.xcodeproj','-scheme','QRCatcher',
+            'build':['xcodebuild','build-for-testing','-project',mini_project(),'-scheme','QRCatcher',
                      '-configuration','Debug','-derivedDataPath','build/iOS','-destination','generic/platform=iOS Simulator',
                      'ARCHS=arm64','CODE_SIGNING_ALLOWED=NO'],
-            'embedding':[sys.executable,'scripts/verify_embedded_watch.py','simulator'],
+            'embedding':embedding,
             'export':[sys.executable,'scripts/export_ios_platform_screenshots.py'],
             'validate':[sys.executable,'scripts/validate_evidence_budget.py','build/ios-platform-evidence',
                         '--scope','ipad_mini','--report','build/platform-evidence-budget.json'],

@@ -66,15 +66,22 @@ def identity(device, result):
     if str(uuid.UUID(device)).upper() != device or result != RESULT:
         raise ValueError('Continuation is scoped to the exact observed Pro result/device')
     source = os.environ.get('GITHUB_SHA', '')
-    if not re.fullmatch('[0-9a-f]{40}', source) or os.environ.get('GITHUB_REPOSITORY') != '100mango/QRCatcher' or os.environ.get('GITHUB_REF') != 'refs/heads/codex/apple-platforms':
+    if not re.fullmatch('[0-9a-f]{40}', source) or os.environ.get('GITHUB_REPOSITORY') != '100mango/QRCatcher' or os.environ.get('GITHUB_REF') not in ('refs/heads/codex/apple-platforms','refs/heads/codex/ios-original-release'):
         raise ValueError('Unexpected source/repository/ref')
+    if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-release':
+        from ios_original_release_route import current_identity
+        current_identity()  # Explicit source/ref/workflow/Pro binding; no process.
     if os.environ.get('EVIDENCE_SCOPE') != 'iphone_pro' or os.environ.get('SIMULATOR_ID') != device:
         raise ValueError('Unexpected platform/device profile')
     return source
 
 
 def expected_command(device):
-    return ['xcodebuild', 'test-without-building', '-project', 'QRCatcher.xcodeproj', '-scheme', 'QRCatcher',
+    project='QRCatcher.xcodeproj'
+    if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-release':
+        from ios_original_release_route import current_identity,PROJECT
+        current_identity();project=PROJECT
+    return ['xcodebuild', 'test-without-building', '-project', project, '-scheme', 'QRCatcher',
             '-configuration', 'Debug', '-derivedDataPath', 'build/iOS', '-destination', 'platform=iOS Simulator,id=' + device,
             '-parallel-testing-enabled', 'NO', '-collect-test-diagnostics', 'never', '-test-timeouts-enabled', 'YES',
             '-default-test-execution-time-allowance', '180', '-maximum-test-execution-time-allowance', '240',

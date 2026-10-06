@@ -72,7 +72,7 @@ def qualified_prior(controller,device,handoff):
     cap=480 if handoff=='before_files_fixture' else 240
     case=mini.test_command(device,selectors,result)
     summary=['xcrun','xcresulttool','get','test-results','summary','--path',result]
-    for command,limit,exits in [(case,cap,(0,) if handoff=='before_files_fixture' else (0,65)),(summary,10,(0,))]:
+    for command,limit,exits in [(case,cap,(0,) if handoff=='before_files_fixture' else (0,65)),(summary,mini.result_summary_limit(result),(0,))]:
         matches=[operation for operation in controller.record['operations'] if operation.get('command')==command]
         mini.require(len(matches)==1,'Exact completed prior case/summary operation required')
         operation=matches[0];elapsed=operation.get('elapsed_seconds')

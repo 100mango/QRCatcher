@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Dependency-free deterministic project definition. Run after adding source files."""
-import hashlib,json,pathlib
+import argparse,hashlib,json,pathlib
+parser=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
+parser.add_argument('--profile',choices=['all-platforms','ios-only'],default='all-platforms',
+                    help='ios-only writes QRCatcher-iOS-Only.xcodeproj; default preserves all-platform output')
+iosOnly=parser.parse_args().profile=='ios-only'
 root=pathlib.Path(__file__).resolve().parent.parent
+projectName='QRCatcher-iOS-Only.xcodeproj' if iosOnly else 'QRCatcher.xcodeproj'
+projectPath=root/projectName
+watchHelpers=['QRCatcher/QRWatchPhoneService.m','QRCatcher/QRWatchSessionGate.m']
 objects={}
 def uid(s): return hashlib.sha1(s.encode()).hexdigest()[:24].upper()
 def add(key,isa,**kw):
@@ -15,6 +22,8 @@ def configs(key,common):
         settings=dict(common)
         if name=='Debug':settings.update(GCC_PREPROCESSOR_DEFINITIONS=['DEBUG=1','$(inherited)'],GCC_OPTIMIZATION_LEVEL='0',ONLY_ACTIVE_ARCH='YES',GCC_SYMBOLS_PRIVATE_EXTERN='NO',ENABLE_TESTABILITY='YES',SWIFT_OPTIMIZATION_LEVEL='-Onone',SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG')
         else:settings.update(GCC_OPTIMIZATION_LEVEL='s',VALIDATE_PRODUCT='YES')
+        if iosOnly and key=='app':
+            settings['GCC_PREPROCESSOR_DEFINITIONS']=settings.get('GCC_PREPROCESSOR_DEFINITIONS',['$(inherited)'])+['QRCATCHER_IOS_ONLY_RELEASE=1']
         if name=='Debug' and key=='app':
             settings['INFOPLIST_FILE']='QRCatcher/Debug-Info.plist'
             # Preserve the actual Watch simulator launcher/debug/preview dylibs
@@ -36,7 +45,7 @@ source+=sharedSources;appfiles+=sharedFiles
 for path in sorted((root/'QRCatcher').glob('*')):
     if path.suffix in ['.h','.m']:
         ref=file(str(path.relative_to(root)),'sourcecode.c.objc' if path.suffix=='.m' else 'sourcecode.c.h');appfiles.append(ref)
-        if path.suffix=='.m':source.append(build(ref))
+        if path.suffix=='.m' and not (iosOnly and str(path.relative_to(root)) in watchHelpers):source.append(build(ref))
 model=file('QRCatcher/QR.xcdatamodeld','wrapper.xcdatamodeld');source.append(build(model));appfiles.append(model)
 resources=[]
 for name in ['Localizable.strings','InfoPlist.strings']:
@@ -62,6 +71,11 @@ for key,name,bundle,kind in [('app','QRCatcher','100mango.QRCatcher','applicatio
         for path in sorted((root/name).glob('*.m')):
             test=file(str(path.relative_to(root)),'sourcecode.c.objc');files.append(test);src.append(build(test))
         if key=='unit':
+            if iosOnly:
+                # Keep the four processor cases hosted, with exactly one helper
+                # implementation owner and no Watch IPC in the shipping app.
+                for helper in watchHelpers:
+                    r=file(helper,'sourcecode.c.objc');files.append(r);src.append(build(r))
             for entry in json.loads((root/'Tests/Fixtures/manifest.json').read_text()):
                 r=file('Tests/Fixtures/'+entry['name'],'image.png');files.append(r);res.append(build(r))
         proxy=add(key+'proxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=appID,remoteInfo='QRCatcher')
@@ -210,10 +224,15 @@ for key,name,kind in [('watch','QRCatcherWatch','application'),('watchunit','QRC
 # this product; standalone Watch tests/builds remain independent of the phone.
 # Xcode resolves the producer's watchOS/watchsimulator product for the parent
 # destination. CI verifies the actual nested platform and producer byte equality.
-watchProxy=add('appWatchProxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=watchID,remoteInfo='QRCatcherWatch')
-objects[appID]['dependencies'].append(add('appWatchDependency','PBXTargetDependency',target=watchID,targetProxy=watchProxy))
-watchCopy=add('appWatchBuild','PBXBuildFile',fileRef=uid('watchproduct'),settings={'ATTRIBUTES':['RemoveHeadersOnCopy']})
-objects[appID]['buildPhases'].append(add('appWatchCopy','PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath='$(CONTENTS_FOLDER_PATH)/Watch',dstSubfolderSpec=16,files=[watchCopy],name='Embed Watch Content',runOnlyForDeploymentPostprocessing=0))
+if not iosOnly:
+    watchProxy=add('appWatchProxy','PBXContainerItemProxy',containerPortal=projectID,proxyType=1,remoteGlobalIDString=watchID,remoteInfo='QRCatcherWatch')
+    objects[appID]['dependencies'].append(add('appWatchDependency','PBXTargetDependency',target=watchID,targetProxy=watchProxy))
+    watchCopy=add('appWatchBuild','PBXBuildFile',fileRef=uid('watchproduct'),settings={'ATTRIBUTES':['RemoveHeadersOnCopy']})
+    objects[appID]['buildPhases'].append(add('appWatchCopy','PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath='$(CONTENTS_FOLDER_PATH)/Watch',dstSubfolderSpec=16,files=[watchCopy],name='Embed Watch Content',runOnlyForDeploymentPostprocessing=0))
+else:
+    targets=[uid(key) for key in ['app','unit','ui']]
+    groups=[uid(key+'group') for key in ['app','unit','ui']]
+    products=[uid(key+'product') for key in ['app','unit','ui']]
 # A file reference has one navigator owner even when several targets compile it.
 from collections import Counter
 counts=Counter(r for group in groups for r in objects[group]['children'])
@@ -224,14 +243,28 @@ productsID=add('products','PBXGroup',children=products,name='Products',sourceTre
 main=add('main','PBXGroup',children=groups+[productsID],sourceTree='<group>')
 projectSettings={'CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','CLANG_WARN_BOOL_CONVERSION':'YES','CLANG_WARN_CONSTANT_CONVERSION':'YES','CLANG_WARN_ENUM_CONVERSION':'YES','CLANG_WARN_INT_CONVERSION':'YES','CLANG_WARN_OBJC_ROOT_CLASS':'YES_ERROR','GCC_WARN_ABOUT_RETURN_TYPE':'YES_ERROR','GCC_WARN_UNUSED_VARIABLE':'YES','IPHONEOS_DEPLOYMENT_TARGET':'15.0','SDKROOT':'iphoneos','ENABLE_USER_SCRIPT_SANDBOXING':'YES','GCC_C_LANGUAGE_STANDARD':'gnu11','CLANG_CXX_LANGUAGE_STANDARD':'gnu++17','DEBUG_INFORMATION_FORMAT':'dwarf-with-dsym'}
 add('project','PBXProject',attributes={'LastUpgradeCheck':'2700','TargetAttributes':{appID:{'CreatedOnToolsVersion':'27.0'},uid('unit'):{'TestTargetID':appID},uid('ui'):{'TestTargetID':appID}}},buildConfigurationList=configs('project',projectSettings),compatibilityVersion='Xcode 14.0',developmentRegion='en',knownRegions=['en','Base','zh-Hans'],mainGroup=main,productRefGroup=productsID,projectDirPath='',projectRoot='',targets=targets)
+if iosOnly:
+    # Emit the closed iOS graph. Deferred-platform objects are still generated
+    # by the default profile, but must not survive as orphan iOS entries.
+    reachable=set()
+    def visit(value):
+        if isinstance(value,dict):
+            for child in value.values():visit(child)
+        elif isinstance(value,list):
+            for child in value:visit(child)
+        elif isinstance(value,str) and value in objects and value not in reachable:
+            reachable.add(value);visit(objects[value])
+    visit(projectID)
+    objects={key:value for key,value in objects.items() if key in reachable}
 def emit(x):
     if isinstance(x,dict):return '{\n'+''.join(json.dumps(str(k))+ ' = '+emit(v)+';\n' for k,v in x.items())+'}'
     if isinstance(x,list):return '('+','.join(emit(v) for v in x)+')'
     if isinstance(x,int):return str(x)
     return json.dumps(x,ensure_ascii=False)
-(root/'QRCatcher.xcodeproj/project.pbxproj').write_text('// !$*UTF8*$!\n'+emit({'archiveVersion':1,'classes':{},'objectVersion':56,'objects':objects,'rootObject':projectID})+'\n')
-scheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcher.xcscheme';scheme.parent.mkdir(parents=True,exist_ok=True)
-def ref(key,name):return f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{uid(key)}" BuildableName="{name}" BlueprintName="{name.split(".")[0]}" ReferencedContainer="container:QRCatcher.xcodeproj"/>'
+projectPath.mkdir(parents=True,exist_ok=True)
+(projectPath/'project.pbxproj').write_text('// !$*UTF8*$!\n'+emit({'archiveVersion':1,'classes':{},'objectVersion':56,'objects':objects,'rootObject':projectID})+'\n')
+scheme=projectPath/'xcshareddata/xcschemes/QRCatcher.xcscheme';scheme.parent.mkdir(parents=True,exist_ok=True)
+def ref(key,name):return f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{uid(key)}" BuildableName="{name}" BlueprintName="{name.split(".")[0]}" ReferencedContainer="container:{projectName}"/>'
 scheme.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2700" version="1.7">
 <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref('app','QRCatcher.app')}</BuildActionEntry></BuildActionEntries></BuildAction>
@@ -241,6 +274,9 @@ scheme.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>''')
 
+if iosOnly:
+    # Never write or remove an existing all-platform project/scheme in this mode.
+    raise SystemExit(0)
 macScheme=(root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme')
 macScheme.write_text(scheme.read_text().replace(uid('app'),uid('mac')).replace(uid('unit'),uid('macunit')).replace(uid('ui'),uid('macui')).replace('QRCatcherTests','QRCatcherMacTests').replace('QRCatcherUITests','QRCatcherMacUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherMac.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherMac"'))
 

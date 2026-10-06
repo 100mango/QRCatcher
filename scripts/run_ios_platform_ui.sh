@@ -20,7 +20,11 @@ python3 -u scripts/run_bounded.py 180 xcrun simctl boot "$DEVICE" || true
 python3 scripts/owned_process_barrier.py --check
 python3 -u scripts/run_bounded.py 300 xcrun simctl bootstatus "$DEVICE" -b
 # Every Bash 3.2 array is populated, including phone/no-seed branches under -u.
-COMMON=(xcodebuild test-without-building -project QRCatcher.xcodeproj -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 CODE_SIGNING_ALLOWED=NO)
+PROJECT=QRCatcher.xcodeproj
+if [ "${GITHUB_REF:-}" = refs/heads/codex/ios-original-release ]; then
+  PROJECT=$(python3 scripts/ios_original_release_route.py project)
+fi
+COMMON=(xcodebuild test-without-building -project "$PROJECT" -scheme QRCatcher -configuration Debug -derivedDataPath build/iOS -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240 CODE_SIGNING_ALLOWED=NO)
 run_suite() {
   local OUTPUT=$1
   local CAP=$2

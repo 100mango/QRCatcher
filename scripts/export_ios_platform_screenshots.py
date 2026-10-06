@@ -96,6 +96,14 @@ scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
 summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'phone_result_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[],'ipad_share_traces':[]}
+if os.environ.get('GITHUB_REF')=='refs/heads/codex/ios-original-release':
+ from ios_original_release_route import current_identity,retain_prepared
+ current_identity()
+ report=pathlib.Path('build/ios-first-debug-package.json')
+ if report.exists() or report.is_symlink():
+  from ios_import_continuation import read_regular
+  (out/report.name).write_bytes(read_regular(report,64*1024))
+ retain_prepared()
 if scope=='ipad_mini':
  from ipad_mini_setup import job_ledger_limit
  for name,cap in [('ipad-mini-job-state.json',job_ledger_limit()),('ipad-mini-owned-device.json',4096),('ipad-mini-inflight.json',4096),('ipad-mini-host-inflight.json',4096),('ipad-mini-row-dispatched.json',4096)]:
