@@ -106,7 +106,7 @@ class Fixture:
             result=command[-1];code=self.layout_exit if '-layout.' in result else self.file_exit if '-files.' in result else self.photo_exit
             raw='Synthetic Xcode command, no app or provider execution'
         else:raise AssertionError(command)
-        operation={'state':'completed','exit':code,'cleanup_confirmed':True,'elapsed_seconds':.01}
+        operation={'command':command,'timeout_seconds':cap,'state':'completed','exit':code,'cleanup_confirmed':True,'elapsed_seconds':.01,'output_bytes':len(raw.encode())}
         if self.operation_edit:self.operation_edit(operation,command)
         if self.after_command:self.after_command(command)
         return code,raw,operation
@@ -348,6 +348,9 @@ class MiniSetupTests(unittest.TestCase):
                 if name=='QRCatcherUITests/QRCatcherPadUITests.m':
                     from test_ios_offline_privacy import restore_pad_for_historical_observer
                     data=restore_pad_for_historical_observer(data.decode()).encode()
+                if name=='QRCatcherUITests/QRCatcherUITests.m':
+                    from test_ios_offline_privacy import restore_phone_for_historical_observer
+                    data=restore_phone_for_historical_observer(data.decode()).encode()
                 self.assertEqual(hashlib.sha256(data).hexdigest(),digest)
     def test_existing_same_head_preflight_dependency_and_discovery_imports(self):
         self.assertTrue(preflight_contract((ROOT/'.github/workflows/apple-platforms.yml').read_text()))

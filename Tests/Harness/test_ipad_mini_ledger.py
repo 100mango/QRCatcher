@@ -4,13 +4,19 @@ Fake Apple/Git commands provide synthetic results, not native/app/platform proof
 """
 from pathlib import Path
 import hashlib,json,os,plistlib,subprocess,sys,time,unittest
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT/'scripts'))
 import test_ipad_mini_setup as base
 import ipad_mini_setup as mini
 import diagnostic_mini_managed_route as route
+import ios_original_release_route as ios_route
 
 
 def diagnostic(f):
+    # This fixture owns the old diagnostic profile even when discovery runs
+    # inside the new iOS-first CI job. Do not inherit its compiler-double input.
+    for key in ('IOS_FIRST_RELEASE_CANDIDATE_ONLY','SYNTHETIC_IOS_PRODUCTS',ios_route.INITIAL_HASH_KEY):
+        os.environ.pop(key,None)
     for name in [route.CANONICAL,route.WORKFLOW]:
         path=f.root/name;path.parent.mkdir(parents=True,exist_ok=True)
         if not path.exists():path.write_bytes((ROOT/name).read_bytes())
@@ -33,6 +39,8 @@ elif name=='sips':shutil.copyfile(args[args.index('--out')-1],args[args.index('-
 elif name=='xcodebuild':
  if args==['-version']:print('Xcode 27.0\nBuild version 27A266a')
  elif args[:1]==['build-for-testing']:
+  if os.environ.get('IOS_FIRST_RELEASE_CANDIDATE_ONLY')=='true':
+   shutil.copytree(os.environ['SYNTHETIC_IOS_PRODUCTS'],'build/iOS/Build/Products');print('Explicit iOS compiler double with public-layout synthetic package bytes');sys.exit(0)
   products=Path('build/iOS/Build/Products');parent=products/'Debug-iphonesimulator/QRCatcher.app';producer=products/'Debug-watchsimulator/QRCatcherWatch.app'
   parent.mkdir(parents=True);producer.mkdir(parents=True)
   base={'CFBundleShortVersionString':'1.1','CFBundleVersion':'2'}
@@ -68,22 +76,31 @@ else:print('Explicit Apple metadata double')
 '''
 
 
-def full_lifecycle(long_ids=False,files_failure=False):
+def full_lifecycle(long_ids=False,files_failure=False,ios_first=False):
     """Actual phase/row/export/validation/gate/summary/final scripts, all Apple doubled."""
     owner=base.MiniSetupTests();owner.setUp()
     try:
-        owner.real_fixture();f=owner.f;diagnostic(f)
+        owner.real_fixture();f=owner.f
+        if ios_first:
+            os.environ.update(GITHUB_REF=ios_route.REF,GITHUB_WORKFLOW_REF=ios_route.WORKFLOW_REF,GITHUB_JOB='platform',
+                              IOS_FIRST_RELEASE_CANDIDATE_ONLY='true',RUNNER_OS='macOS',RUNNER_ARCH='ARM64')
+            value=json.loads(f.origin.read_text());value['caps']=mini.IOS_FIRST_CAPS;f.origin.write_text(json.dumps(value));f.origin.chmod(0o600)
+            f.budget.path.unlink();f.budget=mini.Budget(f.clock)
+            from test_ios_only_release_package import IOSOnlyPackageTests
+            package=IOSOnlyPackageTests();package.setUp();package.hosted(ui_target=True)
+        else:diagnostic(f)
         if long_ids:
             value=json.loads(f.origin.read_text());value.update(run_id='9'*20,run_attempt='8'*20)
             os.environ.update(GITHUB_RUN_ID=value['run_id'],GITHUB_RUN_ATTEMPT=value['run_attempt'])
             origin=f.temp/('qrcatcher-mini-'+value['run_id']+'-'+value['run_attempt']+'.json');origin.write_text(json.dumps(value));origin.chmod(0o600)
             os.environ['QRCATCHER_MINI_JOB_ORIGIN']=str(origin);f.budget=mini.Budget(time.monotonic)
-        binary=f.root/'bin';binary.mkdir();log=f.root/'fake-apple-calls.log';seq=f.root/'states.json';seq.write_text(json.dumps(['Shutdown','Shutdown','Shutdown']))
+        binary=f.root/'bin';binary.mkdir();log=f.root/'fake-apple-calls.log';seq=f.root/'states.json';seq.write_text(json.dumps(['Shutdown']*(4 if ios_first else 3)))
         app=f.root/'synthetic-app';app.mkdir();data=f.root/'synthetic-data';data.mkdir()
         (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'100mango.QRCatcher','UIFileSharingEnabled':True,'LSSupportsOpeningDocumentsInPlace':True}))
         for name in ['git','sw_vers','xcodebuild','uname','sips','xcrun','plutil']:(binary/name).write_text(STUB);(binary/name).chmod(0o755)
         env={**os.environ,'PATH':str(binary)+os.pathsep+os.environ['PATH'],'APPLE_CALL_LOG':str(log),'STATE_SEQUENCE':str(seq),
              'SYNTHETIC_APP':str(app),'SYNTHETIC_DATA':str(data),'RUNTIME':base.RUNTIME,'TYPE':base.TYPE,'CREATED_DEVICE':base.DEVICE,'FILES_CASE_FAILURE':'65' if files_failure else '0'}
+        if ios_first:env['SYNTHETIC_IOS_PRODUCTS']=str(package.xctestrun.parent)
         if not __debug__:env['PYTHONOPTIMIZE']='1'
         else:env.pop('PYTHONOPTIMIZE',None)
         sizes=[];outputs=[];operations=[]
@@ -104,13 +121,14 @@ def full_lifecycle(long_ids=False,files_failure=False):
         if f.setup()['real_files_case_exit']!=(65 if files_failure else 0):raise AssertionError('Files outcome lost before actual Photos attempt')
         if (data/'Documents/QRCatcher-Test-Imports/SyntheticQR.png').read_bytes()!=(f.root/'Tests/Fixtures/unicode.png').read_bytes():raise AssertionError('Original fixture changed')
         handoffs=list(completed_row['phases']['mini']['state_handoffs'].values())
-        if [item['boot_attempts'] for item in handoffs]!=[1,1]:raise AssertionError('Two once-only Shutdown recoveries missing')
-        if [item['observations'][0]['state'] for item in handoffs]!=['Shutdown','Shutdown'] or [len(item['observations']) for item in handoffs]!=[1,1]:raise AssertionError('Two fresh Shutdown prechecks required without readbacks')
+        recovery_count=3 if ios_first else 2
+        if [item['boot_attempts'] for item in handoffs]!=[1]*recovery_count:raise AssertionError('Once-only Shutdown recoveries missing')
+        if [item['observations'][0]['state'] for item in handoffs]!=['Shutdown']*recovery_count or [len(item['observations']) for item in handoffs]!=[1]*recovery_count:raise AssertionError('Fresh Shutdown prechecks required without readbacks')
         if any(item['state']!='bootstatus_completion_observation_only' or item['readiness_basis']!='exact_owned_uuid_bootstatus_completion' for item in handoffs):raise AssertionError('Exact observed bootstatus readiness missing')
         calls=[json.loads(line) for line in log.read_text().splitlines()]
-        if sum(name=='xcrun' and args==['simctl','list','devices','available','-j'] for name,args in calls)!=3:raise AssertionError('Repeated state readback')
+        if sum(name=='xcrun' and args==['simctl','list','devices','available','-j'] for name,args in calls)!=recovery_count+1:raise AssertionError('Repeated state readback')
         for action in ['boot','bootstatus']:
-            if sum(name=='xcrun' and args[:2]==['simctl',action] for name,args in calls)!=2:raise AssertionError('Two once-only owned '+action+' commands missing')
+            if sum(name=='xcrun' and args[:2]==['simctl',action] for name,args in calls)!=recovery_count:raise AssertionError('Once-only owned '+action+' commands missing')
         run(controller+['phase','export']);exported=(f.root/'build/ios-platform-evidence/ipad-mini-job-state.json').read_bytes()
         mini.read_regular(f.root/'build/ios-platform-evidence/ipad-mini-job-state.json',32768)
         run(controller+['phase','validate']);validation=json.loads((f.root/'build/platform-evidence-budget.json').read_text())
@@ -127,11 +145,13 @@ def full_lifecycle(long_ids=False,files_failure=False):
         if max(item['bytes'] for item in sizes)>32768 or len(last)<=16384 or len(exported)<=16384:raise AssertionError('Expected complete large ledger not retained')
         if validation['scope_limit_bytes']!=2_000_000 or validation['combined_limit_bytes']!=20_000_000:raise AssertionError('Evidence caps changed')
         return {'classification':'actual complete checked-script lifecycle with explicit Apple/Git/bundle/case doubles; no native or platform action',
-                'long_identifiers':long_ids,'files_case_exit':65 if files_failure else 0,'photos_case_exit':f.setup()['real_photo_case_exit'],'row_ledger_bytes':row_bytes,'exported_ledger_bytes':len(exported),'final_ledger_bytes':len(last),'maximum_measured_bytes':max(item['bytes'] for item in sizes),
+                'ios_first_profile':ios_first,'long_identifiers':long_ids,'files_case_exit':65 if files_failure else 0,'photos_case_exit':f.setup()['real_photo_case_exit'],'row_ledger_bytes':row_bytes,'exported_ledger_bytes':len(exported),'final_ledger_bytes':len(last),'maximum_measured_bytes':max(item['bytes'] for item in sizes),
                 'ledger_limit':32768,'headroom_bytes':32768-len(last),'sizes':sizes,'outputs':outputs,'ledger':state,'ledger_raw':last,'exported_raw':exported,
                 'validated_evidence_bytes':validation['current']['bytes'],'scope_limit_bytes':validation['scope_limit_bytes'],
                 'retained_operation_records':sum(len(item['operations']) for item in state['phases'].values()),'full_job_accepted':False,'native_execution':False,'actual_upload_executed':False,'platform_post_observed':False}
-    finally:owner.tearDown()
+    finally:
+        if ios_first and 'package' in locals():package.doCleanups()
+        owner.tearDown()
 
 
 class MiniLedgerTests(unittest.TestCase):
@@ -189,5 +209,45 @@ class MiniLedgerTests(unittest.TestCase):
         result=full_lifecycle(True);self.assertGreater(result['final_ledger_bytes'],16384);self.assertLess(result['final_ledger_bytes'],32768)
         self.assertFalse(result['actual_upload_executed']);self.assertFalse(result['platform_post_observed'])
         print('COMPLETE_LEDGER_LIFECYCLE '+json.dumps({k:v for k,v in result.items() if k not in ['ledger','ledger_raw','exported_raw','outputs','sizes']}),flush=True)
+    def test_actual_diagnostic_lifecycle_owns_profile_under_poisoned_outer_ios_ci(self):
+        poison={'GITHUB_REF':ios_route.REF,'GITHUB_WORKFLOW_REF':ios_route.WORKFLOW_REF,
+                'GITHUB_JOB':'preflight','EVIDENCE_SCOPE':'','IOS_FIRST_RELEASE_CANDIDATE_ONLY':'true',
+                'SYNTHETIC_IOS_PRODUCTS':'/outer/foreign-ios-products',ios_route.INITIAL_HASH_KEY:'c'*64}
+        with patch.dict(os.environ,poison):
+            result=full_lifecycle()
+            self.assertEqual({key:os.environ.get(key) for key in poison},poison)
+        state=result['ledger'];row=state['phases']['mini']
+        self.assertFalse(result['ios_first_profile'])
+        self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+3000)
+        self.assertEqual(row['deadline'],row['started']+1920)
+        self.assertEqual(state['phases']['build']['deadline'],state['phases']['build']['started']+480)
+        self.assertEqual([op['cap'] for op in state['phases']['build']['operations']],[435,20])
+        self.assertEqual([item['caps'] for item in row['state_handoffs'].values()],
+                         [{'precheck':30,'boot':30,'bootstatus':90}]*2)
+        self.assertNotIn('row_admissions',row);self.assertEqual(result['retained_operation_records'],23)
+        self.assertEqual(result['files_case_exit'],0);self.assertEqual(result['photos_case_exit'],0)
+        self.assertFalse(result['full_job_accepted']);self.assertLess(result['maximum_measured_bytes'],32768)
+        print('POISONED_OUTER_IOS_DIAGNOSTIC_LIFECYCLE '+json.dumps({k:v for k,v in result.items() if k not in ['ledger','ledger_raw','exported_raw','outputs','sizes']}),flush=True)
+    def test_actual_ios_first_three_shutdown_lifecycle_preserves_schedule_and_caps(self):
+        result=full_lifecycle(ios_first=True);state=result['ledger'];row=state['phases']['mini']
+        self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+3000)
+        self.assertEqual(row['deadline'],row['started']+2220)
+        self.assertEqual(state['phases']['build']['deadline'],state['phases']['build']['started']+180)
+        self.assertEqual([op['cap'] for op in state['phases']['build']['operations']],[135,20])
+        self.assertEqual([item['caps'] for item in row['state_handoffs'].values()],
+                         [{'precheck':30,'boot':30,'bootstatus':210},{'precheck':30,'boot':30,'bootstatus':90},{'precheck':30,'boot':30,'bootstatus':90}])
+        self.assertEqual(sum(op['cap'] for op in row['operations'])+60,2090)
+        self.assertEqual(len(row['operations'])+2,21)
+        self.assertEqual([row['row_admissions'][stage]['required_seconds'] for stage in ('configure','first_bootstrap','layout')],[2152,2026,1750])
+        self.assertEqual(row['row_admissions']['layout']['completed_first_bootstrap_debit_seconds'],276)
+        self.assertEqual(row['row_admissions']['layout']['skipped_first_boot_pair_seconds'],0)
+        self.assertLess(result['maximum_measured_bytes'],32768)
+        print('IOS_FIRST_COMPLETE_LEDGER_LIFECYCLE '+json.dumps({k:v for k,v in result.items() if k not in ['ledger','ledger_raw','exported_raw','outputs','sizes']}),flush=True)
+    def test_actual_ios_first_failed_files_long_identifier_lifecycle_continues_photos(self):
+        result=full_lifecycle(long_ids=True,files_failure=True,ios_first=True)
+        self.assertEqual(result['files_case_exit'],65);self.assertEqual(result['photos_case_exit'],0)
+        self.assertEqual(result['ledger']['phases']['mini']['status'],'completed_failed')
+        self.assertLess(result['maximum_measured_bytes'],32768)
+        print('IOS_FIRST_COMPLETE_LEDGER_LIFECYCLE '+json.dumps({k:v for k,v in result.items() if k not in ['ledger','ledger_raw','exported_raw','outputs','sizes']}),flush=True)
 
 if __name__=='__main__':unittest.main()

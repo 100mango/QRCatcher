@@ -17,6 +17,8 @@ import ipad_mini_setup as mini
 
 HANDOFFS=('before_files_fixture','before_photos_seed')
 CAPS={'precheck':30,'boot':30,'bootstatus':90}
+FIRST_HANDOFF='before_first_layout'
+FIRST_CAPS={'precheck':30,'boot':30,'bootstatus':210}
 READINESS={'booted_snapshot_only':'fresh_unique_owned_booted_inventory',
            'bootstatus_completion_observation_only':'exact_owned_uuid_bootstatus_completion'}
 
@@ -45,6 +47,10 @@ def read_state(controller,expected,cap,record):
     command=['xcrun','simctl','list','devices','available','-j']
     code,raw=controller.command(command,cap)
     mini.require(code==0,'Owned device state inventory failed')
+    if record['handoff']==FIRST_HANDOFF:
+        operation=completed_owned_command(controller,command,cap,3)
+        mini.require(operation.get('timeout_seconds')==cap and operation.get('output_bytes')==len(raw.encode()),
+                     'Incomplete or wrong-cap first owned precheck output')
     value=mini.strict_json(raw)
     mini.require(isinstance(value,dict) and isinstance(value.get('devices'),dict) and len(value['devices'])<=128,
                  'Invalid state inventory')
@@ -116,15 +122,99 @@ def completed_bootstatus(raw,expected):
     return {**proof,'completion_kind':'terminal_finished','terminal_status':4294967295,'isTerminal':True,'terminal_message':'Finished'}
 
 
+def qualified_configuration(controller,expected,receipt):
+    """The first precheck has no prior test; bind the original clean configure."""
+    retained=mini.strict_json(mini.read_regular(controller.budget.root/'build/ipad-mini-owned-device.json',4096))
+    mini.require(retained==receipt and receipt.get('absent_from_initial_inventory') is True and
+                 type(receipt.get('initial_device_count')) is int and 0<=receipt['initial_device_count']<=4096 and
+                 not controller.record.get('results') and not controller.record.get('state_handoffs'),
+                 'Original first-bootstrap configuration receipt required')
+    admission=controller.record.get('row_admissions',{}).get('configure',{})
+    admitted=admission.get('admitted_monotonic')
+    mini.require(admission.get('required_seconds')==2152 and admission.get('cleanup_reserve_seconds')==mini.CLEANUP and
+                 admission.get('row_started_monotonic')==controller.record['started'] and
+                 admission.get('row_deadline_monotonic')==controller.deadline and
+                 admission.get('completed_configure_debit_seconds')==0 and admission.get('first_bootstrap_removed_seconds')==0 and
+                 type(admitted) in (int,float) and math.isfinite(admitted) and
+                 controller.record['started']<=admitted<=controller.deadline-2152,
+                 'Original complete configure admission receipt required')
+    commands=[(['xcrun','simctl','list','-j'],30,'initial_inventory_sha256'),
+              (['xcrun','simctl','create',expected['name'],expected['device_type'],expected['runtime']],60,None),
+              (['xcrun','simctl','list','devices','available','-j'],30,'readback_sha256')]
+    operations=controller.record['operations']
+    mini.require(len(operations)==3,'Only original configure operations may precede first bootstrap')
+    for operation,(command,cap,hash_key) in zip(operations,commands):
+        elapsed=operation.get('elapsed_seconds');digest=operation.get('output_sha256')
+        mini.require(operation.get('command')==command and operation.get('cap')==cap and
+                     operation.get('timeout_seconds')==cap and
+                     operation.get('state')=='completed' and operation.get('cleanup_confirmed') is True and
+                     type(operation.get('exit')) is int and operation['exit']==0 and
+                     type(elapsed) in (int,float) and math.isfinite(elapsed) and 0<=elapsed<cap+2 and
+                     type(operation.get('output_bytes')) is int and operation['output_bytes']>0 and
+                     isinstance(digest,str) and re.fullmatch('[0-9a-f]{64}',digest) is not None and
+                     (hash_key is None or receipt.get(hash_key)==digest),
+                     'First bootstrap requires exact clean timely configure operations')
+    mini.require(operations[1].get('created_device')==expected['device'],'First bootstrap must use the exact configured UUID')
+
+
+def qualified_first_bootstrap(controller,device,receipt):
+    expected=ownership(controller,device,receipt)
+    record=controller.record.get('state_handoffs',{}).get(FIRST_HANDOFF,{})
+    mini.require(record.get('state') in READINESS and record.get('readiness_basis')==READINESS[record['state']] and
+                 record.get('caps')==FIRST_CAPS and record.get('device')==device and
+                 record.get('row_started_monotonic')==controller.record['started'] and
+                 record.get('row_deadline_monotonic')==controller.deadline and
+                 len(record.get('observations',[]))==1,'Original qualified first-bootstrap receipt required')
+    observation=record['observations'][0]
+    mini.require(all(observation.get(key)==value for key,value in expected.items()) and observation.get('isAvailable') is True,
+                 'First-bootstrap observation belongs to another device')
+    precheck=['xcrun','simctl','list','devices','available','-j']
+    operation=completed_owned_command(controller,precheck,30,3)
+    mini.require(operation.get('timeout_seconds')==30 and operation.get('output_sha256')==observation.get('inventory_sha256'),
+                 'First-bootstrap precheck receipt is not the current output')
+    if record['state']=='bootstatus_completion_observation_only':
+        mini.require(observation.get('state')=='Shutdown' and len(controller.record['operations'])==6 and
+                     record.get('boot_attempts')==1 and record.get('bootstatus_attempts')==1,
+                     'Original once-only first-bootstrap chain required')
+        boot=completed_owned_command(controller,['xcrun','simctl','boot',device],30,3)
+        operation=completed_owned_command(controller,['xcrun','simctl','bootstatus',device,'-b'],210,3)
+        proof=record.get('bootstatus_completion',{})
+        mini.require(boot.get('timeout_seconds')==30 and operation.get('timeout_seconds')==210 and
+                     isinstance(operation.get('output_sha256'),str) and re.fullmatch('[0-9a-f]{64}',operation['output_sha256']) is not None and
+                     all(proof.get(key)==value for key,value in expected.items()) and
+                     proof.get('stdout_sha256')==operation.get('output_sha256') and
+                     proof.get('stdout_bytes')==operation.get('output_bytes') and
+                     proof.get('state')=='completed' and type(proof.get('exit')) is int and proof['exit']==0 and
+                     proof.get('cleanup_confirmed') is True and proof.get('elapsed_seconds')==operation.get('elapsed_seconds') and
+                     ((proof.get('completion_kind')=='terminal_finished' and proof.get('terminal_status')==4294967295 and
+                       proof.get('isTerminal') is True and proof.get('terminal_message')=='Finished') or
+                      (proof.get('completion_kind')=='already_booted_no_work' and
+                       proof.get('completion_message')=='Device already booted, nothing to do.' and
+                       not any(key in proof for key in ('terminal_status','isTerminal','terminal_message')))),
+                     'First-bootstrap exact completion proof changed before layout')
+    else:
+        mini.require(observation.get('state')=='Booted' and len(controller.record['operations'])==4 and
+                     record.get('boot_attempts')==0 and record.get('bootstatus_attempts')==0,
+                     'Original first Booted snapshot required')
+    mini.require(mini.strict_json(mini.read_regular(controller.budget.root/'build/ipad-mini-owned-device.json',4096))==receipt,
+                 'Original configure receipt changed before layout')
+
+
 def ensure_owned_booted(controller,device,receipt,handoff):
     """One precheck; Shutdown permits one bounded exact-owned boot/status pair."""
-    mini.require(handoff in HANDOFFS,'Only the two original full-row handoffs are permitted')
+    first=handoff==FIRST_HANDOFF
+    mini.require(handoff in HANDOFFS or (first and mini.ios_first_profile()),
+                 'Only admitted original full-row handoffs are permitted')
     expected=ownership(controller,device,receipt)
     lease=mini._ROW_LEASE
-    qualified_prior(controller,device,handoff)
-    layout=controller.record.get('results',{}).get('MiniUIResults-layout.xcresult',{})
-    mini.require(layout=={'totalTestCount':2,'passedTests':2,'failedTests':0,'skippedTests':0,'expectedFailures':0},
-                 'The two original layout cases must qualify before either handoff')
+    if first:
+        qualified_configuration(controller,expected,receipt)
+        mini.admit_full_ios_first_row(controller.budget,controller.deadline,'first_bootstrap')
+    else:
+        qualified_prior(controller,device,handoff)
+        layout=controller.record.get('results',{}).get('MiniUIResults-layout.xcresult',{})
+        mini.require(layout=={'totalTestCount':2,'passedTests':2,'failedTests':0,'skippedTests':0,'expectedFailures':0},
+                     'The two original layout cases must qualify before either handoff')
     if handoff=='before_photos_seed':
         files=controller.record.get('results',{}).get('MiniUIResults-files.xcresult',{})
         mini.require(files.get('totalTestCount')==1 and files.get('skippedTests')==0 and files.get('expectedFailures')==0 and
@@ -135,28 +225,36 @@ def ensure_owned_booted(controller,device,receipt,handoff):
                      'The original fixture handoff must complete first')
     records=controller.record.setdefault('state_handoffs',{})
     mini.require(handoff not in records,'This handoff cannot retry or reset its clock')
+    caps=FIRST_CAPS if first else CAPS
     record={'handoff':handoff,'device':device,'state':'pending','boot_attempts':0,'bootstatus_attempts':0,
-            'caps':dict(CAPS),'started_monotonic':controller.budget.clock(),'row_deadline_monotonic':controller.deadline,
+            'caps':dict(caps),'started_monotonic':controller.budget.clock(),'row_deadline_monotonic':controller.deadline,
             'observations':[],'service_completion_claimed':False,'daemon_cleanup_claimed':False}
+    if first:
+        record['row_started_monotonic']=controller.record['started']
+        record['automation_session_stability_claimed']=False
+        record['full_row_reservation_seconds']=mini.IOS_FIRST_RESERVATIONS['first_bootstrap']
     records[handoff]=record;controller.budget.persist()
     operation_start=len(controller.record['operations'])
     try:
-        state=read_state(controller,expected,CAPS['precheck'],record)
+        if first:controller.budget.next('mini',mini.IOS_FIRST_RESERVATIONS['first_bootstrap']-mini.CLEANUP,controller.deadline)
+        state=read_state(controller,expected,caps['precheck'],record)
         if state=='Shutdown':
             # Refuse before the first mutation if the entire once-only recovery
             # pair, its two existing two-second cleanup bounds and the
             # original twenty-second admission reserve cannot still fit.
-            controller.budget.next('mini',CAPS['boot']+CAPS['bootstatus']+4,controller.deadline)
+            controller.budget.next('mini',caps['boot']+caps['bootstatus']+4,controller.deadline)
             record['boot_attempts']=1;controller.budget.persist()
             boot=['xcrun','simctl','boot',device]
-            code,_=controller.command(boot,CAPS['boot'])
+            code,_=controller.command(boot,caps['boot'])
             mini.require(type(code) is int and code==0,'The one permitted owned boot did not complete successfully')
-            completed_owned_command(controller,boot,CAPS['boot'],operation_start)
+            operation=completed_owned_command(controller,boot,caps['boot'],operation_start)
+            if first:mini.require(operation.get('timeout_seconds')==caps['boot'],'Wrong original first boot cap')
             record['bootstatus_attempts']=1;controller.budget.persist()
             status=['xcrun','simctl','bootstatus',device,'-b']
-            code,raw=controller.command(status,CAPS['bootstatus'])
+            code,raw=controller.command(status,caps['bootstatus'])
             mini.require(type(code) is int and code==0,'The one permitted bootstatus did not return successfully')
-            operation=completed_owned_command(controller,status,CAPS['bootstatus'],operation_start)
+            operation=completed_owned_command(controller,status,caps['bootstatus'],operation_start)
+            if first:mini.require(operation.get('timeout_seconds')==caps['bootstatus'],'Wrong original first bootstatus cap')
             proof=completed_bootstatus(raw,expected)
             mini.require(type(operation.get('output_bytes')) is int and operation['output_bytes']==proof['stdout_bytes'],
                          'Bootstatus output is incomplete or its size is unknown')
@@ -167,9 +265,12 @@ def ensure_owned_booted(controller,device,receipt,handoff):
         else:record['state']='booted_snapshot_only'
         record['readiness_basis']=READINESS[record['state']]
         record['completed_monotonic']=controller.budget.clock();controller.budget.persist()
-        if state=='Shutdown':
+        if state=='Shutdown' or first:
             mini.require(mini._ROW_LEASE is lease and ownership(controller,device,receipt)==expected,
                          'Original owned Mini lease changed during bootstatus')
+        if first:
+            mini.require(mini.strict_json(mini.read_regular(controller.budget.root/'build/ipad-mini-owned-device.json',4096))==receipt,
+                         'Original configure receipt changed during first bootstrap')
         return record
     except BaseException as error:
         record['state']='failed_or_refused';record['stop_reason']=str(error)[:200];controller.budget.persist();raise

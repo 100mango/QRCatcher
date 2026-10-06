@@ -12,6 +12,8 @@ import subprocess
 import shutil
 import sys
 import tempfile
+import textwrap
+import time
 import unittest
 from unittest.mock import patch
 
@@ -78,7 +80,8 @@ class OriginalIOSRouteTests(unittest.TestCase):
    name=route.step_name(step)
    if name in route.SELECTED_STEPS and name not in special:
     expected=step.replace('-project QRCatcher.xcodeproj','-project '+route.PROJECT)
-    expected=expected.replace('      timeout-minutes: 27\n','      timeout-minutes: 32\n')
+    expected=expected.replace('      timeout-minutes: 27\n','      timeout-minutes: 37\n')
+    if name=='Compile Mini tests inside original job budget':expected=expected.replace('      timeout-minutes: 8\n','      timeout-minutes: 3\n')
     self.assertIn(expected,new,name)
   for forbidden in ('Run watchOS','Run native tvOS','Run native Vision','Sandbox UI gate'):
    self.assertNotIn(forbidden,self.workflow)
@@ -116,7 +119,24 @@ class OriginalIOSRouteTests(unittest.TestCase):
    self.assertEqual(mini.result_summary_limit('MiniUIResults.xcresult'),10)
    self.assertIn(route.PROJECT,mini.test_command(base.DEVICE,mini.LAYOUT,'MiniUIResults-layout.xcresult'))
   self.assertEqual(sum(mini.DIAGNOSTIC_CAPS.values()),3000);self.assertEqual(mini.DIAGNOSTIC_CAPS['mini'],1920)
-  self.assertIn("'checkout_post':60",self.workflow);self.assertIn("'mini':1920",self.workflow)
+  self.assertIn("'checkout_post':60",self.workflow);self.assertIn("'mini':2220",self.workflow);self.assertIn("'build':180",self.workflow)
+  self.assertEqual(mini.IOS_FIRST_CAPS['mini'],2220);self.assertEqual(sum(mini.IOS_FIRST_CAPS.values()),3000)
+ def test_actual_workflow_clock_producer_and_consumer_share_exact_schedule(self):
+  with self.fixture() as root:
+   runner=root/'runner';runner.mkdir()
+   _,platform=route.job_parts(self.workflow);_,steps,_=route.split_platform(platform)
+   clock_step=next(s for s in steps if route.step_name(s)=='Capture original Mini job clock before checkout')
+   source=textwrap.dedent(clock_step.split("<<'PY_ORIGIN'\n",1)[1].split('        PY_ORIGIN\n',1)[0])
+   with patch.dict(os.environ,{'RUNNER_TEMP':str(runner)}):
+    exec(compile(source,route.WORKFLOW+' clock producer','exec'),{})
+    generated=dict(line.split('=',1) for line in (root/'env').read_text().splitlines())
+    os.environ.update(generated)
+    budget=mini.Budget(time.monotonic)
+    self.assertEqual(budget.caps,mini.IOS_FIRST_CAPS)
+    self.assertEqual(budget.job_seconds,3000)
+    self.assertEqual(budget.deadline,budget.start+3000)
+    self.assertEqual(json.loads(budget.origin_raw)['caps']['build'],180)
+    self.assertEqual(json.loads(budget.origin_raw)['caps']['mini'],2220)
  def test_canonical_and_previous_mini_project_clocks_stay_explicit(self):
   with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms'}):
    self.assertEqual(mini.mini_project(),'QRCatcher.xcodeproj');self.assertEqual(mini.job_ledger_limit(),16384)
@@ -197,7 +217,7 @@ class OriginalIOSRouteTests(unittest.TestCase):
      for path,text in ((route.CANONICAL,self.canonical),(route.WORKFLOW,self.workflow)):
       target=f.root/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(text)
      os.environ.update(self.env)
-     value=json.loads(f.origin.read_text());value['caps']=mini.DIAGNOSTIC_CAPS;f.origin.write_text(json.dumps(value))
+     value=json.loads(f.origin.read_text());value['caps']=mini.IOS_FIRST_CAPS;f.origin.write_text(json.dumps(value))
      f.budget.path.unlink();f.budget=mini.Budget(f.clock)
      for phase in ('prepare','build'):
       f.budget.enter(phase);f.budget.state['phases'][phase]['status']='completed';f.budget.persist()
@@ -270,14 +290,14 @@ class OriginalIOSRouteTests(unittest.TestCase):
   try:
    env,log=owner.prepare_fixture();f=owner.f
    env.update(self.env,GITHUB_WORKSPACE=str(f.root),GITHUB_ENV=str(f.root/'env'))
-   value=json.loads(f.origin.read_text());value['caps']=mini.DIAGNOSTIC_CAPS;f.origin.write_text(json.dumps(value))
+   value=json.loads(f.origin.read_text());value['caps']=mini.IOS_FIRST_CAPS;f.origin.write_text(json.dumps(value))
    command=[sys.executable]+(['-O'] if not __debug__ else [])+['scripts/ipad_mini_setup.py','phase','prepare']
    result=subprocess.run(command,cwd=f.root,env=env,capture_output=True,text=True,timeout=100,start_new_session=True)
    self.assertEqual(result.returncode,0,result.stdout+result.stderr)
    self.assertFalse((f.root/'build/ipad-mini-host-inflight.json').exists())
    state=json.loads((f.root/'build/ipad-mini-job-state.json').read_text())
    self.assertEqual(state['phases']['prepare']['status'],'completed')
-   self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.DIAGNOSTIC_CAPS.values()))
+   self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.IOS_FIRST_CAPS.values()))
    record=json.loads((f.root/route.RECEIPT).read_text());self.assertEqual(record['project'],route.PROJECT)
    leases=[json.loads(line) for line in Path(str(log)+'.lease.jsonl').read_text().splitlines()]
    self.assertEqual(len({r['sha256'] for r in leases}),1)
@@ -294,13 +314,13 @@ class OriginalIOSRouteTests(unittest.TestCase):
    start=3071.9999999999995
    with patch.dict(os.environ,{'RUNNER_TEMP':str(runner),'QRCATCHER_MINI_JOB_ORIGIN':str(origin)}):
     _,identity=mini.context()
-    origin.write_text(json.dumps({'version':1,**identity,'caps':mini.DIAGNOSTIC_CAPS,'started_monotonic':start}))
+    origin.write_text(json.dumps({'version':1,**identity,'caps':mini.IOS_FIRST_CAPS,'started_monotonic':start}))
     with patch.object(mini,'execute',side_effect=AssertionError('clock validation must not execute a command')):
      budget=mini.Budget(clock=lambda:start+1)
      state=budget.state
      self.assertEqual(state['deadline_monotonic']-state['started_monotonic'],3000.0000000000005)
      self.assertNotEqual(state['deadline_monotonic']-state['started_monotonic'],3000)
-     self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.DIAGNOSTIC_CAPS.values()))
+     self.assertEqual(state['deadline_monotonic'],state['started_monotonic']+sum(mini.IOS_FIRST_CAPS.values()))
      budget.persist()
      readback=mini.Budget(clock=lambda:start+1)
      self.assertEqual(readback.state,state)

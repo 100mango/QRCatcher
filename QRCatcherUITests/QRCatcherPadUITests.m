@@ -35,6 +35,8 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, strong) NSMutableDictionary *shareReadinessTrace;
 @property (nonatomic) BOOL shareTraceRetained;
+@property (nonatomic) BOOL shareSystemObservationAttempted;
+@property (nonatomic) BOOL shareSystemObservationLate;
 #if DEBUG
 @property (nonatomic, copy) NSString *startupObservationSlot;
 @property (nonatomic, copy) NSString *startupObservationRequestID;
@@ -46,6 +48,7 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
 - (void)setUp {
     [super setUp]; self.continueAfterFailure = NO;
     self.shareReadinessTrace = nil; self.shareTraceRetained = NO;
+    self.shareSystemObservationAttempted = NO; self.shareSystemObservationLate = NO;
 #if DEBUG
     self.startupObservationSlot = nil; self.startupObservationRequestID = nil;
     self.startupObservationReadAttempted = NO; self.startupObservationLogBytes = 0;
@@ -54,6 +57,13 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
     self.app = [XCUIApplication new];
 }
 - (void)tearDown {
+    if (self.shareSystemObservationLate) {
+        // A returned late system observation cannot justify another AX read or
+        // a test-authored device action. The already-failed case stays failed.
+        [super tearDown];
+        [self removeUIInterruptionMonitor:self.interruptionGuard];
+        return;
+    }
     [self retainShareReadinessTrace];
 #if DEBUG
     if (self.testRun.failureCount > 0) [self observeStartupValueOnce];
@@ -75,6 +85,74 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
     XCTAttachment *attachment = [XCTAttachment attachmentWithData:data uniformTypeIdentifier:@"public.json"];
     attachment.name = @"ipad-share-readiness-trace"; attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:attachment];
+}
+- (void)retainSpringboardShareObservation {
+    if (self.shareSystemObservationAttempted) return;
+    self.shareSystemObservationAttempted = YES;
+    NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;
+    NSMutableDictionary *record = [@{@"version": @1, @"scope": @"springboard_unique_ActivityListView",
+        @"status": @"UNKNOWN", @"observations_qualify_pass": [NSNumber numberWithBool:NO],
+        @"activity_count": NSNull.null, @"activity_frame": NSNull.null,
+        @"payload_count": NSNull.null, @"payload_frame": NSNull.null,
+        @"copy_count": NSNull.null, @"copy_enabled": NSNull.null,
+        @"copy_hittable": NSNull.null, @"copy_frame": NSNull.null} mutableCopy];
+    // Each public AX getter may block until the unchanged case/outer timeout.
+    // A late return stops this observation and all later test-authored reads.
+    BOOL (^timely)(void) = ^BOOL {
+        NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;
+        BOOL valid = isfinite(elapsed) && elapsed >= 0 && elapsed < 10;
+        if (!valid) self.shareSystemObservationLate = YES;
+        return valid;
+    };
+    id (^frameValue)(CGRect) = ^id(CGRect frame) {
+        return QRPadFiniteNonemptyRect(frame) ? (id)@[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)] : (id)NSNull.null;
+    };
+    NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION_ENTER unqualified");
+    do {
+        XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
+        XCUIElementQuery *activities = [system.otherElements matchingIdentifier:@"ActivityListView"];
+        if (!timely()) break;
+        NSUInteger activityCount = activities.count;
+        record[@"activity_count"] = @(activityCount);
+        if (!timely() || activityCount != 1) break;
+        XCUIElement *activity = activities.firstMatch;
+        CGRect activityFrame = activity.frame;
+        record[@"activity_frame"] = frameValue(activityFrame);
+        if (!timely() || !QRPadFiniteNonemptyRect(activityFrame)) break;
+        XCUIElementQuery *payloads = [activity.otherElements matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Native iPad QR result 你好"]];
+        NSUInteger payloadCount = payloads.count;
+        record[@"payload_count"] = @(payloadCount);
+        if (!timely()) break;
+        if (payloadCount == 1) {
+            record[@"payload_frame"] = frameValue(payloads.firstMatch.frame);
+            if (!timely()) break;
+        }
+        XCUIElementQuery *copies = [[activity.cells matchingIdentifier:@"actionGroupCell"]
+            containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",
+                (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];
+        NSUInteger copyCount = copies.count;
+        record[@"copy_count"] = @(copyCount);
+        if (!timely()) break;
+        if (copyCount == 1) {
+            XCUIElement *copy = copies.firstMatch;
+            record[@"copy_enabled"] = [NSNumber numberWithBool:copy.enabled];
+            if (!timely()) break;
+            record[@"copy_hittable"] = [NSNumber numberWithBool:copy.hittable];
+            if (!timely()) break;
+            record[@"copy_frame"] = frameValue(copy.frame);
+            if (!timely()) break;
+        }
+        record[@"status"] = @"scoped_observation_only";
+    } while (NO);
+    record[@"late_return"] = [NSNumber numberWithBool:self.shareSystemObservationLate];
+    NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;
+    record[@"elapsed"] = isfinite(elapsed) && elapsed >= 0 ? (id)@(elapsed) : (id)NSNull.null;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+    if (data && data.length <= 3072) {
+        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+    } else {
+        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:UNKNOWN bounded serialization unavailable");
+    }
 }
 #if DEBUG
 // These records use only the existing native layout log. Public AX value may
@@ -250,6 +328,7 @@ static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
     observeReadiness = NO;
     NSLog(@"IPAD_NATIVE_SHARE_READINESS outcome=%ld elapsed=%.3f", (long)readiness, readinessElapsed);
     [self retainShareReadinessTrace];
+    if (readiness != XCTWaiterResultCompleted) [self retainSpringboardShareObservation];
     XCTAssertEqual(readiness, XCTWaiterResultCompleted, @"Expected native share popover, matching payload caption and hittable Copy cell");
     if (readiness != XCTWaiterResultCompleted) return;
     BOOL currentReady = [shareReady evaluateWithObject:nil];

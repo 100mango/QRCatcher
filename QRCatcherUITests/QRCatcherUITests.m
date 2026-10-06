@@ -1,6 +1,16 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
 #import "QRUIInterruptionSafety.h"
+static NSString *QRObservedApplicationStateName(XCUIApplicationState state) {
+    switch (state) {
+        case XCUIApplicationStateNotRunning: return @"not_running";
+        case XCUIApplicationStateRunningBackground: return @"background";
+        case XCUIApplicationStateRunningBackgroundSuspended: return @"suspended";
+        case XCUIApplicationStateRunningForeground: return @"foreground";
+        case XCUIApplicationStateUnknown: return @"unknown";
+    }
+    return @"unknown";
+}
 @interface QRCatcherUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
@@ -64,12 +74,22 @@
     XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"The approved text must begin visibly in the real scroll pane.");
     XCUIElement *external = self.app.buttons[@"privacy.externalPolicy"];
     XCTAssertEqualObjects(external.label, Chinese ? @"在浏览器打开" : @"Open in Browser");
+    XCUIElement *website = self.app.staticTexts[@"privacy.websiteNotice"];
+    XCTAssertEqualObjects(website.label, Chinese ? @"GitHub Pages 会为安全目的记录访客 IP 地址。" : @"GitHub Pages records visitor IP addresses for security.");
+    CGRect actionViewport = CGRectIntersection(self.app.frame, actions.frame);
+    CGRect noticeBeginning = CGRectMake(CGRectGetMinX(website.frame), CGRectGetMinY(website.frame),
+        CGRectGetWidth(website.frame), MIN(20, CGRectGetHeight(website.frame)));
+    XCTAssertGreaterThan(CGRectGetHeight(website.frame), 0);
+    XCTAssertTrue(CGRectContainsRect(actionViewport, noticeBeginning), @"The website notice must begin visibly in its own action pane.");
     for (NSUInteger attempt = 0; attempt < 2; attempt++) {
         if (external.hittable && CGRectContainsRect(actions.frame, external.frame)) break;
         [actions swipeUp];
     }
     XCTAssertTrue(external.hittable);
     XCTAssertTrue(CGRectContainsRect(actions.frame, external.frame));
+    CGRect noticeEnding = CGRectMake(CGRectGetMinX(website.frame), CGRectGetMaxY(website.frame) - MIN(20, CGRectGetHeight(website.frame)),
+        CGRectGetWidth(website.frame), MIN(20, CGRectGetHeight(website.frame)));
+    XCTAssertTrue(CGRectContainsRect(actionViewport, noticeEnding), @"The complete notice ending must remain reachable beside the browser action.");
     XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"Action scrolling must preserve the visible local text.");
     XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.close"].hittable);
     NSError *error = nil;
@@ -184,15 +204,38 @@
     [self assertOfflinePrivacyForChinese:NO];
     NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);
     [self logSyntheticScreenshot:@"privacy-open-diagnostic"];
-    [self.app.buttons[@"privacy.externalPolicy"] tap];
+    // Establish the public observer before the asynchronous external handoff.
+    // No browser launch/activation may manufacture the expected transition.
     XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];
+    NSMutableArray<NSDictionary *> *statePairs = [NSMutableArray array];
+    __block BOOL samplesOmitted = NO;
+    [self.app.buttons[@"privacy.externalPolicy"] tap];
     NSPredicate *browserForeground = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
         (void)object; (void)bindings;
-        return browser.state == XCUIApplicationStateRunningForeground &&
-            (self.app.state == XCUIApplicationStateRunningBackground || self.app.state == XCUIApplicationStateRunningBackgroundSuspended);
+        XCUIApplicationState browserState = browser.state;
+        XCUIApplicationState appState = self.app.state;
+        if (statePairs.count < 12) {
+            [statePairs addObject:@{@"browser_raw": @(browserState), @"qr_raw": @(appState),
+                @"browser_kind": QRObservedApplicationStateName(browserState),
+                @"qr_kind": QRObservedApplicationStateName(appState)}];
+        } else {
+            samplesOmitted = YES;
+        }
+        return browserState == XCUIApplicationStateRunningForeground &&
+            (appState == XCUIApplicationStateRunningBackground || appState == XCUIApplicationStateRunningBackgroundSuspended);
     }];
     XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];
-    XCTAssertEqual([XCTWaiter waitForExpectations:@[openedOutside] timeout:10], XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");
+    XCTWaiterResult handoff = [XCTWaiter waitForExpectations:@[openedOutside] timeout:10];
+    NSDictionary *stateTrace = @{@"version": @1, @"samples": statePairs,
+        @"samples_omitted": [NSNumber numberWithBool:samplesOmitted],
+        @"observations_qualify_pass": [NSNumber numberWithBool:NO]};
+    NSData *stateTraceData = [NSJSONSerialization dataWithJSONObject:stateTrace options:0 error:nil];
+    if (stateTraceData && stateTraceData.length <= 2048) {
+        NSLog(@"PRIVACY_BROWSER_STATE_PAIRS:%@", [[NSString alloc] initWithData:stateTraceData encoding:NSUTF8StringEncoding]);
+    } else {
+        NSLog(@"PRIVACY_BROWSER_STATE_PAIRS:UNKNOWN bounded serialization unavailable");
+    }
+    XCTAssertEqual(handoff, XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");
     [self.app activate];
     XCTAssertTrue([done waitForExistenceWithTimeout:10]);
     [self assertOfflinePrivacyForChinese:NO];

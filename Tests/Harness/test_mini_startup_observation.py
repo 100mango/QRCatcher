@@ -1,5 +1,6 @@
 """Portable startup observation contracts, never Apple compilation/runtime proof."""
 from pathlib import Path
+import ast
 import ctypes
 import hashlib
 import itertools
@@ -21,6 +22,44 @@ PHASES = ['main_entry', 'store_enter', 'store_return', 'watch_enter', 'watch_ret
           'delegate_return', 'fixture_encode_enter', 'fixture_encode_return',
           'fixture_decode_enter', 'fixture_decode_return', 'fixture_handle_save_enter',
           'fixture_handle_save_return', 'main_queue_turn']
+
+# Whole old module hashes changed only for the separately admitted iOS-first
+# scheduler/bootstrap component. Keep explicit old/new identities and byte
+# fingerprints of every listed, actually unchanged legacy source node.
+IOS_FIRST_COMPONENTS = {
+    'scripts/ipad_mini_setup.py': (
+        'c0f1636b7553b666d5bfeac094c865494ed6285eb7bd033eedff43ac3a4f63c8',
+        '252c41f8cf1f7efe86543d531a170ed018a37aa3ecd03e611b6d803dd8557ea2',
+        'b4c9388017322463050e1d58a0b9eba1ddea26d87a12d9a6b12b06fecf0bc67c',
+        'CAPS DIAGNOSTIC_CAPS ORDER ROW_SECONDS CLEANUP PENDING STOP _ACTIVE _ROW_LEASE LAYOUT FILES PHOTOS '
+        'require strict_json signature read_regular valid_uuid context ios_first_profile extended_mini_profile '
+        'mini_project job_ledger_limit Budget.current Budget.persist Budget.enter Budget.next Claim '
+        'active_claim_exists active_claim_is_current Controller.__init__ inventory test_command result_summary_limit '
+        'qualify_result _FIXTURE fixture_query row host_execute host_commands summaries action_gate main'),
+    'scripts/ipad_mini_state_handoff.py': (
+        '2295b9b5909b8954948bc02e2d9bff6ae75ccf4d4ed44adae1f8ea9922edf390',
+        'c20124a4191f9f109d53194736e2a5fff00cd29c29abcb7d8ed179737255dd4b',
+        '14a5e7c88ac87fc8c4458e34aaff8d5896c7d0bce2bca8bf96946f342aba578e',
+        'HANDOFFS CAPS READINESS ownership qualified_prior completed_owned_command completed_bootstatus')}
+
+
+def unchanged_source_nodes_digest(text, selectors):
+    nodes = {}
+    for node in ast.parse(text).body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            nodes[node.name] = node
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name): nodes[target.id] = node
+        if isinstance(node, ast.ClassDef):
+            for method in node.body:
+                if isinstance(method, ast.FunctionDef): nodes[node.name + '.' + method.name] = method
+    names = selectors.split()
+    if any(name not in nodes for name in names): raise ValueError('Missing original Mini source guard')
+    # Hash exact source segments, avoiding host-version differences in AST
+    # field serialization while retaining actual source bytes and whitespace.
+    values = {name: ast.get_source_segment(text, nodes[name]) for name in names}
+    return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
 def preprocess(text, debug):
@@ -339,9 +378,60 @@ __weak id releaseValue; __block BOOL releaseFlag;
             'QRCatcher/PrivacyInfo.xcprivacy': 'a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58'}
         for path, expected in frozen.items():
             with self.subTest(path=path):
-                self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), expected)
+                data = (ROOT / path).read_bytes()
+                if path in IOS_FIRST_COMPONENTS:
+                    old, reviewed, unchanged, selectors = IOS_FIRST_COMPONENTS[path]
+                    self.assertEqual(expected, old)
+                    self.assertEqual(hashlib.sha256(data).hexdigest(), reviewed)
+                    self.assertEqual(unchanged_source_nodes_digest(data.decode(), selectors), unchanged)
+                else:
+                    self.assertEqual(hashlib.sha256(data).hexdigest(), expected)
         self.assertIn('self.continueAfterFailure = NO;', self.pad)
         self.assertIn('performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil', self.pad)
+
+    def test_original_canonical_and_dedicated_profiles_keep_clocks_cases_and_fences(self):
+        import test_ipad_mini_setup as base
+        import test_ipad_mini_ledger as ledger
+        import ipad_mini_setup as mini
+        import ipad_mini_state_handoff as handoff
+        from unittest.mock import patch
+        for diagnostic in (False, True):
+            with self.subTest(diagnostic=diagnostic):
+                f = base.Fixture()
+                try:
+                    if diagnostic:
+                        ledger.diagnostic(f)
+                        for phase in ('prepare', 'build'):
+                            f.budget.enter(phase); f.budget.state['phases'][phase]['status'] = 'completed'; f.budget.persist()
+                    self.assertEqual(f.budget.caps['build'], 480)
+                    self.assertEqual(f.budget.caps['mini'], 1920 if diagnostic else 1620)
+                    self.assertEqual(f.budget.deadline, f.budget.start + (3000 if diagnostic else 2700))
+                    # Run the actual old-profile host envelope with an explicit
+                    # host-command double, verifying its compiler allowance.
+                    f.budget.state['phases'].pop('build')
+                    host_calls = []
+                    def host(command, cap):
+                        host_calls.append((command, cap)); return 0, 'Explicit host envelope double; no compilation'
+                    with patch.object(mini, 'Budget', return_value=f.budget), patch.object(mini, 'host_execute', side_effect=host):
+                        mini.phase('build')
+                    self.assertEqual([cap for command, cap in host_calls], [435, 20])
+                    self.assertIn('QRCatcher.xcodeproj', host_calls[0][0])
+                    receipt = f.configure()
+                    f.readback_edit = lambda value: value['devices'][base.RUNTIME][0].update(state='Booted')
+                    self.assertEqual(f.row(), 0)
+                    cases = [(command, cap) for command, cap in f.calls if command[0] == 'xcodebuild']
+                    self.assertEqual([cap for command, cap in cases], [480, 240, 360])
+                    self.assertTrue(all('QRCatcher.xcodeproj' in command for command, cap in cases))
+                    self.assertEqual([cap for command, cap in f.calls if command[:3] == ['xcrun', 'xcresulttool', 'get']],
+                                     [30 if diagnostic else 10, 10, 10])
+                    self.assertEqual(f.setup()['unexecuted'], [])
+                    row = f.budget.state['phases']['mini']
+                    self.assertNotIn('row_admissions', row)
+                    self.assertNotIn(handoff.FIRST_HANDOFF, row.get('state_handoffs', {}))
+                    self.assertEqual(receipt['pretest_boot_completion'], 'not_requested')
+                    self.assertFalse(any(command[2] in ('boot', 'bootstatus') for command, cap in f.calls if command[:2] == ['xcrun', 'simctl']))
+                    with self.assertRaises(ValueError): handoff.ensure_owned_booted(None, base.DEVICE, {}, handoff.FIRST_HANDOFF)
+                finally: f.close()
 
     def test_assertion_wait_decoder_and_release_guard_mutations_fail_preservation(self):
         historical_pad = restore_pad_for_historical_observer(self.pad)

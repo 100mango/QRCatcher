@@ -20,6 +20,7 @@ PAD_END = '    [self.app.navigationBars.buttons[@"privacy.close"] tap];'
 
 
 def restore_pad_for_historical_observer(text):
+    text = restore_pad_share_observation(text)
     if PAD_START not in text:
         return text
     if text.count(PAD_START) != 1:
@@ -71,6 +72,106 @@ def default_contract(source):
         raise ValueError('Fixed policy URL must have a unique action-owned use')
 
 
+def browser_observation_contract(source):
+    case = test_methods(source)['testDeniedCameraAndEmptyHistory']
+    observer = 'XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];'
+    action = '[self.app.buttons[@"privacy.externalPolicy"] tap];'
+    if case.count(observer) != 1 or case.count(action) != 1 or case.index(observer) >= case.index(action):
+        raise ValueError('Browser observer must precede the unique explicit action')
+    if re.search(r'\[browser\s+(?:launch|activate|terminate|open)\b', case):
+        raise ValueError('Browser activity cannot manufacture the handoff')
+    start = case.index('NSPredicate *browserForeground =')
+    end = case.index('    }];', start)
+    predicate = case[start:end]
+    if predicate.count('browser.state') != 1 or predicate.count('self.app.state') != 1:
+        raise ValueError('Each poll must use one observed state per application')
+    required = ('XCUIApplicationState browserState = browser.state;',
+                'XCUIApplicationState appState = self.app.state;',
+                'if (statePairs.count < 12)', 'samplesOmitted = YES;',
+                'return browserState == XCUIApplicationStateRunningForeground &&\n'
+                '            (appState == XCUIApplicationStateRunningBackground || appState == XCUIApplicationStateRunningBackgroundSuspended);')
+    if any(token not in predicate for token in required):
+        raise ValueError('Changed strict handoff or finite observation contract')
+    if any(token in predicate for token in ('debugDescription', '.exists', '.hittable', 'waitForExistence', 'screenshot', 'activate', 'launch')):
+        raise ValueError('State polling cannot add an accessibility or launch operation')
+    for token in ('XCTWaiterResult handoff = [XCTWaiter waitForExpectations:@[openedOutside] timeout:10];',
+                  'XCTAssertEqual(handoff, XCTWaiterResultCompleted,',
+                  'stateTraceData.length <= 2048',
+                  '@"samples_omitted": [NSNumber numberWithBool:samplesOmitted]',
+                  '@"observations_qualify_pass": [NSNumber numberWithBool:NO]',
+                  'PRIVACY_BROWSER_STATE_PAIRS:UNKNOWN bounded serialization unavailable'):
+        if token not in case:
+            raise ValueError('Missing unchanged deadline or bounded diagnostic rejection')
+    if case.index('PRIVACY_BROWSER_STATE_PAIRS:%@') >= case.index('XCTAssertEqual(handoff,'):
+        raise ValueError('Failed assertion must not discard the diagnostic states')
+    tail = case[case.index('    [self.app activate];'):]
+    if hashlib.sha256(tail.encode()).hexdigest() != '9c787ede9aa255b2536f03c0097c7c56d9e7d01e47d7ea7278790736d0c76752':
+        raise ValueError('Changed privacy return, close or scanner restoration')
+
+
+
+PHONE_READINESS_HELPER_SHA256 = '221404eea0d81b079c89c486fdbc3241ea38f5c05c593fe71d068ebb3abe9116'
+PHONE_READINESS_METHOD_REPLACEMENTS = [{'selector': 'assertOfflinePrivacyForChinese:', 'new_sha256': '34c1011eedb5350d313dcbf599840f2559b70275e962f09d0032c6ecb951db43', 'old': '- (void)assertOfflinePrivacyForChinese:(BOOL)Chinese {\n    XCUIElementQuery *bodies = [self.app.staticTexts matchingIdentifier:@"privacy.body"];\n    XCUIElement *body = bodies.firstMatch;\n    XCTAssertTrue([body waitForExistenceWithTimeout:5]);\n    XCTAssertEqual(bodies.count, 1);\n    NSString *approved = Chinese ? @"Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片、相机画面、二维码或颜色数据，开发者不收集或上传这些数据。用户主动分享、打开链接，以及系统 iCloud 同步等行为由相应服务处理。如有隐私问题，请联系 100mango@gmail.com。本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。" : @"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings.";\n    XCTAssertEqualObjects(body.label, approved);\n    XCTAssertEqual(self.app.webViews.count, 0, @"The default local policy must not create a web document.");\n    XCTAssertEqual(self.app.state, XCUIApplicationStateRunningForeground);\n    XCUIElement *content = self.app.scrollViews[@"privacy.content"];\n    XCUIElement *actions = self.app.scrollViews[@"privacy.actionScroll"];\n    CGRect viewport = CGRectIntersection(self.app.frame, content.frame);\n    XCTAssertFalse(CGRectIsEmpty(viewport));\n    XCTAssertGreaterThan(CGRectGetHeight(body.frame), 0);\n    XCTAssertGreaterThan(CGRectGetWidth(body.frame), 0);\n    XCTAssertGreaterThanOrEqual(CGRectGetMinX(body.frame), CGRectGetMinX(viewport));\n    XCTAssertLessThanOrEqual(CGRectGetMaxX(body.frame), CGRectGetMaxX(viewport));\n    CGRect beginning = CGRectMake(CGRectGetMinX(body.frame), CGRectGetMinY(body.frame), CGRectGetWidth(body.frame), MIN(20, CGRectGetHeight(body.frame)));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"The approved text must begin visibly in the real scroll pane.");\n    XCUIElement *external = self.app.buttons[@"privacy.externalPolicy"];\n    XCTAssertEqualObjects(external.label, Chinese ? @"在浏览器打开" : @"Open in Browser");\n    for (NSUInteger attempt = 0; attempt < 2; attempt++) {\n        if (external.hittable && CGRectContainsRect(actions.frame, external.frame)) break;\n        [actions swipeUp];\n    }\n    XCTAssertTrue(external.hittable);\n    XCTAssertTrue(CGRectContainsRect(actions.frame, external.frame));\n    XCTAssertTrue(CGRectContainsRect(viewport, beginning), @"Action scrolling must preserve the visible local text.");\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.close"].hittable);\n    NSError *error = nil;\n    XCTAssertTrue([self.app performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil error:&error], @"Offline privacy accessibility audit: %@", error);\n}\n'}, {'selector': 'testDeniedCameraAndEmptyHistory', 'new_sha256': 'bf118a97b74edcf8ea4326aab33a9d94192f69752d926ff8640c59819e4fb947', 'old': '- (void)testDeniedCameraAndEmptyHistory {\n    [self launch:@[@"-reset-history", @"-camera-denied"]];\n    XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);\n    XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);\n    XCUIElement *privacy = self.app.navigationBars.buttons[@"privacy.policy"];\n    XCTAssertTrue(privacy.hittable);\n    XCTAssertEqualObjects(privacy.label, @"Privacy Policy");\n    [privacy tap];\n    XCUIElement *done = self.app.navigationBars.buttons[@"privacy.close"];\n    XCTAssertTrue([done waitForExistenceWithTimeout:15]);\n    [self assertOfflinePrivacyForChinese:NO];\n    NSLog(@"PRIVACY_OPEN_UI:%@", self.app.debugDescription);\n    [self logSyntheticScreenshot:@"privacy-open-diagnostic"];\n    [self.app.buttons[@"privacy.externalPolicy"] tap];\n    XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];\n    NSPredicate *browserForeground = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {\n        (void)object; (void)bindings;\n        return browser.state == XCUIApplicationStateRunningForeground &&\n            (self.app.state == XCUIApplicationStateRunningBackground || self.app.state == XCUIApplicationStateRunningBackgroundSuspended);\n    }];\n    XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];\n    XCTAssertEqual([XCTWaiter waitForExpectations:@[openedOutside] timeout:10], XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");\n    [self.app activate];\n    XCTAssertTrue([done waitForExistenceWithTimeout:10]);\n    [self assertOfflinePrivacyForChinese:NO];\n    [done tap];\n    BOOL returnedToScanner = [self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:5];\n    if (!returnedToScanner) {\n        NSLog(@"PRIVACY_RETURN_UI:%@", self.app.debugDescription);\n        [self logSyntheticScreenshot:@"privacy-return-diagnostic"];\n    }\n    XCTAssertTrue(returnedToScanner);\n    [self.app.tabBars.buttons[@"history.tab"] tap];\n    XCTAssertTrue([self.app.staticTexts[@"history.empty"] waitForExistenceWithTimeout:5]);\n    XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);\n    [self.app.tabBars.buttons[@"scan.tab"] tap];\n    XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);\n}\n'}]
+PAD_SHARE_OBSERVATION_BLOCKS = [{'name': 'properties', 'new': '@property (nonatomic) BOOL shareSystemObservationAttempted;\n@property (nonatomic) BOOL shareSystemObservationLate;\n', 'sha256': '7420ecc4688453962145d6867bddecb0409ea32ce2f8f97145edfc9bd02a19ec'}, {'name': 'setup', 'new': '    self.shareSystemObservationAttempted = NO; self.shareSystemObservationLate = NO;\n', 'sha256': '13510ef96ac74b8e5e44724ebb91ce9ee6657fe278dc93d3ee541e99a3549dee'}, {'name': 'late_guard', 'new': '    if (self.shareSystemObservationLate) {\n        // A returned late system observation cannot justify another AX read or\n        // a test-authored device action. The already-failed case stays failed.\n        [super tearDown];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '9ae65d32e23cc39dccfa5d11b25cb570374836ae95826ff4fa19eb28fcb3cfeb'}, {'name': 'helper', 'new': '- (void)retainSpringboardShareObservation {\n    if (self.shareSystemObservationAttempted) return;\n    self.shareSystemObservationAttempted = YES;\n    NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;\n    NSMutableDictionary *record = [@{@"version": @1, @"scope": @"springboard_unique_ActivityListView",\n        @"status": @"UNKNOWN", @"observations_qualify_pass": [NSNumber numberWithBool:NO],\n        @"activity_count": NSNull.null, @"activity_frame": NSNull.null,\n        @"payload_count": NSNull.null, @"payload_frame": NSNull.null,\n        @"copy_count": NSNull.null, @"copy_enabled": NSNull.null,\n        @"copy_hittable": NSNull.null, @"copy_frame": NSNull.null} mutableCopy];\n    // Each public AX getter may block until the unchanged case/outer timeout.\n    // A late return stops this observation and all later test-authored reads.\n    BOOL (^timely)(void) = ^BOOL {\n        NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n        BOOL valid = isfinite(elapsed) && elapsed >= 0 && elapsed < 10;\n        if (!valid) self.shareSystemObservationLate = YES;\n        return valid;\n    };\n    id (^frameValue)(CGRect) = ^id(CGRect frame) {\n        return QRPadFiniteNonemptyRect(frame) ? (id)@[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)] : (id)NSNull.null;\n    };\n    NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION_ENTER unqualified");\n    do {\n        XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];\n        XCUIElementQuery *activities = [system.otherElements matchingIdentifier:@"ActivityListView"];\n        if (!timely()) break;\n        NSUInteger activityCount = activities.count;\n        record[@"activity_count"] = @(activityCount);\n        if (!timely() || activityCount != 1) break;\n        XCUIElement *activity = activities.firstMatch;\n        CGRect activityFrame = activity.frame;\n        record[@"activity_frame"] = frameValue(activityFrame);\n        if (!timely() || !QRPadFiniteNonemptyRect(activityFrame)) break;\n        XCUIElementQuery *payloads = [activity.otherElements matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Native iPad QR result 你好"]];\n        NSUInteger payloadCount = payloads.count;\n        record[@"payload_count"] = @(payloadCount);\n        if (!timely()) break;\n        if (payloadCount == 1) {\n            record[@"payload_frame"] = frameValue(payloads.firstMatch.frame);\n            if (!timely()) break;\n        }\n        XCUIElementQuery *copies = [[activity.cells matchingIdentifier:@"actionGroupCell"]\n            containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",\n                (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];\n        NSUInteger copyCount = copies.count;\n        record[@"copy_count"] = @(copyCount);\n        if (!timely()) break;\n        if (copyCount == 1) {\n            XCUIElement *copy = copies.firstMatch;\n            record[@"copy_enabled"] = [NSNumber numberWithBool:copy.enabled];\n            if (!timely()) break;\n            record[@"copy_hittable"] = [NSNumber numberWithBool:copy.hittable];\n            if (!timely()) break;\n            record[@"copy_frame"] = frameValue(copy.frame);\n            if (!timely()) break;\n        }\n        record[@"status"] = @"scoped_observation_only";\n    } while (NO);\n    record[@"late_return"] = [NSNumber numberWithBool:self.shareSystemObservationLate];\n    NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n    record[@"elapsed"] = isfinite(elapsed) && elapsed >= 0 ? (id)@(elapsed) : (id)NSNull.null;\n    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];\n    if (data && data.length <= 3072) {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);\n    } else {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:UNKNOWN bounded serialization unavailable");\n    }\n}\n', 'sha256': 'a196957ba8d739a589c797743ed30b7bbe86219a65848766b2f38816008e52c4'}, {'name': 'call', 'new': '    if (readiness != XCTWaiterResultCompleted) [self retainSpringboardShareObservation];\n', 'sha256': 'af583824c9f3e3dfecbd5b8017632c852306b6d9f634b7384e8a19030aa52de1'}]
+
+def restore_phone_for_historical_observer(text):
+    """Remove only the exact admitted observer/notice clauses, retaining old proof."""
+    start = 'static NSString *QRObservedApplicationStateName('
+    if start not in text:
+        if 'PRIVACY_BROWSER_STATE_PAIRS:' in text or 'noticeBeginning' in text:
+            raise ValueError('Incomplete phone readiness observation')
+        return text
+    if text.count(start) != 1:
+        raise ValueError('Ambiguous phone readiness helper')
+    begin = text.index(start)
+    end = text.index('@interface', begin)
+    helper = text[begin:end]
+    if hashlib.sha256(helper.encode()).hexdigest() != PHONE_READINESS_HELPER_SHA256:
+        raise ValueError('Changed admitted symbolic state helper')
+    text = text[:begin] + text[end:]
+    for entry in PHONE_READINESS_METHOD_REPLACEMENTS:
+        current = method(text, entry['selector'])
+        if hashlib.sha256(current.encode()).hexdigest() != entry['new_sha256']:
+            raise ValueError('Changed admitted phone readiness or notice method')
+        text = text.replace(current, entry['old'], 1)
+    return text
+
+
+def restore_pad_share_observation(text):
+    """Historical inputs never erase an unpinned new diagnostic or other behavior."""
+    if 'shareSystemObservationAttempted' not in text:
+        if 'retainSpringboardShareObservation' in text:
+            raise ValueError('Incomplete iPad share observation')
+        return text
+    for entry in PAD_SHARE_OBSERVATION_BLOCKS:
+        block = entry['new']
+        if text.count(block) != 1 or hashlib.sha256(block.encode()).hexdigest() != entry['sha256']:
+            raise ValueError('Changed admitted iPad share diagnostic block')
+        text = text.replace(block, '', 1)
+    return text
+
+
+
+UNIT_PRIVACY_HELPER_SHA256 = 'aab8f855b5e57c06db80c0b979f1839e68e6c1759c260f70abf8219e35f1c4e5'
+UNIT_PRIVACY_CALLS = '    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryLarge];\n    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge];\n'
+
+def restore_unit_for_historical_observer(text):
+    """Keep the old unit inventory proof while binding this exact added exercise."""
+    marker = '- (void)assertPrivacyWebsiteNoticeAtCompactWidthForCategory:'
+    if marker not in text:
+        if 'assertPrivacyWebsiteNoticeAtCompactWidthForCategory:' in text:
+            raise ValueError('Incomplete privacy geometry exercise')
+        return text
+    if text.count(marker) != 1 or text.count(UNIT_PRIVACY_CALLS) != 1 or text.count('#import <math.h>\n') != 1:
+        raise ValueError('Ambiguous new privacy geometry exercise')
+    begin = text.index(marker)
+    end = text.index('- (void)testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent {', begin)
+    helper = text[begin:end]
+    if hashlib.sha256(helper.encode()).hexdigest() != UNIT_PRIVACY_HELPER_SHA256:
+        raise ValueError('Changed admitted compact privacy geometry helper')
+    return (text[:begin]+text[end:]).replace(UNIT_PRIVACY_CALLS, '', 1).replace('#import <math.h>\n', '', 1)
+
+
 class OfflinePrivacyTests(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT/'QRCatcher/QRPrivacyViewController.m').read_text()
@@ -116,7 +217,10 @@ class OfflinePrivacyTests(unittest.TestCase):
 
     def test_same_native_case_inventory_and_unrelated_method_bodies_remain_exact(self):
         for path, reference in NATIVE_REFERENCE.items():
-            actual = test_methods((ROOT/path).read_text())
+            text = (ROOT/path).read_text()
+            if path.endswith('QRCatcherPadUITests.m'):
+                text = restore_pad_share_observation(text)
+            actual = test_methods(text)
             expected = set(reference['all_case_names'])
             if path.endswith('QRCatcherTests.m'):
                 expected.remove('testPrivacyHTTPFailuresAndWebProcessTerminationOfferRetry')
@@ -151,6 +255,134 @@ class OfflinePrivacyTests(unittest.TestCase):
         self.assertIn('issueHandler:nil', self.phone)
         self.assertIn('issueHandler:nil', self.pad)
         self.assertEqual(self.pad.count(PAD_START), 1)
+
+    def test_browser_proxy_precedes_action_without_launch_or_weakening_handoff(self):
+        browser_observation_contract(self.phone)
+        observer = '    XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];\n'
+        action = '    [self.app.buttons[@"privacy.externalPolicy"] tap];\n'
+        after_tap = self.phone.replace(observer, '', 1).replace(action, action+observer, 1)
+        for changed in (after_tap, self.phone.replace(action, '    [browser activate];\n'+action, 1),
+                        self.phone.replace(action, '    [browser launch];\n'+action, 1)):
+            with self.subTest(mutation=changed != after_tap), self.assertRaises(ValueError):
+                browser_observation_contract(changed)
+
+    def test_browser_states_are_single_snapshots_and_diagnostics_cannot_qualify(self):
+        browser_observation_contract(self.phone)
+        changes = [('self.app.state;', 'self.app.state; (void)self.app.state;'),
+                   ('waitForExpectations:@[openedOutside] timeout:10];', 'waitForExpectations:@[openedOutside] timeout:11];'),
+                   ('statePairs.count < 12', 'statePairs.count < 13'),
+                   ('stateTraceData.length <= 2048', 'stateTraceData.length <= 2049'),
+                   ('[NSNumber numberWithBool:NO]', '[NSNumber numberWithBool:YES]'),
+                   ('appState == XCUIApplicationStateRunningBackgroundSuspended', 'YES'),
+                   ('[done tap];', '/* removed close */')]
+        for before, after in changes:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                browser_observation_contract(self.phone.replace(before, after, 1))
+
+    def test_closed_symbolic_state_labels_and_twelve_pairs_fit_diagnostic_bytes(self):
+        start = self.phone.index('static NSString *QRObservedApplicationStateName(')
+        end = self.phone.index('@interface', start)
+        helper = self.phone[start:end]
+        labels = {'NotRunning': 'not_running', 'RunningBackground': 'background',
+                  'RunningBackgroundSuspended': 'suspended', 'RunningForeground': 'foreground',
+                  'Unknown': 'unknown'}
+        for symbol, label in labels.items():
+            self.assertIn('case XCUIApplicationState'+symbol+': return @"'+label+'";', helper)
+        self.assertNotRegex(helper, r'case\s+[0-9]')
+        # No raw-value ordering is assumed. Even a maximum-width public enum
+        # observation fits; strings/keys are fixed, never app or website text.
+        samples = [{'browser_raw': 18446744073709551615, 'qr_raw': 18446744073709551615,
+                    'browser_kind': 'not_running', 'qr_kind': 'not_running'}] * 12
+        encoded = json.dumps({'version': 1, 'samples': samples, 'samples_omitted': True,
+                              'observations_qualify_pass': False}, separators=(',', ':')).encode()
+        self.assertLessEqual(len(encoded), 2048)
+
+    def test_website_notice_keeps_real_height_and_existing_native_case_exercises_both_categories(self):
+        loaded = method(self.source, 'viewDidLoad')
+        required = '[website setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];'
+        self.assertEqual(loaded.count(required), 1)
+        self.assertIn('[actionScroll.heightAnchor constraintLessThanOrEqualToAnchor:safe.heightAnchor multiplier:0.45]', loaded)
+        helper = method(self.unit, 'assertPrivacyWebsiteNoticeAtCompactWidthForCategory:')
+        for token in ('CGRectMake(0, 0, 375, 593)', 'notice.bounds.size.width, 327',
+                      'notice.bounds.size.height, completeNotice.height',
+                      'constraint.multiplier, 0.45', 'heightLimits, 1',
+                      'CGRectContainsRect(actions.bounds, originalTarget)',
+                      'actions.contentSize.height, actions.bounds.size.height',
+                      'privacy.openedURLs.count, 0'):
+            self.assertIn(token, helper)
+        case = test_methods(self.unit)['testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent']
+        for category in ('UIContentSizeCategoryLarge', 'UIContentSizeCategoryAccessibilityExtraExtraExtraLarge'):
+            self.assertIn('[self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:'+category+'];', case)
+        ui = method(self.phone, 'assertOfflinePrivacyForChinese:')
+        for token in ('privacy.websiteNotice', 'website.label',
+                      'CGRectContainsRect(actionViewport, noticeBeginning)',
+                      'CGRectContainsRect(actionViewport, noticeEnding)',
+                      'performAccessibilityAuditWithAuditTypes:XCUIAccessibilityAuditTypeAll issueHandler:nil'):
+            self.assertIn(token, ui)
+        self.assertNotIn('preferredMaxLayoutWidth', loaded)
+        self.assertNotIn('adjustsFontSizeToFitWidth = YES', loaded)
+
+    def test_historical_phone_normalization_requires_every_exact_owned_clause(self):
+        restored = restore_phone_for_historical_observer(self.phone)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(), 'e29e743721b4a539550cd1d563b0ec1834a368b1f2056cbc9a4c307202202648')
+        for before, after in [('statePairs.count < 12', 'statePairs.count < 13'),
+                              ('noticeEnding)', 'CGRectZero)'),
+                              ('waitForExpectations:@[openedOutside] timeout:10', 'waitForExpectations:@[openedOutside] timeout:11'),
+                              ('case XCUIApplicationStateUnknown: return @"unknown";', 'case XCUIApplicationStateUnknown: return @"foreground";')]:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                restore_phone_for_historical_observer(self.phone.replace(before, after, 1))
+        outside = self.phone.replace('XCTAssertFalse(self.app.staticTexts[@"scan.result"].exists);',
+                                    'XCTAssertTrue(self.app.staticTexts[@"scan.result"].exists);', 1)
+        self.assertNotEqual(hashlib.sha256(restore_phone_for_historical_observer(outside).encode()).hexdigest(), 'e29e743721b4a539550cd1d563b0ec1834a368b1f2056cbc9a4c307202202648')
+
+    def test_historical_unit_normalizer_keeps_the_original_inventory_and_unrelated_assertions(self):
+        restored = restore_unit_for_historical_observer(self.unit)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(), '9c48f6dac92deff8383127febef1e302f4b9315ea184c2b6adcdf80ab3f63612')
+        for before, after in [('notice.bounds.size.height, completeNotice.height', 'notice.bounds.size.height + 100, completeNotice.height'),
+                              ('constraint.multiplier, 0.45', 'constraint.multiplier, 0.95'),
+                              ('CGRectContainsRect(actions.bounds, originalTarget)', 'YES'),
+                              ('ForCategory:UIContentSizeCategoryLarge];', 'ForCategory:UIContentSizeCategorySmall];')]:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                restore_unit_for_historical_observer(self.unit.replace(before, after, 1))
+        outside = self.unit.replace('XCTAssertNil([QRCodeCodec imageForPayload:@""]);', 'XCTAssertNotNil([QRCodeCodec imageForPayload:@""]);', 1)
+        self.assertNotEqual(hashlib.sha256(restore_unit_for_historical_observer(outside).encode()).hexdigest(), '9c48f6dac92deff8383127febef1e302f4b9315ea184c2b6adcdf80ab3f63612')
+
+    def test_share_system_observation_is_once_scoped_bounded_and_never_supplies_readiness(self):
+        helper = method(self.pad, 'retainSpringboardShareObservation')
+        for token in ('if (self.shareSystemObservationAttempted) return;', 'self.shareSystemObservationAttempted = YES;',
+                      'initWithBundleIdentifier:@"com.apple.springboard"', 'system.otherElements matchingIdentifier:@"ActivityListView"',
+                      'activityCount != 1', 'label == %@", @"Native iPad QR result 你好"',
+                      'activity.cells matchingIdentifier:@"actionGroupCell"', 'XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"',
+                      'elapsed < 10', 'data.length <= 3072',
+                      '@"observations_qualify_pass": [NSNumber numberWithBool:NO]'):
+            self.assertIn(token, helper)
+        for getter in ('activities.count', 'activity.frame', 'payloads.count', 'payloads.firstMatch.frame',
+                       'copies.count', 'copy.enabled', 'copy.hittable', 'copy.frame'):
+            self.assertEqual(helper.count(getter), 1, getter)
+        for token in ('debugDescription', '[system launch]', '[system activate]', '[system terminate]', ' tap]', 'swipe', 'sleep', 'com.apple.UIKit'):
+            self.assertNotIn(token, helper)
+        case = test_methods(self.pad)['testSplitSelectionRotationAndAnchoredShare']
+        diagnostic = 'if (readiness != XCTWaiterResultCompleted) [self retainSpringboardShareObservation];'
+        self.assertEqual(case.count(diagnostic), 1)
+        self.assertLess(case.index('XCTWaiterResult readiness ='), case.index(diagnostic))
+        self.assertLess(case.index(diagnostic), case.index('XCTAssertEqual(readiness,'))
+        predicate = case[case.index('NSPredicate *shareReady ='):case.index('// Start at the original point;')]
+        self.assertNotIn('Springboard', predicate)
+        late = method(self.pad, 'tearDown').split('    [self retainShareReadinessTrace];', 1)[0]
+        self.assertIn('if (self.shareSystemObservationLate)', late)
+        self.assertIn('return;', late)
+        for token in ('debugDescription', 'capture:', '[self.app terminate]', 'orientation =', 'observeStartupValueOnce'):
+            self.assertNotIn(token, late)
+
+    def test_historical_pad_normalization_rejects_changed_new_system_observer(self):
+        old = restore_pad_for_historical_observer(self.pad)
+        self.assertEqual(hashlib.sha256(old.encode()).hexdigest(), PAD_BASE_SHA256)
+        for before, after in [('elapsed < 10', 'elapsed < 100'),
+                              ('activityCount != 1', 'activityCount > 1'),
+                              ('data.length <= 3072', 'data.length <= 40960'),
+                              ('self.shareSystemObservationAttempted = YES;', 'self.shareSystemObservationAttempted = NO;')]:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                restore_pad_for_historical_observer(self.pad.replace(before, after, 1))
 
     def test_historical_pad_input_is_exact_and_new_privacy_block_cannot_hide_other_changes(self):
         restored = restore_pad_for_historical_observer(self.pad)

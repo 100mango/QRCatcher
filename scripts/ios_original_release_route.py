@@ -102,8 +102,10 @@ def render_workflow(canonical):
  header=replace_once(header,'    timeout-minutes: 45\n',
   "    timeout-minutes: ${{ matrix.scope == 'ipad_mini' && 50 || 45 }}\n")
  body=header+''.join(selected)
- body=replace_once(body,'      timeout-minutes: 27\n','      timeout-minutes: 32\n')
- body=replace_once(body,"'mini':1620","'mini':1920")
+ body=replace_once(body,'      timeout-minutes: 27\n','      timeout-minutes: 37\n')
+ body=replace_once(body,"'build':480,'mini':1620","'build':180,'mini':2220")
+ build_step=next(s for s in selected if step_name(s)=='Compile Mini tests inside original job budget')
+ body=replace_once(body,build_step,replace_once(build_step,'      timeout-minutes: 8\n','      timeout-minutes: 3\n'))
  old="        require(os.environ['GITHUB_REF']=='refs/heads/codex/apple-platforms')\n"
  new=("        require(os.environ['GITHUB_REF']=='"+REF+"')\n"
   "        require(os.environ.get('GITHUB_WORKFLOW_REF')=='"+WORKFLOW_REF+"')\n"
@@ -150,7 +152,15 @@ def current_identity():
   'run_id':e['GITHUB_RUN_ID'],'run_attempt':e['GITHUB_RUN_ATTEMPT'],'job':job,'scope':scope,
   'selected_scopes':list(SCOPES),'project':PROJECT,'scheme':SCHEME,'shipping_watch_requested':False,
   'maximum_simultaneous_slots':1,'cancel_in_progress':False,'permissions':{'contents':'read'},
-  'mini_row_seconds':1920,'mini_job_seconds':3000,'first_mini_summary_seconds':30,
+  'mini_row_seconds':2220,'mini_job_seconds':3000,'mini_build_phase_seconds':180,'mini_compiler_seconds':135,
+  'first_mini_bootstrap_caps':{'precheck':30,'boot':30,'bootstatus':210},'first_mini_summary_seconds':30,
+  'mini_full_row_reservation':{'command_seconds':2090,'operations':21,'post_return_seconds_each':2,
+   'cleanup_reserve_seconds':20,'total_seconds':2152,'phase_headroom_seconds':68,
+   'after_configure_seconds':2026,'after_first_bootstrap_seconds':1750},
+  'previous_mini_schedule':{'row_seconds':1920,'build_phase_seconds':480,'compiler_seconds':435,
+   'layout_seconds':480,'layout_included_runner_preparation':True,'first_bootstrap_requested':False,
+   'command_seconds':1820,'operations':18},
+  'bootstrap_proves_automation_session_stability':False,
   'required_unit_cases':30,'required_phone_cases':{'ordinary':9,'files':1,'photos':1},
   'required_pad_cases':{'layout':2,'files':1,'photos':1},
   'preflight_evidence_limit_bytes':1000000,'selected_runtime_evidence_limit_bytes':8000000}

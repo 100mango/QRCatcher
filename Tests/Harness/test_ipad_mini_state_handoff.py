@@ -346,4 +346,177 @@ class MiniStateHandoffTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.second()
         self.assertEqual(self.calls,[])
 
+
+
+class IOSFirstBootstrapTests(unittest.TestCase):
+    """Closed source/clock/operation doubles; no native bootstrap proof."""
+    def setUp(self):
+        import ios_original_release_route as route
+        self.f=base.Fixture();self.lease=None;self.state='Shutdown';self.boot_raw=None;self.edit_operation=None
+        for path in (route.CANONICAL,route.WORKFLOW):
+            target=self.f.root/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((base.ROOT/path).read_bytes())
+        os.environ.update(GITHUB_REF=route.REF,GITHUB_WORKFLOW_REF=route.WORKFLOW_REF,GITHUB_JOB='platform',
+                          IOS_FIRST_RELEASE_CANDIDATE_ONLY='true',RUNNER_OS='macOS',RUNNER_ARCH='ARM64')
+        origin=json.loads(self.f.origin.read_text());origin['caps']=mini.IOS_FIRST_CAPS;self.f.origin.write_text(json.dumps(origin))
+        self.f.budget.path.unlink();self.f.budget=mini.Budget(self.f.clock)
+        for phase in ('prepare','build'):
+            self.f.budget.enter(phase);self.f.budget.state['phases'][phase]['status']='completed';self.f.budget.persist()
+        original=self.f.executor
+        def execute(command,cap,**kwargs):
+            if command[:3] in (['xcrun','simctl','boot'],['xcrun','simctl','bootstatus']):
+                self.f.calls.append((command,cap));self.f.clock.now+=.01
+                raw='' if command[2]=='boot' else self.boot_raw or bootstatus_output('QRCatcher Mini 123-1',base.DEVICE)
+                operation={'command':command,'timeout_seconds':cap,'state':'completed','exit':0,'cleanup_confirmed':True,
+                           'elapsed_seconds':.01,'output_bytes':len(raw.encode())}
+                if self.edit_operation:self.edit_operation(operation,command)
+                return 0,raw,operation
+            result=original(command,cap,**kwargs)
+            if self.edit_operation:self.edit_operation(result[2],command)
+            return result
+        self.f.executor=execute
+    def tearDown(self):
+        if self.lease:self.lease.close(False)
+        self.f.close()
+    def configure(self,owned=True):
+        self.receipt=self.f.configure();self.f.readback_edit=lambda value:value['devices'][base.RUNTIME][0].update(state=self.state)
+        phase=self.f.budget.state['phases']['mini']
+        if owned:phase['status']='row_running'
+        self.controller=mini.Controller(self.f.budget,'mini',phase['deadline'],self.f.executor)
+        if owned:
+            self.lease=mini.Claim(self.f.budget,None,'full_row_dispatched_once',mini.STOP);mini._ROW_LEASE=self.lease
+        return self.receipt
+    def bootstrap(self):return handoff.ensure_owned_booted(self.controller,base.DEVICE,self.receipt,handoff.FIRST_HANDOFF)
+    def test_shutdown_first_pair_is210_and_does_not_query_after_boot(self):
+        self.configure();start=self.controller.record['started'];deadline=self.controller.deadline
+        record=self.bootstrap();handoff.qualified_first_bootstrap(self.controller,base.DEVICE,self.receipt)
+        self.assertEqual([cap for command,cap in self.f.calls],[30,60,30,30,30,210])
+        self.assertEqual(record['state'],'bootstatus_completion_observation_only');self.assertFalse(record['automation_session_stability_claimed'])
+        self.assertEqual(self.controller.record['started'],start);self.assertEqual(self.controller.deadline,deadline)
+        self.assertEqual(self.receipt['pretest_boot_completion'],'not_requested');self.assertEqual(self.receipt['pretest_installed_bytes'],'not_observed')
+    def test_booted_first_snapshot_skips_pair_with_honest_residual_basis(self):
+        self.configure();self.state='Booted';record=self.bootstrap()
+        handoff.qualified_first_bootstrap(self.controller,base.DEVICE,self.receipt)
+        mini.admit_full_ios_first_row(self.f.budget,self.controller.deadline,'layout')
+        self.assertEqual(record['state'],'booted_snapshot_only');self.assertEqual(len(self.f.calls),4)
+        admission=self.controller.record['row_admissions']['layout']
+        self.assertEqual(admission['completed_first_bootstrap_debit_seconds'],32)
+        self.assertEqual(admission['skipped_first_boot_pair_seconds'],244)
+    def test_full_reservation_arithmetic_matches_three_fixed_residuals(self):
+        self.assertEqual(mini.IOS_FIRST_ROW_COMMAND_SECONDS,1820+270)
+        self.assertEqual(mini.IOS_FIRST_ROW_OPERATIONS,18+3)
+        self.assertEqual(mini.IOS_FIRST_ROW_RESERVATION,2152)
+        self.assertEqual(mini.IOS_FIRST_RESERVATIONS,{'configure':2152,'first_bootstrap':2026,'layout':1750})
+        self.assertEqual(2152-120-6,2026);self.assertEqual(2026-270-6,1750);self.assertEqual(2220-2152,68)
+    def test_exact_full_configure_window_admitted_before_inventory(self):
+        original=self.f.budget.enter
+        def enter(phase):
+            deadline=original(phase);self.f.clock.now=deadline-2152;return deadline
+        self.f.budget.enter=enter;self.configure()
+        self.assertEqual(len(self.f.calls),3)
+        self.assertEqual(self.controller.record['row_admissions']['configure']['required_seconds'],2152)
+    def test_insufficient_full_configure_window_stops_before_inventory(self):
+        original=self.f.budget.enter
+        def enter(phase):
+            deadline=original(phase);self.f.clock.now=deadline-2152+.01;return deadline
+        self.f.budget.enter=enter
+        with self.assertRaises(ValueError):self.f.configure()
+        self.assertEqual(self.f.calls,[])
+    def test_exact2026_after_clean_configure_admitted(self):
+        self.configure();self.f.clock.now=self.controller.deadline-2026;self.bootstrap()
+        self.assertEqual(len(self.f.calls),6)
+        self.assertEqual(self.controller.record['row_admissions']['first_bootstrap']['completed_configure_debit_seconds'],126)
+    def test_insufficient2026_after_configure_stops_before_precheck(self):
+        self.configure();self.f.clock.now=self.controller.deadline-2026+.01
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),3)
+    def test_exact1750_after_bootstrap_admitted(self):
+        self.configure();self.bootstrap();self.f.clock.now=self.controller.deadline-1750
+        handoff.qualified_first_bootstrap(self.controller,base.DEVICE,self.receipt)
+        mini.admit_full_ios_first_row(self.f.budget,self.controller.deadline,'layout')
+        self.assertEqual(self.controller.record['row_admissions']['layout']['required_seconds'],1750)
+    def test_insufficient1750_after_bootstrap_stops_before_layout(self):
+        self.configure();self.bootstrap();self.f.clock.now=self.controller.deadline-1750+.01
+        with self.assertRaises(ValueError):mini.admit_full_ios_first_row(self.f.budget,self.controller.deadline,'layout')
+        self.assertFalse(any(command[0]=='xcodebuild' for command,cap in self.f.calls))
+    def test_missing_wrong_late_or_unclean_configure_operation_stops_precheck(self):
+        self.configure();original=copy.deepcopy(self.controller.record['operations'])
+        variants=[original[:2]]
+        for index,change in [(0,{'cap':31}),(0,{'timeout_seconds':31}),(1,{'created_device':'11111111-2222-4333-8444-555555555555'}),(0,{'output_sha256':'f'*64}),(1,{'command':['xcrun','simctl','create','foreign']}),
+                             (1,{'exit':True}),(1,{'elapsed_seconds':62}),(2,{'cleanup_confirmed':False}),
+                             (2,{'state':'unknown'}),(2,{'elapsed_seconds':float('nan')})]:
+            rows=copy.deepcopy(original);rows[index].update(change);variants.append(rows)
+        for rows in variants:
+            with self.subTest(rows=rows):
+                self.controller.record['operations']=rows
+                with self.assertRaises(ValueError):self.bootstrap()
+                self.assertEqual(len(self.f.calls),3)
+        self.controller.record['operations']=original
+    def test_missing_original_full_row_admission_refuses_bootstrap(self):
+        self.configure();self.controller.record['row_admissions'].pop('configure')
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),3)
+    def test_changed_original_receipt_or_inventory_identity_stops(self):
+        self.configure();path=self.f.root/'build/ipad-mini-owned-device.json';original=path.read_bytes()
+        path.write_text('{}')
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),3);path.write_bytes(original)
+        self.f.readback_edit=lambda value:value['devices'][base.RUNTIME][0].update(isAvailable=False)
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),4)
+    def test_unknown_first_state_or_completion_stops_all_later_commands(self):
+        self.configure();self.state='Booting'
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),4)
+        self.assertFalse(any(command[0]=='xcodebuild' for command,cap in self.f.calls))
+    def test_first210_reuses_exact_already_booted_parser(self):
+        self.configure();self.boot_raw='Monitoring boot status for QRCatcher Mini 123-1 ('+base.DEVICE+').\nDevice already booted, nothing to do.\n\n'
+        record=self.bootstrap();handoff.qualified_first_bootstrap(self.controller,base.DEVICE,self.receipt)
+        self.assertEqual(record['bootstatus_completion']['completion_kind'],'already_booted_no_work')
+        self.assertNotIn('terminal_status',record['bootstatus_completion'])
+    def test_unknown_first_bootstatus_stops_before_layout(self):
+        self.configure();self.boot_raw='Finished\n'
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),6)
+    def test_late_unclean_or_unknown_first_bootstatus_stops(self):
+        self.configure();self.edit_operation=lambda operation,command:operation.update(elapsed_seconds=212) if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),6)
+    def test_wrong_first_bootstrap_proof_stops_before_layout_command(self):
+        self.configure(owned=False);original=handoff.ensure_owned_booted
+        def changed(*args):
+            result=original(*args)
+            if args[-1]==handoff.FIRST_HANDOFF:result['bootstatus_completion']['stdout_sha256']='f'*64
+            return result
+        from unittest.mock import patch
+        with patch.object(handoff,'ensure_owned_booted',side_effect=changed),self.assertRaises(ValueError):self.f.row()
+        self.assertEqual(len(self.f.calls),6)
+        self.assertFalse(any(command[0]=='xcodebuild' for command,cap in self.f.calls))
+    def test_unclean_first_precheck_stops_all_row_commands(self):
+        self.configure(owned=False)
+        self.edit_operation=lambda operation,command:operation.update(cleanup_confirmed=False) if command==['xcrun','simctl','list','devices','available','-j'] else None
+        with self.assertRaises(ValueError):self.f.row()
+        self.assertEqual(len(self.f.calls),4);self.assertTrue(barrier.blocked())
+    def test_unknown_first_bootstatus_operation_stops_all_row_commands(self):
+        self.configure(owned=False)
+        self.edit_operation=lambda operation,command:operation.update(state='unknown') if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.f.row()
+        self.assertEqual(len(self.f.calls),6);self.assertTrue(barrier.blocked())
+    def test_wrong_first_boot_timeout_stops_before_bootstatus(self):
+        self.configure(owned=False)
+        self.edit_operation=lambda operation,command:operation.update(timeout_seconds=90) if command[2]=='boot' else None
+        with self.assertRaises(ValueError):self.f.row()
+        self.assertEqual(len(self.f.calls),5)
+    def test_actual_late_first_bootstatus_return_stops_all_row_commands(self):
+        self.configure(owned=False)
+        self.edit_operation=lambda operation,command:setattr(self.f.clock,'now',self.f.clock.now+212) if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.f.row()
+        self.assertEqual(len(self.f.calls),6);self.assertTrue(barrier.blocked())
+    def test_first_bootstrap_is_ios_first_only(self):
+        self.configure()
+        from unittest.mock import patch
+        with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/codex/apple-platforms'}):
+            with self.assertRaises(ValueError):self.bootstrap()
+        self.assertEqual(len(self.f.calls),3)
+
+
 if __name__=='__main__':unittest.main()

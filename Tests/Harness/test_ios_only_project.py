@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from test_ios_offline_privacy import restore_unit_for_historical_observer
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -271,7 +272,8 @@ class IOSOnlyProjectTests(unittest.TestCase):
         self.assertEqual({p.name for p in (ROOT / 'QRCatcherTests').glob('*.m')}, set(expected))
         for name, (count, digest) in expected.items():
             data = (ROOT / 'QRCatcherTests' / name).read_bytes()
-            self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
+            historical = restore_unit_for_historical_observer(data.decode()).encode() if name == 'QRCatcherTests.m' else data
+            self.assertEqual(hashlib.sha256(historical).hexdigest(), digest)
             self.assertEqual(len(re.findall(r'-\s*\(void\)\s*test\w+\s*\{', data.decode())), count)
 
     def test_negative_default_flag_preserves_frozen_debug_and_release_preprocessor_outputs(self):

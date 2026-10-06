@@ -33,6 +33,7 @@
     UILabel *body = [self label:@"Celluloid, QRCatcher, and TouchColor process photos, camera images, QR codes, or color data locally on your device. The developer does not collect or upload this data. Actions you choose to take, such as sharing or opening links, and system services such as iCloud sync are handled by the respective services. For privacy questions, contact 100mango@gmail.com. Local data can be deleted through the relevant app or system, and permissions can be revoked in system settings." identifier:@"privacy.body" style:UIFontTextStyleBody];
     UILabel *services = [self label:@"System backups, file providers, the clipboard, and services you choose may handle data according to your settings." identifier:@"privacy.systemServices" style:UIFontTextStyleBody];
     UILabel *website = [self label:@"GitHub Pages records visitor IP addresses for security." identifier:@"privacy.websiteNotice" style:UIFontTextStyleFootnote];
+    [website setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
     self.errorMessage = [self label:@"This website could not be opened." identifier:@"privacy.error" style:UIFontTextStyleBody];
     self.errorMessage.hidden = YES;
     UIStackView *text = [[UIStackView alloc] initWithArrangedSubviews:@[body, services, self.errorMessage]];

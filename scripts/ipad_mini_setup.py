@@ -28,6 +28,13 @@ CAPS = {'checkout_main':60, 'prepare':120, 'build':480, 'mini':1620,
         'export':180, 'validate':30, 'upload':60, 'summary':30,
         'final':30, 'checkout_post':60, 'overhead':30}
 DIAGNOSTIC_CAPS = {**CAPS, 'mini':1920}  # Dedicated full-Mini diagnostic only.
+IOS_FIRST_CAPS = {**DIAGNOSTIC_CAPS, 'build':180, 'mini':2220}
+# All configuration, four cases, three summaries, fixture queries and all
+# three possible Shutdown bootstrap pairs, with every post-return allowance.
+IOS_FIRST_ROW_COMMAND_SECONDS = 2090
+IOS_FIRST_ROW_OPERATIONS = 21
+IOS_FIRST_ROW_RESERVATION = IOS_FIRST_ROW_COMMAND_SECONDS+2*IOS_FIRST_ROW_OPERATIONS+20
+IOS_FIRST_RESERVATIONS = {'configure':2152,'first_bootstrap':2026,'layout':1750}
 ORDER = ['prepare','build','mini','export','validate','upload','summary','final']
 ROW_SECONDS = 1620
 CLEANUP = 20                 # Admission reserve; existing 1s/1s cleanup unchanged.
@@ -122,6 +129,34 @@ def extended_mini_profile():
     return ios_first_profile()
 
 
+def schedule_caps():
+    if ios_first_profile(): return IOS_FIRST_CAPS
+    return DIAGNOSTIC_CAPS if extended_mini_profile() else CAPS
+
+
+def admit_full_ios_first_row(budget,deadline,stage='configure'):
+    if not ios_first_profile(): return
+    require(budget.caps==IOS_FIRST_CAPS and deadline==budget.state['phases']['mini']['deadline'] and
+            deadline==budget.state['phases']['mini']['started']+IOS_FIRST_CAPS['mini'],
+            'Original iOS-first Mini schedule required')
+    require(stage in IOS_FIRST_RESERVATIONS,'Unknown fixed full-row admission stage')
+    reservation=IOS_FIRST_RESERVATIONS[stage]
+    budget.next('mini',reservation-CLEANUP,deadline)
+    record=budget.state['phases']['mini']
+    admissions=record.setdefault('row_admissions',{})
+    require(stage not in admissions,'Original full-row admission cannot reset')
+    admissions[stage]={'required_seconds':reservation,'row_started_monotonic':record['started'],
+                       'row_deadline_monotonic':deadline,'admitted_monotonic':budget.clock(),
+                       'completed_configure_debit_seconds':0 if stage=='configure' else 126,
+                       'first_bootstrap_removed_seconds':276 if stage=='layout' else 0,
+                       'cleanup_reserve_seconds':CLEANUP}
+    if stage=='layout':
+        booted=record['state_handoffs']['before_first_layout']['state']=='booted_snapshot_only'
+        admissions[stage]['completed_first_bootstrap_debit_seconds']=32 if booted else 276
+        admissions[stage]['skipped_first_boot_pair_seconds']=244 if booted else 0
+    budget.persist();budget.next('mini',reservation-CLEANUP,deadline)
+
+
 def mini_project():
     if ios_first_profile():
         from ios_original_release_route import PROJECT
@@ -140,7 +175,7 @@ def job_ledger_limit():
 class Budget:
     def __init__(self, clock=time.monotonic):
         self.clock = clock; self.root,self.identity = context()
-        self.caps = DIAGNOSTIC_CAPS if extended_mini_profile() else CAPS
+        self.caps = schedule_caps()
         self.job_seconds = sum(self.caps.values())
         self.ledger_limit = job_ledger_limit()
         tmp = Path(os.environ['RUNNER_TEMP'])
@@ -290,6 +325,11 @@ class Controller:
             claim.dispatch_window=None
             print('BOUNDED_COMMAND_END '+json.dumps(operation),flush=True)
             event.update(operation)
+            configuring=self.record.get('status')=='pending'
+            first_bootstrapping=self.record.get('state_handoffs',{}).get('before_first_layout',{}).get('state')=='pending'
+            if ios_first_profile() and self.phase=='mini' and (configuring or first_bootstrapping):
+                require(operation.get('output_bytes')==len(tail.encode()),'Incomplete original configure/bootstrap output')
+                event['output_sha256']=hashlib.sha256(tail.encode()).hexdigest()
             observed=(operation.get('state')=='completed' and operation.get('cleanup_confirmed') is True and
                       self.budget.clock() < self.deadline and self.budget.clock()<began+cap+2)
             if log: (self.budget.root/log).write_text('BOUNDED_COMMAND_START '+json.dumps({'seconds':cap,'command':command})+'\n'+tail+'\nBOUNDED_COMMAND_END '+json.dumps(operation)+'\n')
@@ -324,11 +364,13 @@ def inventory(controller):
 
 def configure(budget=None,executor=execute):
     budget=budget or Budget(); deadline=budget.enter('mini'); c=Controller(budget,'mini',deadline,executor)
+    admit_full_ios_first_row(budget,deadline)
     runtime,device_type,rows,digest=inventory(c)
     name='QRCatcher Mini '+budget.identity['run_id']+'-'+budget.identity['run_attempt']
     require(not any(d['name']==name for d in rows),'Owned name already exists')
     code,raw=c.command(['xcrun','simctl','create',name,device_type,runtime],60)
     device=raw.strip(); require(code==0 and valid_uuid(device) and device not in [d['udid'] for d in rows], 'Invalid or pre-existing created UUID')
+    if ios_first_profile():c.record['operations'][-1]['created_device']=device;budget.persist()
     code,raw=c.command(['xcrun','simctl','list','devices','available','-j'],30)
     require(code==0,'Created-device readback failed'); after=strict_json(raw)
     require(isinstance(after,dict) and isinstance(after.get('devices'),dict) and len(after['devices'])<=128,'Invalid readback')
@@ -450,6 +492,13 @@ def row_body(device,budget,deadline,executor,stager):
         require(not any((budget.root/name).exists() or (budget.root/name).is_symlink() for name in
                         ['MiniUIResults-layout.xcresult','MiniUIResults-files.xcresult','MiniUIResults.xcresult']),
                 'Stale result bundle cannot be reused')
+        if ios_first_profile():
+            from ipad_mini_state_handoff import ensure_owned_booted
+            original_receipt=strict_json(read_regular(budget.root/'build/ipad-mini-owned-device.json',4096))
+            ensure_owned_booted(c,device,original_receipt,'before_first_layout')
+            from ipad_mini_state_handoff import qualified_first_bootstrap
+            qualified_first_bootstrap(c,device,original_receipt)
+            admit_full_ios_first_row(budget,deadline,'layout')
         code,_=c.command(test_command(device,LAYOUT,'MiniUIResults-layout.xcresult'),480,'MiniUIResults-layout.log')
         qualify_result(c,device,'MiniUIResults-layout.xcresult',2,code)
         setup['layout_and_real_picker_cancel_exit']=code; setup['unexecuted'].remove('layout'); save()
@@ -531,6 +580,7 @@ def phase(name):
     global _ACTIVE
     budget=Budget(); deadline=budget.enter(name); operations=budget.state['phases'][name]['operations']
     caps={'prepare':95,'build':435,'embedding':20,'export':155,'validate':5,'summary':5,'final':5}
+    if ios_first_profile(): caps['build']=135
     try:
         if name=='build':require(not (budget.root/'build/iOS').exists() and not (budget.root/'build/iOS').is_symlink(),
                                  'Fresh Mini build products required')

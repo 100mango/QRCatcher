@@ -10,6 +10,7 @@
 #import "QRURLViewController.h"
 #import "QRPrivacyViewController.h"
 #import <AVFoundation/AVFoundation.h>
+#import <math.h>
 
 @interface QRCatchViewController (RegressionTesting)
 - (void)handlePayload:(NSString *)payload;
@@ -260,7 +261,63 @@
         [NSFileManager.defaultManager removeItemAtURL:URL error:nil];
     }
 }
+- (void)assertPrivacyWebsiteNoticeAtCompactWidthForCategory:(UIContentSizeCategory)category {
+    UIViewController *host = [UIViewController new];
+    // SE3's retained unobscured policy area is375 by593 points. This real
+    // UIKit content fixture excludes the74-point navigation/status region.
+    host.view.frame = CGRectMake(0, 0, 375, 593);
+    QRTestPrivacyController *privacy = [QRTestPrivacyController new];
+    [host addChildViewController:privacy];
+    UITraitCollection *traits = [UITraitCollection traitCollectionWithPreferredContentSizeCategory:category];
+    [host setOverrideTraitCollection:traits forChildViewController:privacy];
+    [traits performAsCurrentTraitCollection:^{
+        [privacy loadViewIfNeeded]; privacy.view.frame = host.view.bounds;
+        [host.view addSubview:privacy.view]; [privacy didMoveToParentViewController:host];
+    }];
+    [host.view layoutIfNeeded]; [privacy.view layoutIfNeeded];
+    UILabel *notice = (UILabel *)[self viewWithIdentifier:@"privacy.websiteNotice" inView:privacy.view];
+    UIScrollView *actions = (UIScrollView *)[self viewWithIdentifier:@"privacy.actionScroll" inView:privacy.view];
+    UIButton *open = (UIButton *)[self viewWithIdentifier:@"privacy.externalPolicy" inView:privacy.view];
+    [actions layoutIfNeeded]; [notice layoutIfNeeded]; [open layoutIfNeeded];
+    XCTAssertEqual(notice.bounds.size.width, 327);
+    XCTAssertEqual([notice contentCompressionResistancePriorityForAxis:UILayoutConstraintAxisVertical], UILayoutPriorityRequired);
+    XCTAssertEqualObjects(notice.text, NSLocalizedString(@"GitHub Pages records visitor IP addresses for security.", nil));
+    CGSize completeNotice = [notice sizeThatFits:CGSizeMake(notice.bounds.size.width, CGFLOAT_MAX)];
+    XCTAssertGreaterThan(completeNotice.height, 0);
+    XCTAssertGreaterThanOrEqual(notice.bounds.size.height, completeNotice.height, @"The real footnote must retain its complete measured text height.");
+    NSUInteger heightLimits = 0;
+    for (NSLayoutConstraint *constraint in privacy.view.constraints) {
+        if (constraint.firstItem == actions && constraint.firstAttribute == NSLayoutAttributeHeight &&
+            constraint.relation == NSLayoutRelationLessThanOrEqual && constraint.secondItem == privacy.view.safeAreaLayoutGuide &&
+            constraint.secondAttribute == NSLayoutAttributeHeight) {
+            heightLimits += 1;
+            XCTAssertEqual(constraint.multiplier, 0.45);
+        }
+    }
+    XCTAssertEqual(heightLimits, 1, @"The original finite action-pane height constraint must remain installed.");
+    CGRect fullNotice = [notice convertRect:notice.bounds toView:actions];
+    CGFloat lineHeight = MIN(notice.font.lineHeight, CGRectGetHeight(fullNotice));
+    CGRect beginning = CGRectMake(fullNotice.origin.x, fullNotice.origin.y, fullNotice.size.width, lineHeight);
+    CGRect ending = CGRectMake(fullNotice.origin.x, CGRectGetMaxY(fullNotice) - lineHeight, fullNotice.size.width, lineHeight);
+    CGFloat scale = actions.traitCollection.displayScale;
+    XCTAssertTrue(isfinite(scale) && scale > 0);
+    CGFloat pixel = isfinite(scale) && scale > 0 ? 1.0 / scale : 0;
+    for (NSValue *value in @[[NSValue valueWithCGRect:beginning], [NSValue valueWithCGRect:ending],
+                            [NSValue valueWithCGRect:[open convertRect:open.bounds toView:actions]]]) {
+        CGRect originalTarget = value.CGRectValue;
+        [actions scrollRectToVisible:CGRectInset(originalTarget, -pixel, -pixel) animated:NO];
+        [actions layoutIfNeeded];
+        XCTAssertTrue(CGRectContainsRect(actions.bounds, originalTarget), @"The original notice endpoints and complete action must remain reachable.");
+    }
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]) {
+        XCTAssertGreaterThan(actions.contentSize.height, actions.bounds.size.height, @"Large notice and action content must scroll instead of compressing the notice.");
+    }
+    XCTAssertEqual(privacy.openedURLs.count, 0, @"Layout cannot request the website.");
+    [privacy willMoveToParentViewController:nil]; [privacy.view removeFromSuperview]; [privacy removeFromParentViewController];
+}
 - (void)testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent {
+    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryLarge];
+    [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge];
     QRTestPrivacyController *privacy = [QRTestPrivacyController new];
     [privacy loadViewIfNeeded];
     UILabel *body = (UILabel *)[self viewWithIdentifier:@"privacy.body" inView:privacy.view];

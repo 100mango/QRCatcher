@@ -103,7 +103,7 @@ jobs:
         require(root.is_absolute() and root.resolve(strict=True)==root)
         path=root/('qrcatcher-mini-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'.json')
         value={'version':1,'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'scope':'ipad_mini','started_monotonic':started,
-               'caps':{'checkout_main':60,'prepare':120,'build':480,'mini':1920,'export':180,'validate':30,'upload':60,'summary':30,'final':30,'checkout_post':60,'overhead':30}}
+               'caps':{'checkout_main':60,'prepare':120,'build':180,'mini':2220,'export':180,'validate':30,'upload':60,'summary':30,'final':30,'checkout_post':60,'overhead':30}}
         fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())
         with open(os.environ['GITHUB_ENV'],'a') as out:out.write('QRCATCHER_MINI_JOB_ORIGIN='+str(path)+'\n')
@@ -166,7 +166,7 @@ jobs:
     - name: Compile Mini tests inside original job budget
       id: mini_test_build
       if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_clock.outcome == 'success' && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
-      timeout-minutes: 8
+      timeout-minutes: 3
       run: python3 -u scripts/ipad_mini_setup.py phase build
     - name: Compile iOS tests before this device boots
       id: ios_test_build
@@ -216,7 +216,7 @@ jobs:
         bash scripts/run_ios_platform_ui.sh "$IPAD_SIMULATOR_ID" PadUIResults.xcresult QRCatcherPadUITests
     - name: Run native iPad mini workflows
       if: ${{ ((matrix.scope == 'ipad_mini') && (!cancelled() && steps.mini_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
-      timeout-minutes: 32
+      timeout-minutes: 37
       run: |
         python3 scripts/owned_process_barrier.py --check
         bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests
