@@ -93,12 +93,23 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
 # The four real workflow result basenames must be retained by the exporter,
 # including Files results when Photos was never executable.
 exporter=ast.parse((root/'scripts/export_ios_platform_screenshots.py').read_text())
-result_rows=[];log_names=[]
-for node in ast.walk(exporter):
-    if isinstance(node,ast.For) and isinstance(node.iter,ast.List):
+def exporter_inventory(tree):
+    result_rows=[];log_names=[]
+    for node in ast.walk(tree):
+        if not (isinstance(node,ast.For) and isinstance(node.iter,ast.List)):continue
+        result_target=(isinstance(node.target,ast.Tuple) and len(node.target.elts)==2 and
+                       all(isinstance(value,ast.Name) for value in node.target.elts) and
+                       [value.id for value in node.target.elts]==['result','label'])
+        log_target=isinstance(node.target,ast.Name) and node.target.id=='name'
+        if not (result_target or log_target):continue
+        # Only the owned result/log inventories are literals. A matched dynamic
+        # value remains an error; unrelated capacity/metadata loops are ignored.
         values=ast.literal_eval(node.iter)
-        if isinstance(node.target,ast.Tuple) and [x.id for x in node.target.elts]==['result','label']:result_rows=values
-        if isinstance(node.target,ast.Name) and node.target.id=='name' and 'ios-test-build.log' in values:log_names=values
+        if result_target:result_rows=values
+        elif 'ios-test-build.log' in values:log_names=values
+    return result_rows,log_names
+
+result_rows,log_names=exporter_inventory(exporter)
 for basename,label in [('PhoneUIResults','pro-max'),('CompactPhoneUIResults','SE3'),('PadUIResults','ipad-pro-13'),('MiniUIResults','ipad-mini')]:
     assert (basename+'-files.xcresult',label+'-files') in result_rows
     assert basename+'-files.log' in log_names
