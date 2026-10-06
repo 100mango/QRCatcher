@@ -1,5 +1,10 @@
 #import "QRImageImportQueue.h"
 #import "QRImageCodec.h"
+#if DEBUG
+@interface QRImageImportQueue ()
++ (NSOperation *)readWithLoader:(NSData *(^)(NSError **))loader debugDecodeObserver:(void (^)(void))observer completion:(void (^)(NSArray<NSString *> *, NSError *))completion;
+@end
+#endif
 @implementation QRImageImportQueue
 + (NSOperationQueue *)queue {
     static NSOperationQueue *queue; static dispatch_once_t once;
@@ -7,6 +12,11 @@
     return queue;
 }
 + (NSOperation *)readWithLoader:(NSData *(^)(NSError **))loader completion:(void (^)(NSArray<NSString *> *, NSError *))completion {
+#if DEBUG
+    return [self readWithLoader:loader debugDecodeObserver:nil completion:completion];
+}
++ (NSOperation *)readWithLoader:(NSData *(^)(NSError **))loader debugDecodeObserver:(void (^)(void))observer completion:(void (^)(NSArray<NSString *> *, NSError *))completion {
+#endif
     NSBlockOperation *operation = [NSBlockOperation new];
     __weak NSBlockOperation *weakOperation = operation;
     [operation addExecutionBlock:^{
@@ -17,6 +27,9 @@
             NSData *data = loader(&error);
             if (current.cancelled) return;
             NSArray *values = data ? [QRImageCodec decodeImageData:data error:&error] : nil;
+#if DEBUG
+            if (observer) observer();
+#endif
             if (current.cancelled) return;
             dispatch_async(dispatch_get_main_queue(), ^{ if (!current.cancelled) completion(values, error); });
         }

@@ -191,6 +191,8 @@ DIAGNOSTIC_MARKERS = (
     '-reset-history', '-camera-denied', '-mini-startup-', 'mini_startup_v1=',
     'QRStartupObservation', 'QRStartupEncodedValue', 'QRStartupRecord',
     'QRStartupLaunchGate', 'QRStartupCanRecord', 'QRStartupWallComparable',
+    '-privacy-system-open', 'privacy_system_open_v1=', 'QRPrivacySystemOpenObservation',
+    '-photo-import-observation', 'photo_import_observation_v1=', 'photoObservation', 'debugDecodeObserver',
     'cameraDiagnosticEpoch', 'traceCamera:', 'QRCATCHER_CAMERA_TRACE',
     'QRCATCHER_TEST_STORE', 'QRCATCHER_SANDBOX_', 'QRCATCHER_WATCH_STORE',
     'QRCATCHER_WATCH_LAYOUT_', 'QRCATCHER_TV_TEST_STORE', 'QRCATCHER_TV_LAYOUT_',

@@ -2,6 +2,20 @@
 #import <UIKit/UIKit.h>
 #import "QRUIInterruptionSafety.h"
 #import "QRFilesPickerSnapshot.h"
+#import <math.h>
+
+static BOOL QRPhotoDiagnosticNumber(id value) {
+    return [value isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)value) != CFBooleanGetTypeID() && isfinite([value doubleValue]);
+}
+static int QRPhotoObservationCanRead(double caseStarted, double now) {
+    return isfinite(caseStarted) && isfinite(now) && caseStarted >= 0 && now >= caseStarted && caseStarted + 180 - now >= 32;
+}
+static int QRPhotoObservationReadReturned(double caseStarted, double started, double returned) {
+    return QRPhotoObservationCanRead(caseStarted, started) && isfinite(returned) && returned >= started && returned <= started + 12 && caseStarted + 180 - returned >= 20;
+}
+static int QRPhotoObservationWaitReturned(double started, double returned) {
+    return isfinite(started) && isfinite(returned) && started >= 0 && returned >= started && returned <= started + 22;
+}
 
 static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) {
     if (!root) return NO;
@@ -28,6 +42,11 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, copy) NSArray *historyRowsBeforePresentation;
+@property (nonatomic, copy) NSString *photoObservationRequestID;
+@property (nonatomic) NSTimeInterval photoObservationCaseStarted;
+@property (nonatomic) BOOL photoObservationWaitReturned;
+@property (nonatomic) BOOL photoObservationReadAttempted;
+@property (nonatomic) BOOL photoObservationUncertain;
 @end
 @implementation QRCatcherImageImportUITests
 - (void)setUp {
@@ -35,12 +54,112 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
     self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
     self.app = [XCUIApplication new];
     self.app.launchArguments = @[@"-ui-testing",@"-reset-history",@"-AppleLanguages",@"(en)",@"-AppleLocale",@"en_US",@"-fixture-payload",@"Previous selected result"];
+    if ([self.name isEqualToString:@"-[QRCatcherImageImportUITests testRealPhotosImportAndReopen]"]) {
+        self.photoObservationCaseStarted = NSProcessInfo.processInfo.systemUptime;
+        self.photoObservationRequestID = NSUUID.UUID.UUIDString;
+        self.app.launchArguments = [self.app.launchArguments arrayByAddingObjectsFromArray:@[@"-photo-import-observation-v1", @"-photo-import-observation-request-id", self.photoObservationRequestID]];
+    }
     [self.app launch]; XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:15]);
 }
 - (void)tearDown {
+    if (self.photoObservationUncertain) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN late owned-value read; no further authored device/AX actions");
+        [super tearDown];
+        [self removeUIInterruptionMonitor:self.interruptionGuard];
+        return;
+    }
+    if (self.testRun.failureCount && self.photoObservationWaitReturned) [self readPhotoObservationOnce];
+    if (self.photoObservationUncertain) {
+        [super tearDown];
+        [self removeUIInterruptionMonitor:self.interruptionGuard];
+        return;
+    }
     if (self.testRun.failureCount) { NSLog(@"ACTUAL_IMAGE_IMPORT_UI:%@",self.app.debugDescription); [self capture:@"image-import-failure"]; }
     [self.app terminate]; [super tearDown];
     [self removeUIInterruptionMonitor:self.interruptionGuard];
+}
+- (void)readPhotoObservationOnce {
+    if (!self.photoObservationRequestID || self.photoObservationReadAttempted || !self.photoObservationWaitReturned) return;
+    self.photoObservationReadAttempted = YES;
+    NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;
+    // Reserve the full existing 10-second owned AX read, two-second return
+    // allowance and 20-second teardown space within the original case clock.
+    if (!QRPhotoObservationCanRead(self.photoObservationCaseStarted, started)) {
+        self.photoObservationUncertain = YES;
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN original case budget insufficient");
+        return;
+    }
+    id value = nil;
+    self.photoObservationUncertain = YES;
+    @try { value = self.app.staticTexts[@"scan.status"].value; }
+    @catch (NSException *exception) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN owned AX getter exception");
+        return;
+    }
+    NSTimeInterval returned = NSProcessInfo.processInfo.systemUptime;
+    if (!QRPhotoObservationReadReturned(self.photoObservationCaseStarted, started, returned)) {
+        self.photoObservationUncertain = YES;
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN late or discontinuous owned AX read");
+        return;
+    }
+    @try {
+    NSString *text = [value isKindOfClass:NSString.class] ? value : nil;
+    NSString *marker = @"photo_import_observation_v1=";
+    NSRange range = [text rangeOfString:marker];
+    if (!text || [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4096 || range.location == NSNotFound || [text rangeOfString:marker options:0 range:NSMakeRange(NSMaxRange(range), text.length - NSMaxRange(range))].location != NSNotFound) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN missing duplicate or oversized receipt");
+        return;
+    }
+    NSString *JSON = [text substringFromIndex:NSMaxRange(range)];
+    NSData *data = [JSON dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data || data.length > 1024) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN oversized receipt");
+        return;
+    }
+    id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![parsed isKindOfClass:NSDictionary.class]) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN JSON root is not a dictionary");
+        return;
+    }
+    NSDictionary *record = parsed;
+    id parsedTimes = record[@"times"];
+    if (![parsedTimes isKindOfClass:NSDictionary.class]) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN times is not a dictionary");
+        return;
+    }
+    NSDictionary *times = parsedTimes;
+    NSData *canonical = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+    NSSet *keys = [NSSet setWithArray:@[@"version", @"request_id", @"launch_id", @"pid", @"generation", @"clock", @"unknown", @"times", @"observations_qualify_pass"]];
+    BOOL owned = canonical && [canonical isEqualToData:data] && [[NSSet setWithArray:record.allKeys] isEqualToSet:keys] && [record[@"request_id"] isEqual:self.photoObservationRequestID] && [record[@"clock"] isEqual:@"NSProcessInfo.systemUptime"];
+    NSString *launchID = [record[@"launch_id"] isKindOfClass:NSString.class] ? record[@"launch_id"] : nil;
+    owned = owned && launchID && [[[[NSUUID alloc] initWithUUIDString:launchID] UUIDString] isEqual:launchID] && QRPhotoDiagnosticNumber(record[@"version"]) && [record[@"version"] doubleValue] == 1;
+    for (NSString *key in @[@"pid", @"generation"]) {
+        NSNumber *number = record[key];
+        owned = owned && QRPhotoDiagnosticNumber(number) && number.doubleValue > 0 && number.doubleValue == floor(number.doubleValue) && number.doubleValue <= 2147483647;
+    }
+    owned = owned && [record[@"unknown"] isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)record[@"unknown"]) == CFBooleanGetTypeID();
+    owned = owned && [record[@"observations_qualify_pass"] isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)record[@"observations_qualify_pass"]) == CFBooleanGetTypeID() && ![record[@"observations_qualify_pass"] boolValue];
+    NSArray *phases = @[@"provider_request", @"provider_callback", @"decode_return", @"main_update_return"];
+    owned = owned && [[NSSet setWithArray:times.allKeys] isEqualToSet:[NSSet setWithArray:phases]];
+    double previous = 0;
+    BOOL gap = NO;
+    for (NSString *phase in phases) {
+        id stamp = times[phase];
+        if (stamp == NSNull.null) { gap = YES; continue; }
+        if (!QRPhotoDiagnosticNumber(stamp)) { owned = NO; continue; }
+        owned = owned && !gap && [stamp doubleValue] >= previous && [stamp doubleValue] <= returned;
+        previous = [stamp doubleValue];
+    }
+    if (!owned) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN invalid or stale receipt");
+        return;
+    }
+    self.photoObservationUncertain = NO;
+    NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:%@", JSON);
+    NSLog(@"PHOTO_IMPORT_OBSERVATION_READ_V1 request=%@ started=%.9f returned=%.9f diagnostic_only=true acceptance=false", self.photoObservationRequestID, started, returned);
+    } @catch (NSException *exception) {
+        NSLog(@"PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN receipt parser exception; no further authored AX actions");
+    }
 }
 - (void)capture:(NSString *)name {
     NSData *data = UIImageJPEGRepresentation(XCUIScreen.mainScreen.screenshot.image,0.45);
@@ -157,7 +276,20 @@ static BOOL QRPhoneFilesPresentationSnapshotReady(id<XCUIElementSnapshot> root) 
 }
 - (void)assertImportedResultAndRelaunch {
     NSPredicate *decoded=[NSPredicate predicateWithFormat:@"label == %@",@"QRCatcher 你好 🌈 123"];
-    [self expectationForPredicate:decoded evaluatedWithObject:self.app.staticTexts[@"scan.result"] handler:nil]; [self waitForExpectationsWithTimeout:20 handler:nil];
+    [self expectationForPredicate:decoded evaluatedWithObject:self.app.staticTexts[@"scan.result"] handler:nil];
+    NSTimeInterval observationWaitStarted = NSProcessInfo.processInfo.systemUptime;
+    if (self.photoObservationRequestID) NSLog(@"PHOTO_IMPORT_WAIT_V1 request=%@ started=%.9f allowance=20 diagnostic_only=true", self.photoObservationRequestID, observationWaitStarted);
+    @try { [self waitForExpectationsWithTimeout:20 handler:nil]; }
+    @finally {
+        if (self.photoObservationRequestID) {
+            NSTimeInterval returned = NSProcessInfo.processInfo.systemUptime;
+            self.photoObservationWaitReturned = QRPhotoObservationWaitReturned(observationWaitStarted, returned);
+            self.photoObservationUncertain = !self.photoObservationWaitReturned;
+            NSLog(@"PHOTO_IMPORT_WAIT_RETURN_V1 request=%@ returned=%.9f diagnostic_only=true", self.photoObservationRequestID, returned);
+        }
+    }
+    [self readPhotoObservationOnce];
+    if (self.photoObservationUncertain) { XCTFail(@"Photo diagnostic owned read exceeded original case bounds"); return; }
     XCTAssertFalse(self.app.buttons[@"scan.open"].exists);
     [self capture:[self.name containsString:@"Files"] ? @"image-import-files-decoded" : @"image-import-photos-decoded"];
     [self.app terminate]; self.app.launchArguments=@[@"-ui-testing",@"-AppleLanguages",@"(en)"]; [self.app launch];

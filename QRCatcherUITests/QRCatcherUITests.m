@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import "QRUIInterruptionSafety.h"
 #import <math.h>
+#import <limits.h>
 static NSString *QRObservedApplicationStateName(XCUIApplicationState state) {
     switch (state) {
         case XCUIApplicationStateNotRunning: return @"not_running";
@@ -12,29 +13,68 @@ static NSString *QRObservedApplicationStateName(XCUIApplicationState state) {
     }
     return @"unknown";
 }
-static BOOL QRPrivacyFiniteNonemptyRect(CGRect frame) {
-    return isfinite(frame.origin.x) && isfinite(frame.origin.y) &&
-        isfinite(frame.size.width) && isfinite(frame.size.height) &&
-        frame.size.width > 0 && frame.size.height > 0 &&
-        isfinite(frame.origin.x + frame.size.width) && isfinite(frame.origin.y + frame.size.height);
-}
 static BOOL QRPrivacyObservationTimely(NSTimeInterval started, NSTimeInterval now) {
     NSTimeInterval elapsed = now - started;
     return isfinite(started) && isfinite(now) && isfinite(elapsed) && elapsed >= 0 && elapsed < 10;
 }
-static BOOL QRPrivacyBrowserWindowQualifies(XCUIApplicationState browserState, BOOL exists, CGRect frame, BOOL hittable) {
-    return browserState == XCUIApplicationStateRunningForeground && exists &&
-        QRPrivacyFiniteNonemptyRect(frame) && hittable;
+static BOOL QRPrivacySystemReadWithinCase(NSTimeInterval caseStarted, NSTimeInterval readStarted,
+                                        NSTimeInterval returned, NSTimeInterval allowance) {
+    return isfinite(caseStarted) && isfinite(readStarted) && isfinite(returned) && isfinite(allowance) &&
+        allowance > 0 && readStarted >= caseStarted && returned >= readStarted && returned - caseStarted < allowance;
 }
-static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInteger bytes) {
-    return width > 0 && height > 0 && bytes > 0 && bytes <= 500 * 1024;
+static BOOL QRPrivacySystemInteger(id value, NSInteger minimum, NSInteger maximum) {
+    if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) return NO;
+    double number = [value doubleValue];
+    return isfinite(number) && number >= minimum && number <= maximum && number == [value integerValue];
+}
+static BOOL QRPrivacySystemFiniteNumber(id value) {
+    return [value isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)value) != CFBooleanGetTypeID() &&
+        isfinite([value doubleValue]);
+}
+static NSDictionary *QRPrivacySystemReceipt(id value, NSString *requestID, NSDictionary *baseline) {
+    if (![value isKindOfClass:NSString.class] || [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > 4096) return nil;
+    NSString *marker = @" privacy_system_open_v1=";
+    NSArray *parts = [value componentsSeparatedByString:marker];
+    if (parts.count != 2) return nil;
+    NSData *data = [parts[1] dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data || data.length == 0 || data.length > 1024) return nil;
+    id record = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    NSSet *keys = [NSSet setWithArray:@[@"version", @"case", @"request_id", @"launch_id", @"app_pid", @"requests",
+        @"completions", @"opened", @"url", @"request_uptime", @"completion_uptime", @"status", @"page_rendered"]];
+    if (![record isKindOfClass:NSDictionary.class] || ![[NSSet setWithArray:[record allKeys]] isEqualToSet:keys] ||
+        !QRPrivacySystemInteger(record[@"version"], 1, 1) ||
+        ![record[@"case"] isEqual:@"testDeniedCameraAndEmptyHistory"] ||
+        ![record[@"request_id"] isEqual:requestID] || ![record[@"page_rendered"] isEqual:@"UNKNOWN"] ||
+        ![record[@"launch_id"] isKindOfClass:NSString.class] ||
+        ![[[NSUUID alloc] initWithUUIDString:record[@"launch_id"]].UUIDString isEqual:record[@"launch_id"]] ||
+        !QRPrivacySystemInteger(record[@"app_pid"], 1, INT_MAX)) return nil;
+    // Only the app's exact sorted wire form qualifies. Re-serialization also
+    // rejects duplicate keys even when whitespace or escaped names hide them.
+    NSData *canonical = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+    if (!canonical || ![canonical isEqualToData:data]) return nil;
+    if (!baseline) {
+        if (!QRPrivacySystemInteger(record[@"requests"], 0, 0) || !QRPrivacySystemInteger(record[@"completions"], 0, 0) ||
+            record[@"opened"] != NSNull.null || record[@"url"] != NSNull.null ||
+            record[@"request_uptime"] != NSNull.null || record[@"completion_uptime"] != NSNull.null ||
+            ![record[@"status"] isEqual:@"baseline"]) return nil;
+    } else {
+        if (![record[@"launch_id"] isEqual:baseline[@"launch_id"]] || ![record[@"app_pid"] isEqual:baseline[@"app_pid"]] ||
+            !QRPrivacySystemInteger(record[@"requests"], 1, 1) || !QRPrivacySystemInteger(record[@"completions"], 1, 1) ||
+            ![record[@"opened"] isKindOfClass:NSNumber.class] ||
+            CFGetTypeID((__bridge CFTypeRef)record[@"opened"]) != CFBooleanGetTypeID() || ![record[@"opened"] boolValue] ||
+            ![record[@"url"] isEqual:@"https://100mango.github.io/app-privacy/"] ||
+            ![record[@"status"] isEqual:@"system_accepted"] ||
+            !QRPrivacySystemFiniteNumber(record[@"request_uptime"]) || !QRPrivacySystemFiniteNumber(record[@"completion_uptime"]) ||
+            !QRPrivacyObservationTimely([record[@"request_uptime"] doubleValue], [record[@"completion_uptime"] doubleValue])) return nil;
+    }
+    return record;
 }
 @interface QRCatcherUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, strong) id cameraMonitor;
 @property (nonatomic) BOOL privacyBrowserObservationLate;
-@property (nonatomic) BOOL privacyBrowserCaptureUnknown;
+@property (nonatomic) BOOL privacySystemReceiptUnknown;
 - (void)assertChineseHistoryResultKeepsCompletePayloadAndRepeatedCancel;
 - (void)assertOfflinePrivacyForChinese:(BOOL)Chinese;
 @end
@@ -45,11 +85,11 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
     self.app = [XCUIApplication new];
     self.privacyBrowserObservationLate = NO;
-    self.privacyBrowserCaptureUnknown = NO;
+    self.privacySystemReceiptUnknown = NO;
 }
 - (void)tearDown {
-    if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {
-        // A late observation or unavailable capture leaves the handoff UNKNOWN. Stop all further
+    if (self.privacyBrowserObservationLate || self.privacySystemReceiptUnknown) {
+        // A late observation or invalid receipt leaves the handoff UNKNOWN. Stop all further
         // test-authored AX reads/device actions while preserving XCTest cleanup.
         [super tearDown];
         if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];
@@ -222,9 +262,28 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
 }
 - (void)testDeniedCameraAndEmptyHistory {
-    [self launch:@[@"-reset-history", @"-camera-denied"]];
+    NSTimeInterval caseStarted = NSProcessInfo.processInfo.systemUptime;
+    NSTimeInterval caseAllowance = self.executionTimeAllowance;
+    NSString *systemRequestID = NSUUID.UUID.UUIDString;
+    [self launch:@[@"-reset-history", @"-camera-denied", @"-privacy-system-open-v1",
+        @"-privacy-system-open-request-id", systemRequestID]];
     XCTAssertTrue([self.app.buttons[@"scan.settings"] waitForExistenceWithTimeout:10]);
     XCTAssertTrue([self.app.staticTexts[@"scan.status"].label containsString:@"Camera access is off"]);
+    NSTimeInterval baselineReadStarted = NSProcessInfo.processInfo.systemUptime;
+    id baselineValue = nil;
+    @try { baselineValue = self.app.staticTexts[@"scan.status"].value; }
+    @catch (NSException *exception) { (void)exception; }
+    // These two owned value reads use the existing case allowance. They do not
+    // add a phase cap or extend the real tap→Safari/completion handoff deadline.
+    NSDictionary *systemBaseline = QRPrivacySystemReadWithinCase(caseStarted, baselineReadStarted, NSProcessInfo.processInfo.systemUptime, caseAllowance) ?
+        QRPrivacySystemReceipt(baselineValue, systemRequestID, nil) : nil;
+    NSData *baselineData = systemBaseline ? [NSJSONSerialization dataWithJSONObject:systemBaseline options:0 error:nil] : nil;
+    if (!baselineData || baselineData.length > 1024) systemBaseline = nil;
+    if (baselineData && baselineData.length <= 1024) NSLog(@"PRIVACY_SYSTEM_OPEN_BASELINE:%@", [[NSString alloc] initWithData:baselineData encoding:NSUTF8StringEncoding]);
+    else NSLog(@"PRIVACY_SYSTEM_OPEN_BASELINE:UNKNOWN missing stale duplicate oversized or late read");
+    self.privacySystemReceiptUnknown = !systemBaseline;
+    XCTAssertNotNil(systemBaseline, @"UNKNOWN unless this launch exposes a current zero-request baseline.");
+    if (!systemBaseline) return;
     XCUIElement *privacy = self.app.navigationBars.buttons[@"privacy.policy"];
     XCTAssertTrue(privacy.hittable);
     XCTAssertEqualObjects(privacy.label, @"Privacy Policy");
@@ -245,13 +304,6 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     XCTAssertTrue(externalPolicy.hittable);
     [self.app.buttons[@"privacy.externalPolicy"] tap];
     NSTimeInterval handoffStarted = NSProcessInfo.processInfo.systemUptime;
-    NSMutableDictionary *manualReceipt = [@{@"version": @1, @"owner": @"com.apple.mobilesafari",
-        @"source": @"XCUIScreen.mainScreen", @"status": @"UNKNOWN", @"runtime_precise_url": @"UNKNOWN",
-        @"manual_review_required": [NSNumber numberWithBool:YES],
-        @"automatic_page_qualification": [NSNumber numberWithBool:NO],
-        @"browser_raw": NSNull.null, @"capture_attempts": @0,
-        @"native_width": NSNull.null, @"native_height": NSNull.null,
-        @"source_bytes": NSNull.null, @"attachment_name": @"privacy-browser-manual-review"} mutableCopy];
     BOOL (^timely)(void) = ^BOOL {
         if (self.privacyBrowserObservationLate) return NO;
         BOOL valid = QRPrivacyObservationTimely(handoffStarted, NSProcessInfo.processInfo.systemUptime);
@@ -269,39 +321,10 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
         } else {
             samplesOmitted = YES;
         }
-        manualReceipt[@"browser_raw"] = @(browserState);
         return browserState == XCUIApplicationStateRunningForeground;
     }];
     XCTNSPredicateExpectation *openedOutside = [[XCTNSPredicateExpectation alloc] initWithPredicate:browserForeground object:browser];
     XCTWaiterResult handoff = [XCTWaiter waitForExpectations:@[openedOutside] timeout:10];
-    if (!timely()) handoff = XCTWaiterResultTimedOut;
-    BOOL captureRetained = NO;
-    if (handoff == XCTWaiterResultCompleted && timely()) {
-        manualReceipt[@"capture_attempts"] = @1;
-        // The sole native full-screen acquisition shares the original deadline.
-        // Its pixels require manual page review; no Safari AX selector follows.
-        @try {
-            UIImage *image = XCUIScreen.mainScreen.screenshot.image;
-            if (timely() && image.CGImage) {
-                size_t width = CGImageGetWidth(image.CGImage);
-                size_t height = CGImageGetHeight(image.CGImage);
-                NSData *JPEG = UIImageJPEGRepresentation(image, 0.55);
-                if (timely() && QRPrivacyManualCaptureRetainable(width, height, JPEG.length)) {
-                    manualReceipt[@"native_width"] = @(width);
-                    manualReceipt[@"native_height"] = @(height);
-                    manualReceipt[@"source_bytes"] = @(JPEG.length);
-                    XCTAttachment *attachment = [XCTAttachment attachmentWithData:JPEG uniformTypeIdentifier:@"public.jpeg"];
-                    attachment.name = @"privacy-browser-manual-review";
-                    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
-                    [self addAttachment:attachment];
-                    captureRetained = timely();
-                }
-            }
-        } @catch (NSException *exception) {
-            (void)exception;
-        }
-    }
-    if (!captureRetained) self.privacyBrowserCaptureUnknown = YES;
     if (!timely()) handoff = XCTWaiterResultTimedOut;
     NSDictionary *stateTrace = @{@"version": @1, @"samples": statePairs,
         @"samples_omitted": [NSNumber numberWithBool:samplesOmitted],
@@ -312,18 +335,9 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     } else {
         NSLog(@"PRIVACY_BROWSER_STATE_PAIRS:UNKNOWN bounded serialization unavailable");
     }
-    manualReceipt[@"status"] = handoff == XCTWaiterResultCompleted && captureRetained ? @"manual_review_required" : @"UNKNOWN";
-    manualReceipt[@"late_return"] = [NSNumber numberWithBool:self.privacyBrowserObservationLate];
-    manualReceipt[@"capture_unknown"] = [NSNumber numberWithBool:self.privacyBrowserCaptureUnknown];
-    NSData *manualData = [NSJSONSerialization dataWithJSONObject:manualReceipt options:0 error:nil];
-    if (manualData && manualData.length <= 1024) {
-        NSLog(@"PRIVACY_BROWSER_MANUAL_RECEIPT:%@", [[NSString alloc] initWithData:manualData encoding:NSUTF8StringEncoding]);
-    } else {
-        NSLog(@"PRIVACY_BROWSER_MANUAL_RECEIPT:UNKNOWN bounded serialization unavailable");
-    }
+    if (handoff != XCTWaiterResultCompleted) self.privacySystemReceiptUnknown = YES;
     XCTAssertEqual(handoff, XCTWaiterResultCompleted, @"Only the explicit policy button opens an external browser.");
-    XCTAssertTrue(captureRetained, @"The native browser screenshot must be retained within the same deadline for manual page review.");
-    if (handoff != XCTWaiterResultCompleted || !captureRetained) return;
+    if (handoff != XCTWaiterResultCompleted) return;
     [self.app activate];
     XCTAssertTrue([done waitForExistenceWithTimeout:10]);
     [self assertOfflinePrivacyForChinese:NO];
@@ -339,6 +353,21 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     XCTAssertTrue(self.app.navigationBars.buttons[@"privacy.policy"].hittable);
     [self.app.tabBars.buttons[@"scan.tab"] tap];
     XCTAssertTrue(self.app.buttons[@"scan.settings"].exists);
+    NSTimeInterval receiptReadStarted = NSProcessInfo.processInfo.systemUptime;
+    id systemValue = nil;
+    @try { systemValue = self.app.staticTexts[@"scan.status"].value; }
+    @catch (NSException *exception) { (void)exception; }
+    NSDictionary *systemReceipt = QRPrivacySystemReadWithinCase(caseStarted, receiptReadStarted, NSProcessInfo.processInfo.systemUptime, caseAllowance) ?
+        QRPrivacySystemReceipt(systemValue, systemRequestID, systemBaseline) : nil;
+    NSData *systemData = systemReceipt ? [NSJSONSerialization dataWithJSONObject:systemReceipt options:0 error:nil] : nil;
+    if (!systemData || systemData.length > 1024) systemReceipt = nil;
+    self.privacySystemReceiptUnknown = !systemReceipt;
+    if (systemData && systemData.length <= 1024) {
+        NSLog(@"PRIVACY_SYSTEM_OPEN_RECEIPT:%@", [[NSString alloc] initWithData:systemData encoding:NSUTF8StringEncoding]);
+    } else {
+        NSLog(@"PRIVACY_SYSTEM_OPEN_RECEIPT:UNKNOWN missing stale duplicate oversized false or late completion");
+    }
+    XCTAssertNotNil(systemReceipt, @"A current baseline→one actual UIApplication request→one timely BOOL true completion proves system handoff; webpage rendering remains UNKNOWN.");
 }
 - (void)testScannedTextPersistsAcrossRelaunchAndBackground {
     // Keep a bounded allowance for this case's two complete app relaunches.

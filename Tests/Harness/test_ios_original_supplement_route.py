@@ -342,13 +342,17 @@ class SupplementRouteTests(unittest.TestCase):
             self.assertNotIn('sensitive',output.getvalue())
 
 class ProductClosureTests(unittest.TestCase):
-    def test_three_test_path_changes_leave_shipping_controller_and_consumers_bound(self):
+    def test_debug_observation_preserves_original_shipping_controller_and_consumers_bound(self):
         project=ROOT/'QRCatcher-iOS-Only.xcodeproj/project.pbxproj'
         objects=parse_project(project)['objects'];targets={v['name']:v for v in objects.values() if v.get('isa')=='PBXNativeTarget'}
         app=paths_in_phase(objects,targets['QRCatcher'],'PBXSourcesBuildPhase')
         self.assertIn('QRCatcher/QRPrivacyViewController.m',app)
         self.assertNotIn('QRCatcherTests/QRCatcherTests.m',app);self.assertNotIn('QRCatcherUITests/QRCatcherUITests.m',app)
-        self.assertEqual(hashlib.sha256((ROOT/'QRCatcher/QRPrivacyViewController.m').read_bytes()).hexdigest(),
+        from test_ios_offline_privacy import restore_privacy_policy_parent, release_preprocessed
+        source=(ROOT/'QRCatcher/QRPrivacyViewController.m').read_text()
+        parent=restore_privacy_policy_parent(source)
+        self.assertEqual(hashlib.sha256(parent.encode()).hexdigest(),
                          '4303215922f7e1a72a1c535eb3d757d785601d296b54034717de7046936a1fe3')
+        self.assertEqual(release_preprocessed(source),release_preprocessed(parent))
 
 if __name__=='__main__':unittest.main()

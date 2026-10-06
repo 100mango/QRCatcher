@@ -43,6 +43,18 @@ if [ "${EVIDENCE_SCOPE:-}" = ipad_mini ] || [ "${2:-}" = MiniUIResults.xcresult 
   exit $?
 fi
 STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')
+if [ "$SUPPLEMENT_ONLY" = true ] && [ "${PHONE_COMPLETION_ONLY:-}" = true ]; then
+  python3 - "$1" "$STEP_STARTED" <<'PY_STEP'
+import os,sys
+from pathlib import Path
+sys.path.insert(0,'scripts')
+from atomic_json import write_json
+from ios_original_supplement_route import current_identity
+identity=current_identity();path=Path('build/ios-platform-step.json')
+if identity['scope'] not in ('iphone_pro','iphone_se3') or path.exists() or path.is_symlink() or Path('build/ios-platform-closed-phase').exists() or Path('build/ios-platform-closed-phase').is_symlink():raise ValueError('Fresh selected original phone step required')
+write_json(path,{'identity':identity,'device':sys.argv[1],'owner_pid':os.getppid(),'step_started_monotonic':float(sys.argv[2])},limit=16384)
+PY_STEP
+fi
 python3 scripts/owned_process_barrier.py --check
 DEVICE=$1
 RESULT=$2
@@ -149,7 +161,11 @@ run_suite() {
   set -e
   SUPPLEMENT_GATE_EXIT=0
   if [ "$SUPPLEMENT_ONLY" = true ]; then
-    if qualify_supplement_result "$OUTPUT" "$CAP" "$TEST_EXIT"; then :; else SUPPLEMENT_GATE_EXIT=$?; fi
+    if qualify_supplement_result "$OUTPUT" "$CAP" "$TEST_EXIT"; then
+      if [ "${PHONE_COMPLETION_ONLY:-}" = true ] && { [ "$OUTPUT" = "$RESULT" ] || [ "$OUTPUT" = "${RESULT%.xcresult}-files.xcresult" ]; }; then
+        if python3 -u scripts/export_ios_platform_screenshots.py --retain-closed-phone-phase "${OUTPUT%.xcresult}" "$STEP_STARTED"; then :; else SUPPLEMENT_GATE_EXIT=126; fi
+      fi
+    else SUPPLEMENT_GATE_EXIT=$?; fi
   fi
 }
 LAYOUT_EXIT=-1

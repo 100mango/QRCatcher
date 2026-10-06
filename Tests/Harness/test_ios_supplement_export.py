@@ -24,7 +24,7 @@ from validate_evidence_budget import inspect
 
 EXPORTER=ROOT/'scripts/export_ios_platform_screenshots.py'
 TREE=ast.parse(EXPORTER.read_text())
-NAMESPACE={'hashlib':hashlib,'json':json,'math':math,'os':os,'pathlib':__import__('pathlib'),'re':re}
+NAMESPACE={'hashlib':hashlib,'json':json,'math':math,'os':os,'pathlib':__import__('pathlib'),'re':re,'sys':sys,'time':time,'subprocess':subprocess}
 exec(compile(ast.Module(body=[node for node in TREE.body if isinstance(node,ast.FunctionDef)],type_ignores=[]),'<selected exporter functions>','exec'),NAMESPACE)
 identity=NAMESPACE['supplement_identity']
 contract=NAMESPACE['supplement_contract']
@@ -39,12 +39,12 @@ DEVICE='11111111-2222-4333-8444-555555555555'
 
 class SupplementExportTests(unittest.TestCase):
  @contextlib.contextmanager
- def fixture(self,scope='ipad_mini'):
+ def fixture(self,scope='ipad_mini',phone_completion=True):
   with tempfile.TemporaryDirectory(prefix='qr-selected-export-') as name:
    root=Path(name).resolve();before=Path.cwd()
    (root/'build').mkdir();(root/'scripts').mkdir()
    canonical=(ROOT/original.CANONICAL).read_text()
-   workflow=route.render_workflow(canonical) if scope in route.PHONE_SCOPES else route.render_legacy_workflow(canonical)
+   workflow=route.render_workflow(canonical) if scope in route.PHONE_SCOPES and phone_completion else route.render_legacy_workflow(canonical)
    for path,text in ((original.CANONICAL,canonical),(original.WORKFLOW,original.render_workflow(canonical)),(route.WORKFLOW,workflow)):
     target=root/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(text)
    shutil.copyfile(ROOT/'scripts/evidence-allocation.json',root/'scripts/evidence-allocation.json')
@@ -55,7 +55,7 @@ class SupplementExportTests(unittest.TestCase):
     'GITHUB_RUN_ID':'123','GITHUB_RUN_ATTEMPT':'1','GITHUB_WORKSPACE':str(root),'GITHUB_ENV':str(root/'env'),
     'QRCATCHER_OWNED_PROCESS_BARRIER':str(root/'build/owned-process-cleanup.json'),
     'SIMULATOR_ID':DEVICE,'COMPACT_SIMULATOR_ID':DEVICE,'IPAD_SIMULATOR_ID':DEVICE,'MINI_SIMULATOR_ID':DEVICE}
-   if scope in route.PHONE_SCOPES:env['PHONE_COMPLETION_ONLY']='true'
+   if scope in route.PHONE_SCOPES and phone_completion:env['PHONE_COMPLETION_ONLY']='true'
    with patch.dict(os.environ,env,clear=True):
     os.chdir(root)
     try:
@@ -111,6 +111,177 @@ class SupplementExportTests(unittest.TestCase):
  def run_exporter(self,runner=None):
   with patch('subprocess.check_output',side_effect=AssertionError('Selected export cannot launch git')), patch('subprocess.run',side_effect=runner or AssertionError('Selected metadata export cannot launch a public command')):
    return runpy.run_path(str(EXPORTER),run_name='__main__')
+
+ def make_closed_cache(self,root,stem,scope):
+  # Execute the actual fixed exporter controller and worker, with only Apple
+  # command bytes doubled. This is process/fence proof, never native UI proof.
+  from test_ios_supplement_executor import STUB
+  for path in (ROOT/'scripts').glob('*.py'):shutil.copyfile(path,root/'scripts'/path.name)
+  binary=root/'bin';binary.mkdir(exist_ok=True)
+  for name in ('xcrun','sips'):
+   path=binary/name;path.write_text(STUB);path.chmod(0o755)
+  os.environ.update(PATH=str(binary)+os.pathsep+os.defpath,APPLE_CALL_LOG=str(root/'calls.jsonl'),DEVICE=DEVICE,PYTHONOPTIMIZE='0' if __debug__ else '1')
+  step=root/'build/ios-platform-step.json'
+  if not step.exists():step.write_text(json.dumps({'identity':route.current_identity(),'device':DEVICE,'owner_pid':os.getpid(),'step_started_monotonic':time.monotonic()}))
+  started=json.loads(step.read_text())['step_started_monotonic']
+  command=[sys.executable,'scripts/export_ios_platform_screenshots.py','--retain-closed-phone-phase',stem,str(started)]
+  result=subprocess.run(command,cwd=root,env=dict(os.environ),capture_output=True,text=True,timeout=10)
+  self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+  return root/'build/ios-platform-closed-phase'/stem
+
+ def test_actual_closed_phases_survive_later_seed_uncertainty_without_attachment_commands(self):
+  with self.fixture('iphone_pro') as root:
+   for stem in ('PhoneUIResults','PhoneUIResults-files'):
+    self.produce(root,stem,'iphone_pro');self.make_closed_cache(root,stem,'iphone_pro')
+   seed=self.operation(['xcrun','simctl','addmedia',DEVICE,'Tests/Fixtures/unicode.png'],210,124)
+   seed.update(state='timed_out',cleanup_confirmed=False)
+   (root/'build/PhoneUIResults-seed-command.json').write_text(json.dumps(seed));(root/'PhoneUIResults-seed.log').write_text('retained actual timeout double')
+   (root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
+   before=(root/'calls.jsonl').read_bytes();self.run_exporter()
+   self.assertEqual((root/'calls.jsonl').read_bytes(),before)
+   out=root/'build/ios-platform-evidence';value=json.loads((out/'manifest.json').read_text())
+   self.assertEqual(len(value['screenshots']),4);self.assertEqual(len(value['import_audit_attachments']),4)
+   self.assertEqual(value['missing_import_audit_pairs'],[])
+   for stem in ('PhoneUIResults','PhoneUIResults-files'):
+    selected=value['selected_evidence']['results'][stem]
+    self.assertTrue(selected['acceptance']);self.assertEqual(selected['attachments'],'retained_closed_phase_before_later_uncertainty')
+    self.assertTrue((out/(stem+'-closed-phase-export.json')).is_file())
+   self.assertEqual(value['selected_evidence']['photos_seed']['exit'],124);self.assertFalse(value['evidence_complete'])
+   self.assertLessEqual(inspect(out,limit=2000000)['bytes'],2000000)
+
+ def test_closed_cache_invalid_stale_unclean_late_missing_duplicate_and_redirected_refuse_without_fallback(self):
+  with self.fixture('iphone_se3') as root:
+   self.produce(root,'CompactPhoneUIResults','iphone_se3');folder=self.make_closed_cache(root,'CompactPhoneUIResults','iphone_se3')
+   snapshots={path.relative_to(folder):path.read_bytes() for path in folder.rglob('*') if path.is_file()}
+   original_receipt=json.loads((folder/'receipt.json').read_text());step_raw=(root/'build/ios-platform-step.json').read_bytes()
+   native_path=root/'build/CompactPhoneUIResults-command.json';native_raw=native_path.read_bytes()
+   for variant in ('owner','source','device','clock','unclean','late','wrong_command','missing','missing_receipt','extra','duplicate','duplicate_asset','symlink','hardlink','hash','invalid_image_rehashed','late_elapsed','raw_native'):
+    with self.subTest(variant=variant):
+     receipt=json.loads(json.dumps(original_receipt));asset=folder/'evidence'/next(name for name in receipt['files'] if name.endswith('.jpg'))
+     if variant=='owner':receipt['owner_pid']+=1
+     elif variant=='source':receipt['binding']['identity']['source_sha']='c'*40
+     elif variant=='device':receipt['binding']['device']='foreign'
+     elif variant=='clock':receipt['binding']['step']['step_started_monotonic']-=1
+     elif variant=='unclean':
+      receipt['operation']['cleanup_confirmed']=False;(folder/'export-command.json').write_text(json.dumps(receipt['operation']))
+     elif variant=='late':receipt['export_started_monotonic']=receipt['binding']['step']['step_started_monotonic']+1320-176
+     elif variant=='wrong_command':receipt['command']=['foreign']
+     elif variant=='missing':asset.unlink()
+     elif variant=='missing_receipt':(folder/'pending.json').unlink()
+     elif variant=='extra':(folder/'evidence/extra.jpg').write_bytes(b'\xff\xd8extra')
+     elif variant=='symlink':asset.unlink();asset.symlink_to(root/'outside.jpg')
+     elif variant=='hardlink':os.link(asset,root/'shared.jpg')
+     elif variant=='hash':asset.write_bytes(b'\xff\xd8modified')
+     elif variant=='invalid_image_rehashed':
+      asset.write_bytes(b'unknown image bytes');receipt['files'][asset.name]={'bytes':asset.stat().st_size,'sha256':hashlib.sha256(asset.read_bytes()).hexdigest()}
+     elif variant=='late_elapsed':
+      receipt['operation']['elapsed_seconds']=157;(folder/'export-command.json').write_text(json.dumps(receipt['operation']))
+     elif variant=='duplicate_asset':
+      path=folder/'evidence/manifest.json';manifest=json.loads(path.read_text());manifest['screenshots'].append(manifest['screenshots'][0]);path.write_text(json.dumps(manifest))
+      receipt['files']['manifest.json']={'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+     elif variant=='raw_native':native_path.write_text('{"state":"unknown"}')
+     (folder/'receipt.json').write_text('{"binding":{},"binding":{}}' if variant=='duplicate' else json.dumps(receipt))
+     self.run_exporter()
+     out=root/'build/ios-platform-evidence';value=json.loads((out/'manifest.json').read_text())
+     selected=value['selected_evidence']['results']['CompactPhoneUIResults']
+     self.assertEqual(selected['attachments'],'missing_closed_phase_evidence_UNKNOWN')
+     self.assertEqual(value['screenshots'],[]);self.assertFalse(value['evidence_complete'])
+     shutil.rmtree(out);shutil.rmtree(folder);folder.mkdir()
+     for relative,raw in snapshots.items():
+      path=folder/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+     (root/'shared.jpg').unlink(missing_ok=True);native_path.write_bytes(native_raw);(root/'build/ios-platform-step.json').write_bytes(step_raw)
+
+ def test_closed_phase_full_original_deadline_admission_and_uncertainty_reject_before_process(self):
+  for variant in ('late','uncertainty','stale','foreign_clock','unclean_native'):
+   with self.subTest(variant=variant),self.fixture('iphone_pro') as root:
+    self.produce(root,'PhoneUIResults','iphone_pro')
+    started=time.monotonic()-(1024 if variant=='late' else 0)
+    step={'identity':route.current_identity(),'device':DEVICE,'owner_pid':os.getppid(),'step_started_monotonic':started}
+    (root/'build/ios-platform-step.json').write_text(json.dumps(step))
+    if variant=='uncertainty':(root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
+    if variant=='stale':(root/'build/ios-platform-closed-phase/PhoneUIResults').mkdir(parents=True)
+    if variant=='unclean_native':
+     path=root/'build/PhoneUIResults-command.json';record=json.loads(path.read_text());record['cleanup_confirmed']=False;path.write_text(json.dumps(record))
+    with patch('watch_process.execute',side_effect=AssertionError('No closed-phase command admitted')):
+     with self.assertRaises(ValueError):NAMESPACE['retain_closed_phone_phase'](route.current_identity(),'PhoneUIResults',str(started+1 if variant=='foreign_clock' else started))
+
+ def test_clean_closed_export_reject_is_not_device_uncertainty_or_tail_fallback(self):
+  # A known-clean host-only rejection fails this component. It neither
+  # qualifies its cache nor invents an unconfirmed simulator process; the
+  # independently qualified hosted unit remains exportable without a fence.
+  import owned_process_barrier as barrier
+  for variant in ('clean_timeout','late_return','cache_binding'):
+   with self.subTest(variant=variant),self.fixture('iphone_pro') as root:
+    self.produce(root,'PhoneUIResults','iphone_pro')
+    self.produce(root,'iOSUnitResults','iphone_pro')
+    started=time.monotonic()
+    (root/'build/ios-platform-step.json').write_text(json.dumps({
+     'identity':route.current_identity(),'device':DEVICE,'owner_pid':os.getppid(),'step_started_monotonic':started}))
+    folder=root/'build/ios-platform-closed-phase/PhoneUIResults'
+    def rejected(command,cap,**kwargs):
+     operation=self.operation(command,cap,124 if variant=='clean_timeout' else 0)
+     if variant=='clean_timeout':operation.update(state='timed_out',elapsed_seconds=155.05)
+     elif variant=='late_return':operation['elapsed_seconds']=157
+     else:
+      pending=json.loads((folder/'pending.json').read_text());pending['owner_pid']+=1
+      (folder/'pending.json').write_text(json.dumps(pending))
+     return operation['exit'],'retained clean host rejection',operation
+    with patch('watch_process.execute',side_effect=rejected) as execute,patch('owned_process_barrier.mark_unconfirmed') as mark:
+     with self.assertRaises(ValueError):NAMESPACE['retain_closed_phone_phase'](route.current_identity(),'PhoneUIResults',str(started))
+    self.assertEqual(execute.call_count,1);mark.assert_not_called();self.assertFalse(barrier.blocked())
+    self.assertFalse((folder/'receipt.json').exists());self.assertTrue((folder/'export-command.json').is_file())
+    calls=[]
+    def hosted_only(command,**kwargs):
+     calls.append(command);self.assertIn('iOSUnitResults.xcresult',command)
+     self.assertEqual(command[:4],['xcrun','xcresulttool','export','attachments'])
+     Path(command[-1],'manifest.json').write_text('[]');return subprocess.CompletedProcess(command,0,'','')
+    self.run_exporter(hosted_only)
+    self.assertEqual(len(calls),1)
+    value=json.loads((root/'build/ios-platform-evidence/manifest.json').read_text())
+    selected=value['selected_evidence']['results']
+    self.assertTrue(selected['iOSUnitResults']['acceptance'])
+    self.assertEqual(selected['PhoneUIResults']['attachments'],'missing_closed_phase_evidence_UNKNOWN')
+    self.assertFalse(value['evidence_complete']);self.assertFalse(value['selected_evidence']['owned_process_uncertainty_observed'])
+    self.assertFalse(value['full_original_row_qualification']);self.assertFalse(value['release_qualification'])
+
+ def test_current_phone_log_keeps_bounded_native_browser_markers_without_growing_original_tail(self):
+  with self.fixture('iphone_se3') as root:
+   self.produce(root,'CompactPhoneUIResults','iphone_se3')
+   markers=b'PRIVACY_SYSTEM_OPEN_BASELINE:{"state":"before"}\nPRIVACY_SYSTEM_OPEN_RECEIPT:{"system_completion_success":true}\n'
+   (root/'CompactPhoneUIResults.log').write_bytes(markers+b'x'*130000+b'\nfinal command receipt\n')
+   (root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
+   self.run_exporter()
+   retained=(root/'build/ios-platform-evidence/CompactPhoneUIResults.log').read_bytes()
+   self.assertEqual(len(retained),64*1024);self.assertTrue(retained.startswith(markers));self.assertTrue(retained.endswith(b'final command receipt\n'))
+
+ def test_current_phone_failed_photos_log_saturation_cannot_starve_fixed_diagnostics(self):
+  for placement in ('outside','tail_boundary','two_unknown_lines'):
+   with self.subTest(placement=placement),self.fixture('iphone_se3') as root:
+    self.produce(root,'CompactPhoneUIResults-imports','iphone_se3',failed=True)
+    markers=(b'PHOTO_IMPORT_WAIT_V1 request=owned started=1 allowance=20 diagnostic_only=true\n'
+     b'PHOTO_IMPORT_WAIT_RETURN_V1 request=owned returned=21 diagnostic_only=true\n'
+     b'PHOTO_IMPORT_OBSERVATION_V1:{"observations_qualify_pass":false}\n'
+     b'PHOTO_IMPORT_OBSERVATION_READ_V1 request=owned started=21 returned=22 diagnostic_only=true acceptance=false\n')
+    if placement=='two_unknown_lines':
+     markers=b''.join(markers.splitlines(keepends=True)[:2])+(b'PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN late or discontinuous owned AX read\n'
+      b'PHOTO_IMPORT_OBSERVATION_V1:UNKNOWN late owned-value read; no further authored device/AX actions\n')
+    log=root/'CompactPhoneUIResults-imports.log';end=b'\nfinal failed command receipt\n'
+    if placement=='tail_boundary':
+     last=markers.splitlines(keepends=True)[-1]
+     log.write_bytes(markers[:-len(last)]+last+b'x'*(64*1024-len(last)-len(end))+end)
+    else:log.write_bytes(markers+b'ACTUAL_IMAGE_IMPORT_UI:failure hierarchy '+b'x'*130000+end)
+    seed=self.operation(['xcrun','simctl','addmedia',DEVICE,'Tests/Fixtures/unicode.png'],210)
+    (root/'build/CompactPhoneUIResults-seed-command.json').write_text(json.dumps(seed));(root/'CompactPhoneUIResults-seed.log').write_text('complete clean seed')
+    (root/'build/owned-process-cleanup.json').write_text('{"blocked":true}')
+    with self.assertRaises(SystemExit):self.run_exporter()
+    out=root/'build/ios-platform-evidence';retained=(out/log.name).read_bytes()
+    self.assertEqual(len(retained),64*1024);self.assertTrue(retained.startswith(markers));self.assertTrue(retained.endswith(b'final failed command receipt\n'))
+    for marker in ('PHOTO_IMPORT_OBSERVATION_V1:','PHOTO_IMPORT_OBSERVATION_READ_V1','PHOTO_IMPORT_WAIT_V1','PHOTO_IMPORT_WAIT_RETURN_V1'):
+     self.assertEqual(retained.count(marker.encode()),markers.count(marker.encode()))
+    value=json.loads((out/'manifest.json').read_text());selected=value['selected_evidence']['results']['CompactPhoneUIResults-imports']
+    self.assertEqual(selected['native_outcome'],'Failed');self.assertEqual(selected['counts']['failedTests'],1)
+    self.assertEqual(selected['attachments'],'not_exported_owned_uncertainty');self.assertFalse(value['evidence_complete'])
+    self.assertFalse(value['full_original_row_qualification']);self.assertFalse(value['release_qualification'])
 
  def test_exact_workflow_identity_rejects_source_ref_flag_and_mutation_without_process(self):
   changes={'GITHUB_SHA':'c'*40,'GITHUB_WORKFLOW_SHA':'c'*40,'GITHUB_REF':original.REF,
@@ -313,7 +484,7 @@ class SupplementExportTests(unittest.TestCase):
 
  def test_manual_browser_image_keeps_original_bytes_without_conversion_or_page_qualification(self):
   for scope,stem,label in (('iphone_pro','PhoneUIResults','pro-max'),('iphone_se3','CompactPhoneUIResults','SE3')):
-   with self.subTest(scope=scope),self.fixture(scope) as root:
+   with self.subTest(scope=scope),self.fixture(scope,phone_completion=False) as root:
     self.produce(root,stem,scope)
     native=b'\xff\xd8'+b'original native full-screen pixels'*100
     def runner(command,**kwargs):
@@ -351,7 +522,7 @@ class SupplementExportTests(unittest.TestCase):
             ('iphone_se3','CompactPhoneUIResults',b'not JPEG'),
             ('iphone_se3','CompactPhoneUIResults',b'\xff\xd8'+b'x'*(500*1024)))
   for scope,stem,data in variants:
-   with self.subTest(scope=scope,stem=stem,size=len(data)),self.fixture(scope) as root:
+   with self.subTest(scope=scope,stem=stem,size=len(data)),self.fixture(scope,phone_completion=False) as root:
     self.produce(root,stem,scope)
     def runner(command,**kwargs):
      self.assertEqual(command[:3],['xcrun','xcresulttool','export'])

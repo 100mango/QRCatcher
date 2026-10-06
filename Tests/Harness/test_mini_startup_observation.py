@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import unittest
 from test_ios_offline_privacy import restore_pad_for_historical_observer
+from test_photo_import_observation import restore_qrcatch_parent, restore_image_import_parent
 
 ROOT = Path(__file__).resolve().parents[2]
 APP_PATH = 'QRCatcher/AppDelegate.m'
@@ -102,6 +103,8 @@ def normalized_digest(text):
 
 def remove_observation(text, path):
     """Remove only the admitted diagnostic additions, leaving every original statement."""
+    if path == 'QRCatcher/QRCatchViewController.m':
+        text = restore_qrcatch_parent(text)
     if path == APP_PATH:
         text = re.sub(r'\n#if DEBUG\n#import <CoreFoundation/CFDate.h>.*?\n#endif\n',
                       '\n', text, count=1, flags=re.S)
@@ -331,7 +334,7 @@ __weak id releaseValue; __block BOOL releaseFlag;
                     source = restore_pad_for_historical_observer(source)
                 text = preprocess(remove_observation(source, path), 1)
                 self.assertEqual(normalized_digest(text), expected[path])
-        files = (ROOT / 'QRCatcherUITests/QRCatcherImageImportUITests.m').read_bytes()
+        files = restore_image_import_parent((ROOT / 'QRCatcherUITests/QRCatcherImageImportUITests.m').read_text()).encode()
         self.assertEqual(hashlib.sha256(files).hexdigest(),
                          'a549e2360cc1245166f8bdbe568a557b05afa09a44f0b9d406720074614d81d5')
         self.assertEqual(re.findall(r'- \(void\)(test\w+) \{', self.pad), [
@@ -416,7 +419,7 @@ __weak id releaseValue; __block BOOL releaseFlag;
                     # stripped supplemental helper; every old branch is still
                     # restored to the exact historical hash below.
                     self.assertEqual(hashlib.sha256(data).hexdigest(),
-                        '966f8993caf06f32e36a36251e98ba9fbff95cf2f893c2d561df4e683db89a58')
+                        '62d454ffb90c58c2bb7fb675cc7584cb556267d11d264e1f4c22d96aed40af32')
                     from test_ipad_mini_setup import MiniSetupTests
                     MiniSetupTests('test_nonmini_selector_and_launcher_body_byte_equivalence').test_nonmini_selector_and_launcher_body_byte_equivalence()
                 else:
@@ -479,8 +482,8 @@ __weak id releaseValue; __block BOOL releaseFlag;
             digest = normalized_digest(preprocess(remove_observation(changed, PAD_PATH), 1))
             self.assertNotEqual(digest, DEBUG_PRESERVATION_DIGESTS[PAD_PATH])
         changed = self.view.replace('[[QRCodeCodec payloadsInImage:QR] firstObject]', '@"fake-decode"', 1)
-        digest = normalized_digest(preprocess(remove_observation(changed, 'QRCatcher/QRCatchViewController.m'), 1))
-        self.assertNotEqual(digest, DEBUG_PRESERVATION_DIGESTS['QRCatcher/QRCatchViewController.m'])
+        with self.assertRaisesRegex(ValueError, 'Original QRCatch parent source changed'):
+            remove_observation(changed, 'QRCatcher/QRCatchViewController.m')
         changed = self.app.replace('#if DEBUG', '#if 1', 1)
         self.assertIn('QRStartupEnabled', preprocess(changed, 0))
 

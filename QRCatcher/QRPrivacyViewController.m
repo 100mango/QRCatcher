@@ -1,6 +1,99 @@
 #import "QRPrivacyViewController.h"
 #import "QRActionButton.h"
 
+#if DEBUG
+#include <math.h>
+static BOOL QRPrivacySystemEnabled;
+static BOOL QRPrivacySystemUnknown;
+static NSUInteger QRPrivacySystemRequests;
+static NSUInteger QRPrivacySystemCompletions;
+static BOOL QRPrivacySystemOpened;
+static double QRPrivacySystemStarted;
+static double QRPrivacySystemCompleted;
+static NSString *QRPrivacySystemRequestID;
+static NSString *QRPrivacySystemLaunchID;
+static NSString *QRPrivacySystemURL;
+static __weak UILabel *QRPrivacySystemLabel;
+static NSString *QRPrivacySystemCameraValue;
+
+int QRPrivacySystemOpenObservationQualifies(unsigned long requests, unsigned long completions,
+                                            int opened, int unknown, double started, double completed) {
+    double elapsed = completed - started;
+    return requests == 1 && completions == 1 && opened && !unknown &&
+        isfinite(started) && isfinite(completed) && isfinite(elapsed) && elapsed >= 0 && elapsed < 10;
+}
+BOOL QRPrivacySystemOpenObservationLaunchGate(NSArray<NSString *> *arguments, int appPID) {
+    if ([arguments containsObject:@"-photo-import-observation-v1"]) return NO;
+    NSUInteger uiCount = 0, tokenCount = 0, requestCount = 0;
+    for (NSString *argument in arguments) {
+        if ([argument isEqualToString:@"-ui-testing"]) uiCount += 1;
+        if ([argument isEqualToString:@"-privacy-system-open-v1"]) tokenCount += 1;
+        if ([argument isEqualToString:@"-privacy-system-open-request-id"]) requestCount += 1;
+    }
+    if (uiCount != 1 || tokenCount != 1 || requestCount != 1 || appPID <= 0) return NO;
+    NSUInteger index = [arguments indexOfObject:@"-privacy-system-open-request-id"];
+    if (index + 1 >= arguments.count) return NO;
+    NSString *requestID = arguments[index + 1];
+    NSUUID *request = [[NSUUID alloc] initWithUUIDString:requestID];
+    return request && [request.UUIDString isEqualToString:requestID];
+}
+static NSString *QRPrivacySystemEncodedValue(void) {
+    if (!QRPrivacySystemEnabled) return QRPrivacySystemCameraValue;
+    BOOL accepted = QRPrivacySystemOpenObservationQualifies(QRPrivacySystemRequests, QRPrivacySystemCompletions,
+        QRPrivacySystemOpened, QRPrivacySystemUnknown, QRPrivacySystemStarted, QRPrivacySystemCompleted);
+    NSString *status = accepted ? @"system_accepted" :
+        (!QRPrivacySystemUnknown && QRPrivacySystemRequests == 0 && QRPrivacySystemCompletions == 0 ? @"baseline" : @"UNKNOWN");
+    NSDictionary *record = @{@"version": @1, @"case": @"testDeniedCameraAndEmptyHistory",
+        @"request_id": QRPrivacySystemRequestID, @"launch_id": QRPrivacySystemLaunchID,
+        @"app_pid": @(NSProcessInfo.processInfo.processIdentifier), @"requests": @(QRPrivacySystemRequests),
+        @"completions": @(QRPrivacySystemCompletions),
+        @"opened": QRPrivacySystemCompletions ? (id)[NSNumber numberWithBool:QRPrivacySystemOpened] : NSNull.null,
+        @"url": QRPrivacySystemURL ?: (id)NSNull.null,
+        @"request_uptime": QRPrivacySystemRequests && isfinite(QRPrivacySystemStarted) ? (id)@(QRPrivacySystemStarted) : NSNull.null,
+        @"completion_uptime": QRPrivacySystemCompletions && isfinite(QRPrivacySystemCompleted) ? (id)@(QRPrivacySystemCompleted) : NSNull.null,
+        @"status": status, @"page_rendered": @"UNKNOWN"};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+    if (!data || data.length > 1024) { QRPrivacySystemUnknown = YES; return QRPrivacySystemCameraValue; }
+    NSString *JSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    return [NSString stringWithFormat:@"%@ privacy_system_open_v1=%@", QRPrivacySystemCameraValue ?: @"", JSON];
+}
+static void QRPrivacySystemPublish(void) {
+    if (QRPrivacySystemEnabled && QRPrivacySystemLabel) QRPrivacySystemLabel.accessibilityValue = QRPrivacySystemEncodedValue();
+}
+void QRPrivacySystemOpenObservationAttach(UILabel *label) {
+    if (!QRPrivacySystemEnabled) {
+        NSArray *arguments = NSProcessInfo.processInfo.arguments;
+        if (!QRPrivacySystemOpenObservationLaunchGate(arguments, NSProcessInfo.processInfo.processIdentifier)) return;
+        QRPrivacySystemRequestID = arguments[[arguments indexOfObject:@"-privacy-system-open-request-id"] + 1];
+        QRPrivacySystemLaunchID = NSUUID.UUID.UUIDString;
+        QRPrivacySystemEnabled = YES;
+    }
+    QRPrivacySystemLabel = label;
+    QRPrivacySystemCameraValue = label.accessibilityValue;
+    QRPrivacySystemPublish();
+}
+NSString *QRPrivacySystemOpenObservationMergeCameraValue(NSString *cameraValue) {
+    if (!QRPrivacySystemEnabled) return cameraValue;
+    QRPrivacySystemCameraValue = cameraValue;
+    return QRPrivacySystemEncodedValue();
+}
+static void QRPrivacySystemRecordRequest(NSURL *URL) {
+    QRPrivacySystemRequests = MIN(QRPrivacySystemRequests + 1, 2);
+    if (QRPrivacySystemRequests != 1 || QRPrivacySystemCompletions != 0 || !NSThread.isMainThread) QRPrivacySystemUnknown = YES;
+    QRPrivacySystemURL = URL.absoluteString;
+    QRPrivacySystemStarted = NSProcessInfo.processInfo.systemUptime;
+    QRPrivacySystemPublish();
+}
+static void QRPrivacySystemRecordCompletion(BOOL opened, BOOL closed) {
+    QRPrivacySystemCompletions = MIN(QRPrivacySystemCompletions + 1, 2);
+    QRPrivacySystemOpened = opened;
+    QRPrivacySystemCompleted = NSProcessInfo.processInfo.systemUptime;
+    if (closed || !NSThread.isMainThread || !QRPrivacySystemOpenObservationQualifies(QRPrivacySystemRequests,
+        QRPrivacySystemCompletions, opened, QRPrivacySystemUnknown, QRPrivacySystemStarted, QRPrivacySystemCompleted)) QRPrivacySystemUnknown = YES;
+    QRPrivacySystemPublish();
+}
+#endif
+
 @interface QRPrivacyViewController ()
 @property (nonatomic, strong) UIButton *externalButton;
 @property (nonatomic, strong) UILabel *errorMessage;
@@ -96,6 +189,20 @@
     ]];
 }
 - (void)openExternalURL:(NSURL *)URL completion:(void (^)(BOOL))completion {
+#if DEBUG
+    if (QRPrivacySystemEnabled) {
+        void (^originalCompletion)(BOOL) = completion;
+        __weak typeof(self) weakSelf = self;
+        completion = ^(BOOL opened) {
+            QRPrivacyViewController *controller = weakSelf;
+            QRPrivacySystemRecordCompletion(opened, !controller || controller.closing);
+            if (originalCompletion) originalCompletion(opened);
+        };
+        // Only this actual public API boundary records a request. A host spy
+        // overriding openExternalURL:completion: cannot create system evidence.
+        QRPrivacySystemRecordRequest(URL);
+    }
+#endif
     [UIApplication.sharedApplication openURL:URL options:@{} completionHandler:completion];
 }
 - (void)openPolicyInBrowser {

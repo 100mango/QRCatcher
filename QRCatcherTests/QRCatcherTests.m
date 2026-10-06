@@ -317,7 +317,40 @@
     XCTAssertEqual(privacy.openedURLs.count, 0, @"Layout cannot request the website.");
     [privacy willMoveToParentViewController:nil]; [privacy.view removeFromSuperview]; [privacy removeFromParentViewController];
 }
+#if DEBUG
+- (void)assertPrivacySystemObservationGateAndCompletionPolicy {
+    NSString *requestID = @"11111111-1111-4111-8111-111111111111";
+    NSArray *arguments = @[@"QRCatcher", @"-ui-testing", @"-privacy-system-open-v1", @"-privacy-system-open-request-id", requestID];
+    XCTAssertTrue(QRPrivacySystemOpenObservationLaunchGate(arguments, 123));
+    XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate([arguments arrayByAddingObject:@"-photo-import-observation-v1"], 123));
+    for (NSString *flag in @[@"-ui-testing", @"-privacy-system-open-v1", @"-privacy-system-open-request-id"]) {
+        NSMutableArray *missing = [arguments mutableCopy]; [missing removeObject:flag];
+        XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate(missing, 123));
+        XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate([arguments arrayByAddingObject:flag], 123));
+    }
+    XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate(arguments, 0));
+    XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate(@[@"-ui-testing", @"-privacy-system-open-v1", @"-privacy-system-open-request-id"], 123));
+    XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate(@[@"-ui-testing", @"-privacy-system-open-v1", @"-privacy-system-open-request-id", @"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"], 123));
+    XCTAssertFalse(QRPrivacySystemOpenObservationLaunchGate(@[@"-ui-testing", @"-privacy-system-open-v1-suffix", @"-privacy-system-open-request-id", requestID], 123));
+    XCTAssertTrue(QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, 109.999));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(0, 0, YES, NO, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 0, YES, NO, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(2, 1, YES, NO, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 2, YES, NO, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, NO, NO, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, YES, YES, 100, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, 110));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, 99));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, NAN, 100));
+    XCTAssertFalse(QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, INFINITY));
+    // This pure policy exercise and the existing spy below are unit seams.
+    // Neither invokes UIApplication nor fabricates a system-acceptance receipt.
+}
+#endif
 - (void)testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent {
+#if DEBUG
+    [self assertPrivacySystemObservationGateAndCompletionPolicy];
+#endif
     [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryLarge];
     [self assertPrivacyWebsiteNoticeAtCompactWidthForCategory:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge];
     QRTestPrivacyController *privacy = [QRTestPrivacyController new];

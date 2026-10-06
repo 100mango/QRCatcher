@@ -24,12 +24,13 @@ import test_ipad_mini_setup as base
 
 DEVICE=base.DEVICE
 STUB=r'''#!/usr/bin/env python3
-import json,os,sys
+import json,os,shutil,sys
 from pathlib import Path
 name=Path(sys.argv[0]).name;args=sys.argv[1:]
 with open(os.environ['APPLE_CALL_LOG'],'a') as f:f.write(json.dumps([name,args])+'\n')
 if name=='xcodebuild':
  result=args[args.index('-resultBundlePath')+1]
+ bundle=Path(result);bundle.mkdir();(bundle/'Info.plist').write_text('Explicit native result metadata double')
  key='WARMUP_EXIT' if '-warmup.' in result else 'FILES_EXIT' if '-files.' in result else 'PHOTOS_EXIT' if '-imports.' in result or result in ('PadUIResults.xcresult','MiniUIResults.xcresult') else 'ORDINARY_EXIT'
  print('Explicit native command double; no app execution')
  print('X'*int(os.environ.get('NATIVE_LOG_BYTES','0')))
@@ -49,6 +50,20 @@ elif args[:2]==['simctl','bootstatus']:
  print('Monitoring boot status for QRCatcher Mini 123-1 ('+os.environ['DEVICE']+').\nDevice already booted, nothing to do.\n')
 elif args[:2]==['simctl','addmedia']:raise SystemExit(int(os.environ.get('SEED_STATUS','0')))
 elif args[:2]==['simctl','get_app_container']:print(os.environ['SYNTHETIC_APP' if args[-1]=='app' else 'SYNTHETIC_DATA'])
+elif args[:3]==['xcresulttool','export','attachments']:
+ folder=Path(args[-1]);entries=[]
+ result=args[args.index('--path')+1]
+ checkpoints=['image-import-real-files' if '-files.' in result else 'image-import-real-photos','image-import-history-after-cancel'] if '-files.' in result or '-imports.' in result else ['privacy-open-diagnostic','privacy-return-diagnostic']
+ for index,checkpoint in enumerate(checkpoints):
+  filename='frame-'+str(index)+'.jpg';(folder/filename).write_bytes(b'\xff\xd8Explicit selected phase frame bytes')
+  entries.append({'name':checkpoint,'exportedFileName':filename})
+ if '-files.' in result or '-imports.' in result:
+  phases=[{'phase':phase,'callback_issues':0,'registered_failure_delta':0,'api_returned_success':True,'error':''} for phase in ['app-owned-result','same-history-after-cancel']]
+  for checkpoint,raw in [('image-import-audit-pair-required','phone-result-history'),('image-import-result-audit-tree','Explicit result tree'),('image-import-history-audit-tree','Explicit history tree'),('image-import-audit-pair-receipts',json.dumps(phases))]:
+   filename=checkpoint+'.txt';(folder/filename).write_text(raw);entries.append({'name':checkpoint,'exportedFileName':filename})
+ (folder/'manifest.json').write_text(json.dumps(entries))
+ if os.environ.get('ATTACHMENT_FENCE_AFTER_EXPORT')=='true':Path('build/owned-process-cleanup.json').write_text('{"blocked":true}')
+elif name=='sips':shutil.copyfile(args[-3],args[-1])
 elif args[:3]==['xcresulttool','get','test-results']:
  result=args[-1]
  count=30 if result=='iOSUnitResults.xcresult' else 2 if result in ('PhoneUIResults.xcresult','CompactPhoneUIResults.xcresult','PadUIResults-layout.xcresult') else 1
@@ -80,6 +95,7 @@ class SupplementExecutorTests(unittest.TestCase):
    scripts=root/'scripts';scripts.mkdir()
    for source in (ROOT/'scripts').glob('*.py'):shutil.copyfile(source,scripts/source.name)
    shutil.copyfile(ROOT/'scripts/run_ios_platform_ui.sh',scripts/'run_ios_platform_ui.sh')
+   shutil.copyfile(ROOT/'scripts/evidence-allocation.json',scripts/'evidence-allocation.json')
    for filename in (route.original.CANONICAL,route.original.WORKFLOW,route.WORKFLOW):
     target=root/filename;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/filename,target)
    (root/route.WORKFLOW).write_text((route.render_workflow if phone_completion else route.render_legacy_workflow)(
@@ -88,7 +104,7 @@ class SupplementExecutorTests(unittest.TestCase):
    app=root/'synthetic-app';app.mkdir();data=root/'synthetic-data';data.mkdir()
    (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'100mango.QRCatcher','UIFileSharingEnabled':True,'LSSupportsOpeningDocumentsInPlace':True}))
    binary=root/'bin';binary.mkdir()
-   for command in ('xcrun','xcodebuild'):(binary/command).write_text(STUB);(binary/command).chmod(0o755)
+   for command in ('xcrun','xcodebuild','sips'):(binary/command).write_text(STUB);(binary/command).chmod(0o755)
    env={**os.environ,'GITHUB_WORKSPACE':str(root),'GITHUB_SHA':base.SHA,'GITHUB_WORKFLOW_SHA':base.SHA,
     'GITHUB_REPOSITORY':'100mango/QRCatcher','GITHUB_REF':route.REF,'GITHUB_WORKFLOW_REF':route.WORKFLOW_REF,
     'GITHUB_EVENT_NAME':'push','GITHUB_JOB':'platform','RUNNER_OS':'macOS','RUNNER_ARCH':'ARM64',
@@ -102,6 +118,16 @@ class SupplementExecutorTests(unittest.TestCase):
    env.pop('PHONE_COMPLETION_ONLY',None)
    if phone_completion:env['PHONE_COMPLETION_ONLY']='true'
    env.update(SIMULATOR_ID=DEVICE,COMPACT_SIMULATOR_ID=DEVICE,IPAD_SIMULATOR_ID=DEVICE,MINI_SIMULATOR_ID=DEVICE)
+   env['PYTHONOPTIMIZE']='0' if __debug__ else '1'
+   if phone_completion and scope in route.PHONE_SCOPES:
+    before=Path.cwd()
+    with patch.dict(os.environ,env,clear=True):
+     os.chdir(root)
+     try:
+      provenance={**route.current_identity(),'tested_tree':'b'*40,'source_readback_phase':'bounded initial original iOS HEAD/tree/diff/status'}
+      raw=(json.dumps(provenance)+'\n').encode();(root/route.original.RECEIPT).write_bytes(raw)
+      env[route.original.INITIAL_HASH_KEY]=hashlib.sha256(raw).hexdigest()
+     finally:os.chdir(before)
    yield root,env
  def invoke(self,root,env,result=None,kind=None):
   defaults={'iphone_pro':('PhoneUIResults.xcresult','QRCatcherUITests'),
@@ -222,6 +248,89 @@ class SupplementExecutorTests(unittest.TestCase):
     self.assertEqual(len({item['phase_started_monotonic'] for item in admissions}),1)
     self.assertEqual([item['phase_seconds'] for item in admissions],[1200 if scope=='iphone_pro' else 1320]*3)
     self.assertEqual([item['required_seconds'] for item in admissions],[52,32,32] if scope=='iphone_se3' else [32,32,32])
+ def test_actual_poisoned_env_early_phone_evidence_retains_closed_phases_then_fences_all_later_commands(self):
+  poison={'PHONE_COMPLETION_ONLY':'true','EVIDENCE_SCOPE':'ipad_mini','GITHUB_REF':'poisoned/ref',
+   'QRCATCHER_CLOSED_PHASE_MODE':'skip','QRCATCHER_EXPORT_PHASE':'imports','QRCATCHER_EXPORT_TIMEOUT':'999999'}
+  for scope in route.PHONE_SCOPES:
+   with self.subTest(scope=scope),patch.dict(os.environ,poison),self.fixture(scope,phone_completion=True) as (root,env):
+    self.receipt_double(root)
+    result=self.invoke(root,{**env,'RECEIPT_TARGET':'seed','RECEIPT_CHANGE':'{"state":"timed_out","cleanup_confirmed":false}'})
+    self.assertEqual(result.returncode,126,result.stdout+result.stderr)
+    calls=self.calls(root);seed=next(index for index,(name,args) in enumerate(calls) if 'addmedia' in args)
+    self.assertEqual(seed,len(calls)-1)
+    exports=[index for index,(name,args) in enumerate(calls) if args[:3]==['xcresulttool','export','attachments']]
+    self.assertEqual(len(exports),2);self.assertTrue(all(index<seed for index in exports))
+    natives=[index for index,(name,args) in enumerate(calls) if name=='xcodebuild']
+    fixture_query=next(index for index,(name,args) in enumerate(calls) if 'get_app_container' in args)
+    self.assertLess(natives[0],exports[0]);self.assertLess(exports[0],fixture_query)
+    self.assertLess(natives[1],exports[1]);self.assertLess(exports[1],seed)
+    base_name='PhoneUIResults' if scope=='iphone_pro' else 'CompactPhoneUIResults'
+    step=json.loads((root/'build/ios-platform-step.json').read_text())
+    for stem in (base_name,base_name+'-files'):
+     receipt=json.loads((root/'build/ios-platform-closed-phase'/stem/'receipt.json').read_text())
+     self.assertEqual(receipt['binding']['step'],step);self.assertEqual(receipt['binding']['stem'],stem)
+     self.assertEqual(receipt['operation']['timeout_seconds'],155)
+     self.assertLessEqual(receipt['export_started_monotonic']+177,step['step_started_monotonic']+(1200 if scope=='iphone_pro' else 1320))
+     self.assertGreater(json.loads((root/'build'/(stem+'-summary.json')).read_text())['passedTests'],0)
+    before=(root/'calls.jsonl').read_bytes()
+    tail=subprocess.run([sys.executable,'scripts/export_ios_platform_screenshots.py'],cwd=root,env=env,capture_output=True,text=True,timeout=10)
+    self.assertEqual(tail.returncode,0,tail.stdout+tail.stderr);self.assertEqual((root/'calls.jsonl').read_bytes(),before)
+    manifest=json.loads((root/'build/ios-platform-evidence/manifest.json').read_text())
+    self.assertEqual(len(manifest['screenshots']),4);self.assertEqual(len(manifest['import_audit_attachments']),4)
+    self.assertEqual(manifest['missing_import_audit_pairs'],[]);self.assertFalse(manifest['evidence_complete'])
+    self.assertTrue(manifest['selected_evidence']['owned_process_uncertainty_observed'])
+    self.assertTrue(all(manifest['selected_evidence']['results'][stem]['acceptance'] for stem in (base_name,base_name+'-files')))
+
+ def test_actual_finalized_failed_photos_keeps_prior_closed_passes_and_raw_failure(self):
+  with self.fixture('iphone_se3',phone_completion=True) as (root,env):
+   result=self.invoke(root,{**env,'PHOTOS_EXIT':'65'});self.assertEqual(result.returncode,65,result.stdout+result.stderr)
+   before=self.calls(root)
+   tail=subprocess.run([sys.executable,'scripts/export_ios_platform_screenshots.py'],cwd=root,env=env,capture_output=True,text=True,timeout=10)
+   self.assertEqual(tail.returncode,0,tail.stdout+tail.stderr)
+   after=self.calls(root)[len(before):]
+   exports=[args for name,args in after if args[:3]==['xcresulttool','export','attachments']]
+   self.assertEqual([args[args.index('--path')+1] for args in exports],['CompactPhoneUIResults-imports.xcresult'])
+   manifest=json.loads((root/'build/ios-platform-evidence/manifest.json').read_text())
+   for stem in ('CompactPhoneUIResults','CompactPhoneUIResults-files'):
+    result=manifest['selected_evidence']['results'][stem]
+    self.assertTrue(result['acceptance']);self.assertEqual(result['native_outcome'],'Passed')
+    self.assertEqual(result['attachments'],'retained_closed_phase_before_later_uncertainty')
+   photo=manifest['selected_evidence']['results']['CompactPhoneUIResults-imports']
+   self.assertTrue(photo['acceptance']);self.assertEqual(photo['native_outcome'],'Failed');self.assertEqual(photo['counts']['failedTests'],1)
+   self.assertFalse(manifest['full_original_row_qualification']);self.assertFalse(manifest['release_qualification'])
+   self.assertEqual(len(manifest['screenshots']),6);self.assertEqual(manifest['missing_import_audit_pairs'],[])
+
+ def test_actual_uncertainty_during_early_export_stops_before_conversion_fixture_seed_or_cache_acceptance(self):
+  with self.fixture('iphone_pro',phone_completion=True) as (root,env):
+   result=self.invoke(root,{**env,'ATTACHMENT_FENCE_AFTER_EXPORT':'true'})
+   self.assertEqual(result.returncode,126,result.stdout+result.stderr)
+   calls=self.calls(root)
+   self.assertEqual(sum(args[:3]==['xcresulttool','export','attachments'] for name,args in calls),1)
+   self.assertFalse(any(name=='sips' or 'get_app_container' in args or 'addmedia' in args for name,args in calls))
+   self.assertTrue((root/'build/PhoneUIResults-summary.json').is_file())
+   self.assertFalse((root/'build/ios-platform-closed-phase/PhoneUIResults/receipt.json').exists())
+   before=(root/'calls.jsonl').read_bytes()
+   tail=subprocess.run([sys.executable,'scripts/export_ios_platform_screenshots.py'],cwd=root,env=env,capture_output=True,text=True,timeout=10)
+   self.assertEqual(tail.returncode,0,tail.stdout+tail.stderr);self.assertEqual((root/'calls.jsonl').read_bytes(),before)
+   value=json.loads((root/'build/ios-platform-evidence/manifest.json').read_text())
+   self.assertTrue(value['selected_evidence']['results']['PhoneUIResults']['acceptance'])
+   self.assertEqual(value['selected_evidence']['results']['PhoneUIResults']['attachments'],'missing_closed_phase_evidence_UNKNOWN')
+   self.assertEqual(value['screenshots'],[])
+
+ def test_actual_early_phone_export_cannot_reset_original_clock_or_borrow_later_phase(self):
+  for scope,seconds in (('iphone_pro',1200),('iphone_se3',1320)):
+   with self.subTest(scope=scope),self.fixture(scope,phone_completion=True) as (root,env):
+    source=root/'scripts/run_ios_platform_ui.sh';text=source.read_text()
+    before="STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')"
+    source.write_text(text.replace(before,"STEP_STARTED=$(python3 -c 'import time;print(time.monotonic()-"+str(seconds-176)+")')",1))
+    result=self.invoke(root,env);self.assertEqual(result.returncode,126,result.stdout+result.stderr)
+    calls=self.calls(root)
+    self.assertEqual(sum(name=='xcodebuild' for name,args in calls),1)
+    self.assertEqual(sum(args[:3]==['xcresulttool','get','test-results'] for name,args in calls),1)
+    self.assertFalse(any(args[:3]==['xcresulttool','export','attachments'] or name=='sips' or 'get_app_container' in args or 'addmedia' in args for name,args in calls))
+    self.assertIn('Full closed-phase export and cleanup reserve unavailable',result.stderr)
+    self.assertFalse((root/'build/ios-platform-closed-phase').exists())
+
  def test_actual_hosted_workflow_first_reader_is30_with_original900s_phase(self):
   with self.fixture('iphone_pro',phone_completion=True) as (root,env):
    text=(root/route.WORKFLOW).read_text()
@@ -254,7 +363,7 @@ class SupplementExecutorTests(unittest.TestCase):
    self.assertEqual([item['state'] for item in reports],['unqualified_retained_raw','missing','missing'])
    self.assertTrue(all(item['acceptance'] is False for item in reports));self.assertIn(raw,result.stdout)
    self.assertEqual((summary.read_bytes(),receipt.read_bytes()),before)
-   self.assertEqual(set(path.name for path in (root/'build').iterdir()),{summary.name,receipt.name})
+   self.assertEqual(set(path.name for path in (root/'build').iterdir()),{summary.name,receipt.name,route.original.RECEIPT.name})
  def test_actual_current_phone_route_missing_false_flag_or_pad_mini_refuses_before_any_command(self):
   for scope in ('iphone_pro','iphone_se3'):
    for value in (None,'false','TRUE',''):

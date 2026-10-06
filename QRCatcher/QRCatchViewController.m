@@ -10,6 +10,13 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
+#if DEBUG
+#import "QRPrivacyViewController.h"
+#import <math.h>
+@interface QRImageImportQueue (QRPhotoObservationPrivate)
++ (NSOperation *)readWithLoader:(NSData *(^)(NSError **))loader debugDecodeObserver:(void (^)(void))observer completion:(void (^)(NSArray<NSString *> *, NSError *))completion;
+@end
+#endif
 
 @interface QRCatchViewController () <AVCaptureMetadataOutputObjectsDelegate, PHPickerViewControllerDelegate, UIDocumentPickerDelegate>
 @property (nonatomic, strong) UIView *preview;
@@ -40,6 +47,12 @@
 @property (nonatomic, copy) NSString *payload;
 #if DEBUG
 @property (atomic) NSUInteger cameraDiagnosticEpoch;
+@property (nonatomic, copy) NSString *photoObservationRequestID;
+@property (nonatomic, copy) NSString *photoObservationLaunchID;
+@property (nonatomic, copy) NSString *photoObservationCameraValue;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *photoObservationTimes;
+@property (nonatomic) NSUInteger photoObservationGeneration;
+@property (nonatomic) BOOL photoObservationUnknown;
 #endif
 @end
 
@@ -87,6 +100,7 @@
     self.statusLabel.accessibilityIdentifier = @"scan.status";
 #if DEBUG
     QRStartupObservationAttach(self.statusLabel);
+    QRPrivacySystemOpenObservationAttach(self.statusLabel);
 #endif
     self.resultLabel = [UILabel new];
     self.resultLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
@@ -208,6 +222,62 @@
     [self.view setNeedsLayout];
 }
 #if DEBUG
+- (void)beginPhotoObservationForGeneration:(NSUInteger)generation {
+    NSArray<NSString *> *args = NSProcessInfo.processInfo.arguments;
+    if (args.count > 64 || self.photoObservationRequestID) return;
+    for (NSString *flag in @[@"-ui-testing", @"-reset-history", @"-photo-import-observation-v1", @"-photo-import-observation-request-id", @"-fixture-payload"]) {
+        NSUInteger count = 0;
+        for (NSString *arg in args) if ([arg isEqualToString:flag]) count += 1;
+        if (count != 1) return;
+    }
+    if ([args containsObject:@"-privacy-system-open-v1"] || [args containsObject:@"-mini-startup-observation-v1"]) return;
+    NSUInteger requestIndex = [args indexOfObject:@"-photo-import-observation-request-id"];
+    NSUInteger fixtureIndex = [args indexOfObject:@"-fixture-payload"];
+    if (requestIndex + 1 >= args.count || fixtureIndex + 1 >= args.count || ![args[fixtureIndex + 1] isEqualToString:@"Previous selected result"]) return;
+    NSString *requestID = args[requestIndex + 1];
+    NSUUID *canonical = [[NSUUID alloc] initWithUUIDString:requestID];
+    if (![canonical.UUIDString isEqualToString:requestID] || !generation || NSProcessInfo.processInfo.processIdentifier <= 0) return;
+    @synchronized (self) {
+        self.photoObservationRequestID = requestID;
+        self.photoObservationLaunchID = NSUUID.UUID.UUIDString;
+        self.photoObservationGeneration = generation;
+        self.photoObservationTimes = [NSMutableDictionary new];
+        self.photoObservationCameraValue = self.statusLabel.accessibilityValue ?: @"";
+    }
+}
+- (void)recordPhotoObservation:(NSString *)phase generation:(NSUInteger)generation {
+    @synchronized (self) {
+        if (!self.photoObservationRequestID) return;
+        double now = NSProcessInfo.processInfo.systemUptime;
+        NSArray *closed = @[@"provider_request", @"provider_callback", @"decode_return", @"main_update_return"];
+        if (generation != self.photoObservationGeneration || ([phase isEqualToString:@"main_update_return"] && generation != self.importGeneration) || ![closed containsObject:phase] || self.photoObservationTimes[phase] || self.photoObservationTimes.count >= 4 || !isfinite(now) || now < 0) {
+            self.photoObservationUnknown = YES;
+            return;
+        }
+        for (NSNumber *earlier in self.photoObservationTimes.allValues) if (now < earlier.doubleValue) self.photoObservationUnknown = YES;
+        self.photoObservationTimes[phase] = @(now);
+    }
+}
+- (NSString *)mergePhotoObservationCameraValue:(NSString *)cameraValue {
+    if (!self.photoObservationRequestID) return cameraValue;
+    @synchronized (self) {
+        self.photoObservationCameraValue = cameraValue ?: @"";
+        NSMutableDictionary *times = [NSMutableDictionary new];
+        for (NSString *phase in @[@"provider_request", @"provider_callback", @"decode_return", @"main_update_return"]) times[phase] = self.photoObservationTimes[phase] ?: NSNull.null;
+        NSDictionary *record = @{@"version": @1, @"request_id": self.photoObservationRequestID, @"launch_id": self.photoObservationLaunchID,
+            @"pid": @(NSProcessInfo.processInfo.processIdentifier), @"generation": @(self.photoObservationGeneration),
+            @"clock": @"NSProcessInfo.systemUptime", @"unknown": [NSNumber numberWithBool:self.photoObservationUnknown],
+            @"times": times, @"observations_qualify_pass": @NO};
+        NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+        if (!data || data.length > 1024) return cameraValue;
+        NSString *value = [NSString stringWithFormat:@"%@ photo_import_observation_v1=%@", cameraValue ?: @"", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
+        return [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= 4096 ? value : cameraValue;
+    }
+}
+- (void)publishPhotoObservation {
+    if (!self.photoObservationRequestID || !NSThread.isMainThread) return;
+    self.statusLabel.accessibilityValue = QRPrivacySystemOpenObservationMergeCameraValue([self mergePhotoObservationCameraValue:self.photoObservationCameraValue]);
+}
 - (void)traceCamera:(NSString *)event {
     if (!NSThread.isMainThread) {
         __weak typeof(self) weakSelf = self;
@@ -219,7 +289,7 @@
     NSString *cameraValue = [NSString stringWithFormat:@"event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d ready=%d wants=%d", event,
         (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
         (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState, self.visible, self.ready, self.wantsCamera];
-    self.statusLabel.accessibilityValue = QRStartupObservationMergeCameraValue(cameraValue);
+    self.statusLabel.accessibilityValue = QRPrivacySystemOpenObservationMergeCameraValue([self mergePhotoObservationCameraValue:QRStartupObservationMergeCameraValue(cameraValue)]);
     NSLog(@"QRCATCHER_CAMERA_TRACE event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d result=%d importing=%d presented=%@ policy=%d ready=%d wants=%d status=%@",
           event, (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
           (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState,
@@ -481,7 +551,15 @@
     NSProgress *readProgress = [NSProgress progressWithTotalUnitCount:1];
     self.importReadProgress = readProgress;
     __weak typeof(self) weakSelf = self;
+#if DEBUG
+    [self beginPhotoObservationForGeneration:generation];
+    [self recordPhotoObservation:@"provider_request" generation:generation];
+    [self publishPhotoObservation];
+#endif
     self.photoProgress = [provider loadFileRepresentationForTypeIdentifier:type completionHandler:^(NSURL *URL, NSError *providerError) {
+#if DEBUG
+        [weakSelf recordPhotoObservation:@"provider_callback" generation:generation];
+#endif
         // The provider owns this temporary URL only until the callback returns.
         // Take the capped, cancellable snapshot here, before scheduling decode.
         if (readProgress.cancelled) return;
@@ -494,11 +572,22 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         if (generation != self.importGeneration) return;
         __weak typeof(self) weakSelf = self;
+#if DEBUG
+        [self publishPhotoObservation];
+#endif
         self.importOperation = [QRImageImportQueue readWithLoader:^NSData *(NSError **error) {
             if (error) *error = importError;
             return data;
+#if DEBUG
+        } debugDecodeObserver:self.photoObservationRequestID ? ^{ [weakSelf recordPhotoObservation:@"decode_return" generation:generation]; } : nil completion:^(NSArray<NSString *> *values, NSError *error) {
+#else
         } completion:^(NSArray<NSString *> *values, NSError *error) {
+#endif
             [weakSelf finishImportedValues:values error:error generation:generation];
+#if DEBUG
+            [weakSelf recordPhotoObservation:@"main_update_return" generation:generation];
+            [weakSelf publishPhotoObservation];
+#endif
         }];
     });
 }

@@ -324,8 +324,9 @@ class MiniSetupTests(unittest.TestCase):
         restored=body.replace(anchor,anchor+fixed,1)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),'b39e1b91d593b65d7d7fc25beee0646a89d439efc5ceb50bfd875c47058528e4')
     def test_nonmini_selector_and_launcher_body_byte_equivalence(self):
+        from test_photo_import_observation import restore_launcher_parent
         selector=(ROOT/'scripts/select_ios_platform_matrix.py').read_text().replace("if os.environ.get('EVIDENCE_SCOPE') == 'ipad_mini':\n from ipad_mini_setup import configure\n configure()\n raise SystemExit(0)\n",'',1)
-        launcher=(ROOT/'scripts/run_ios_platform_ui.sh').read_text().replace("if [ \"${EVIDENCE_SCOPE:-}\" = ipad_mini ] || [ \"${2:-}\" = MiniUIResults.xcresult ]; then\n  python3 -u scripts/ipad_mini_setup.py row \"$@\"\n  exit $?\nfi\n",'',1)
+        launcher=restore_launcher_parent((ROOT/'scripts/run_ios_platform_ui.sh').read_text()).replace("if [ \"${EVIDENCE_SCOPE:-}\" = ipad_mini ] || [ \"${2:-}\" = MiniUIResults.xcresult ]; then\n  python3 -u scripts/ipad_mini_setup.py row \"$@\"\n  exit $?\nfi\n",'',1)
         # Remove only the closed supplemental additions, then retain the
         # historical byte fence for every old non-Mini command and branch.
         launcher,count=re.subn(r'(?ms)^SUPPLEMENT_ONLY=false\n.*?^  SUPPLEMENT_ONLY=true\nfi\n','',launcher)
@@ -372,6 +373,9 @@ class MiniSetupTests(unittest.TestCase):
         for name,digest in protected.items():
             with self.subTest(path=name):
                 data=(ROOT/name).read_bytes()
+                if name=='QRCatcherUITests/QRCatcherImageImportUITests.m':
+                    from test_photo_import_observation import restore_image_import_parent
+                    data=restore_image_import_parent(data.decode()).encode()
                 if name=='QRCatcherUITests/QRCatcherPadUITests.m':
                     from test_ios_offline_privacy import restore_pad_for_historical_observer
                     data=restore_pad_for_historical_observer(data.decode()).encode()

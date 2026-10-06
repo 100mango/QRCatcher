@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded synthetic phone/iPad evidence. Never uploads full xcresult archives."""
-import hashlib,json,math,os,pathlib,re,struct,subprocess,time
+import hashlib,json,math,os,pathlib,re,struct,subprocess,sys,time
 from export_settings_discovery import export_settings
 export_started=time.monotonic()
 def required_phone_result_endpoints(mode):
@@ -193,10 +193,130 @@ def supplement_export_blocked(identity):
   return False
  except (OSError,ValueError,KeyError,TypeError):return True
 
-def retain_supplement_records(identity,out,limit):
+# These two fixed phone phases must survive a later independent Photos fence.
+# The same exporter runs once per closed phase, inside the original UI clock.
+def closed_phone_stems(identity):
+ if os.environ.get('PHONE_COMPLETION_ONLY')!='true':return ()
+ base={'iphone_pro':'PhoneUIResults','iphone_se3':'CompactPhoneUIResults'}.get(identity['scope'])
+ if base is None:raise ValueError('Closed phase retention requires the selected phone route')
+ return (base,base+'-files')
+
+def closed_phone_binding(identity,stem):
+ from ipad_mini_setup import read_regular
+ from ios_original_release_route import RECEIPT,INITIAL_HASH_KEY
+ if stem not in closed_phone_stems(identity):raise ValueError('Unselected closed phone phase')
+ step_raw=read_regular(pathlib.Path('build/ios-platform-step.json'),16*1024);step=strict_record(step_raw)
+ expected=supplement_contract(identity['scope'],stem)
+ if set(step)!={'identity','device','owner_pid','step_started_monotonic'} or step['identity']!=identity or step['device']!=expected['device'] or type(step['owner_pid']) is not int or step['owner_pid']<=0:raise ValueError('Foreign original phone step owner')
+ started=step['step_started_monotonic']
+ if type(started) not in (int,float) or not math.isfinite(started) or not 0<started<=time.monotonic():raise ValueError('Invalid original phone step clock')
+ source_raw=read_regular(RECEIPT,4096);prepared=strict_record(source_raw)
+ if hashlib.sha256(source_raw).hexdigest()!=os.environ.get(INITIAL_HASH_KEY) or set(prepared)!=set(identity)|{'tested_tree','source_readback_phase'} or any(prepared[key]!=value for key,value in identity.items()) or re.fullmatch('[0-9a-f]{40}',prepared['tested_tree']) is None or prepared['source_readback_phase']!='bounded initial original iOS HEAD/tree/diff/status':raise ValueError('Foreign prepared source/run/attempt/profile receipt')
+ raw={name:read_regular(pathlib.Path('build')/(stem+name),cap) for name,cap in (('-command.json',16384),('-summary-command.json',16384),('-summary.json',65536))}
+ records={stem+name:strict_record(data) for name,data in raw.items()}
+ if not classify_supplement_result(identity['scope'],stem,records,raw['-summary.json'])['acceptance']:raise ValueError('Closed phone phase has no timely clean selected result')
+ bundle=pathlib.Path(stem+'.xcresult')
+ if bundle.is_symlink() or bundle.resolve(strict=True)!=pathlib.Path.cwd()/bundle:raise ValueError('Redirected closed result bundle')
+ info=read_regular(bundle/'Info.plist',65536)
+ return {'identity':identity,'stem':stem,'device':expected['device'],'step':step,
+  'step_sha256':hashlib.sha256(step_raw).hexdigest(),'source_receipt_sha256':hashlib.sha256(source_raw).hexdigest(),
+  'tested_tree':prepared['tested_tree'],'result_sha256':{name:hashlib.sha256(data).hexdigest() for name,data in raw.items()},
+  'result_info_sha256':hashlib.sha256(info).hexdigest()}
+
+def closed_phone_deadline(binding,full=False):
+ from ios_original_supplement_route import SUMMARY_PHASE_SECONDS,SUMMARY_POST_RETURN_SECONDS,SUMMARY_CLEANUP_SECONDS
+ deadline=binding['step']['step_started_monotonic']+SUMMARY_PHASE_SECONDS[binding['identity']['scope']]
+ required=(155+SUMMARY_POST_RETURN_SECONDS if full else 0)+SUMMARY_CLEANUP_SECONDS
+ if time.monotonic()+required>deadline:raise ValueError('Full closed-phase export and cleanup reserve unavailable inside original native phase')
+ return deadline
+
+def retain_closed_phone_phase(identity,stem,raw_start):
+ from atomic_json import write_json
+ from ipad_mini_setup import read_regular
+ from watch_process import execute
+ binding=closed_phone_binding(identity,stem)
+ if float(raw_start)!=binding['step']['step_started_monotonic'] or os.getppid()!=binding['step']['owner_pid'] or supplement_export_blocked(identity):raise ValueError('Closed phase exporter owner/clock/fence mismatch')
+ closed_phone_deadline(binding,full=True)
+ folder=pathlib.Path('build/ios-platform-closed-phase')/stem
+ folder.parent.mkdir(exist_ok=True)
+ if folder.parent.is_symlink() or folder.parent.resolve(strict=True)!=pathlib.Path.cwd()/folder.parent or folder.exists() or folder.is_symlink():raise ValueError('Closed phone phase cannot retry or reuse stale evidence')
+ if any(path.name not in closed_phone_stems(identity) for path in folder.parent.iterdir()):raise ValueError('Unknown closed phone phase cache')
+ folder.mkdir()
+ command=[sys.executable,'scripts/export_ios_platform_screenshots.py','--export-closed-phone-phase',stem,raw_start]
+ pending={'binding':binding,'owner_pid':os.getpid(),'command':command}
+ write_json(folder/'pending.json',pending,limit=16*1024)
+ closed_phone_deadline(binding,full=True)
+ began=time.monotonic()
+ code,raw,operation=execute(command,155,output_limit=512*1024,tail_limit=64*1024,echo=False)
+ finished=time.monotonic()
+ (folder/'export.log').write_text(raw)
+ write_json(folder/'export-command.json',operation,limit=16*1024)
+ elapsed=operation.get('elapsed_seconds')
+ if code!=0 or operation.get('command')!=command or type(operation.get('timeout_seconds')) is not int or operation['timeout_seconds']!=155 or operation.get('state')!='completed' or type(operation.get('exit')) is not int or operation['exit']!=0 or operation.get('cleanup_confirmed') is not True or type(elapsed) not in (int,float) or not math.isfinite(elapsed) or not 0<=elapsed<157 or supplement_export_blocked(identity):raise ValueError('Closed phase export is late, incomplete or unclean')
+ closed_phone_deadline(binding)
+ if closed_phone_binding(identity,stem)!=binding or strict_record(read_regular(folder/'pending.json',16384))!=pending:raise ValueError('Closed phone phase binding changed during export')
+ evidence=folder/'evidence'
+ inventory={path.name:{'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()} for path in evidence.iterdir() for data in [read_regular(path,800*1024)]}
+ write_json(folder/'receipt.json',{'binding':binding,'owner_pid':pending['owner_pid'],'command':command,'operation':operation,'export_started_monotonic':began,'export_finished_monotonic':finished,'files':inventory},limit=32*1024)
+ print('IOS_SUPPLEMENT_CLOSED_PHASE_RETAINED '+stem,flush=True)
+
+def verified_closed_phone_phase(identity,stem):
+ from ipad_mini_setup import read_regular
+ binding=closed_phone_binding(identity,stem);folder=pathlib.Path('build/ios-platform-closed-phase')/stem
+ receipt_raw=read_regular(folder/'receipt.json',32*1024);receipt=strict_record(receipt_raw);pending=strict_record(read_regular(folder/'pending.json',16*1024))
+ command=[sys.executable,'scripts/export_ios_platform_screenshots.py','--export-closed-phone-phase',stem,str(binding['step']['step_started_monotonic'])]
+ if set(receipt)!={'binding','owner_pid','command','operation','export_started_monotonic','export_finished_monotonic','files'} or receipt['binding']!=binding or type(receipt['owner_pid']) is not int or receipt['owner_pid']<=0 or receipt['command']!=command or pending!={'binding':binding,'owner_pid':receipt['owner_pid'],'command':command}:raise ValueError('Foreign or stale closed-phase receipt')
+ operation=receipt['operation'];elapsed=operation.get('elapsed_seconds')
+ if strict_record(read_regular(folder/'export-command.json',16384))!=operation or operation.get('command')!=command or type(operation.get('timeout_seconds')) is not int or operation['timeout_seconds']!=155 or operation.get('state')!='completed' or type(operation.get('exit')) is not int or operation['exit']!=0 or operation.get('cleanup_confirmed') is not True or type(elapsed) not in (int,float) or not math.isfinite(elapsed) or not 0<=elapsed<157:raise ValueError('Unqualified closed-phase exporter receipt')
+ from ios_original_supplement_route import SUMMARY_PHASE_SECONDS
+ began=receipt['export_started_monotonic'];finished=receipt['export_finished_monotonic'];started=binding['step']['step_started_monotonic'];deadline=started+SUMMARY_PHASE_SECONDS[identity['scope']]
+ if any(type(value) not in (int,float) or not math.isfinite(value) for value in (began,finished)) or not started<=began<=finished<=time.monotonic() or began+177>deadline or finished+20>deadline or finished-began>=157:raise ValueError('Closed-phase cache exceeded its original native clock')
+ if set(path.name for path in folder.iterdir())!={'pending.json','export.log','export-command.json','receipt.json','evidence'}:raise ValueError('Unknown closed-phase cache entry')
+ files=receipt['files'];evidence=folder/'evidence'
+ if not isinstance(files,dict) or not 1<=len(files)<=128 or set(files)!={path.name for path in evidence.iterdir()}:raise ValueError('Missing or extra closed-phase cache files')
+ data={}
+ for name,record in files.items():
+  if not isinstance(name,str) or pathlib.Path(name).name!=name or not isinstance(record,dict) or set(record)!={'bytes','sha256'} or type(record['bytes']) is not int or not 0<record['bytes']<=800*1024:raise ValueError('Invalid fixed cache file')
+  raw=read_regular(evidence/name,800*1024)
+  if name.endswith('.jpg') and not raw.startswith(b'\xff\xd8'):raise ValueError('Invalid cached selected JPEG')
+  if len(raw)!=record['bytes'] or hashlib.sha256(raw).hexdigest()!=record['sha256']:raise ValueError('Closed-phase cache bytes changed')
+  data[name]=raw
+ manifest=strict_record(data['manifest.json'])
+ if manifest.get('scope')!=identity['scope'] or manifest.get('commit')!=identity['source_sha'] or manifest.get('tree')!=binding['tested_tree'] or manifest.get('run_id')!=identity['run_id'] or manifest.get('closed_phone_phase_binding')!=binding or manifest.get('closed_phone_phase_owner_pid')!=receipt['owner_pid'] or manifest.get('evidence_complete') is not True:raise ValueError('Incomplete or foreign closed-phase manifest')
+ return manifest,data,receipt_raw
+
+def reuse_closed_phone_phase(identity,stem,label,summary,out,limit):
+ manifest,data,receipt_data=verified_closed_phone_phase(identity,stem)
+ receipt_name=stem+'-closed-phase-export.json'
+ for key in ('screenshots','import_audit_attachments'):
+  rows=manifest[key]
+  if not isinstance(rows,list):raise ValueError('Invalid retained closed-phase attachment list')
+  for item in rows:
+   if not isinstance(item,dict) or item.get('result_label')!=label or item.get('name') not in data or item.get('bytes')!=len(data[item['name']]) or item.get('sha256')!=hashlib.sha256(data[item['name']]).hexdigest():raise ValueError('Foreign retained closed-phase attachment')
+ for item in manifest['import_audit_attachments']:
+  raw=data[item['name']]
+  if len(raw)>64*1024:raise ValueError('Cached audit attachment exceeded original allocation')
+  if item['checkpoint']=='image-import-audit-pair-required' and raw.decode().strip()!='phone-result-history':raise ValueError('Invalid cached audit-pair requirement')
+  if item['checkpoint']=='image-import-audit-pair-receipts':validate_import_audit_pair_receipts(raw)
+ if missing_import_audit_pairs(manifest['import_audit_pair_requirements'],manifest['screenshots'],manifest['import_audit_attachments'],[label] if label.endswith('-files') else []):raise ValueError('Missing cached Files paired evidence')
+ if manifest['import_audit_pair_requirements'] not in ([],[label]) or manifest['phone_result_evidence_requirements']!=[] or manifest['missing_import_audit_pairs'] or manifest['omitted']:raise ValueError('Incomplete retained closed-phase requirements')
+ names=[row['name'] for key in ('screenshots','import_audit_attachments') for row in manifest[key]]
+ if len(names)!=len(set(names)) or len(summary['screenshots'])+len(manifest['screenshots'])>28:raise ValueError('Duplicate or excessive retained closed-phase attachments')
+ names.append(receipt_name);data[receipt_name]=receipt_data
+ if sum(path.stat().st_size for path in out.iterdir())+sum(len(data[name]) for name in names)>limit-512*1024 or len(list(out.iterdir()))+len(names)>126:raise ValueError('Retained closed-phase evidence exceeds original scope allocation')
+ for name in names:
+  target=out/name
+  if target.exists() or target.is_symlink():raise ValueError('Duplicate retained closed-phase output')
+ for name in names:(out/name).write_bytes(data[name])
+ for key in ('screenshots','import_audit_attachments','import_audit_pair_requirements'):summary[key].extend(manifest[key])
+
+def retain_supplement_records(identity,out,limit,closed_stem=None):
  from ipad_mini_setup import read_regular
  scope=identity['scope']
  stems={'iphone_pro':('iOSUnitResults','PhoneUIResults','PhoneUIResults-files','PhoneUIResults-imports'),'iphone_se3':('CompactPhoneUIResults','CompactPhoneUIResults-files','CompactPhoneUIResults-imports'),'ipad_pro':('PadUIResults-layout','PadUIResults-files','PadUIResults'),'ipad_mini':('MiniUIResults-warmup','MiniUIResults')}[scope]
+ if closed_stem is not None:
+  if closed_stem not in closed_phone_stems(identity):raise ValueError('Unselected closed retention result')
+  stems=(closed_stem,)
  report={'diagnostic_only':True,'full_original_row_qualification':False,'historical_component_reference':identity['historical_component_reference'],'runtime_precise_safari_url':'UNKNOWN','files':[],'missing':[],'invalid':[],'results':{},'owned_process_uncertainty_observed':False}
  records={};raw_summaries={}
  def retain(path,cap,tail=None):
@@ -207,6 +327,21 @@ def retain_supplement_records(identity,out,limit):
    name=path.name;target=out/name
    if target.exists() or target.is_symlink():raise ValueError('Duplicate fixed supplemental output record')
    retained=data[-tail:] if tail else data
+   if tail and scope in ('iphone_pro','iphone_se3') and os.environ.get('PHONE_COMPLETION_ONLY')=='true':
+    # Keep fixed native diagnostic lines when a long failure hierarchy pushes
+    # them outside the original tail. They never qualify a pass.
+    base={'iphone_pro':'PhoneUIResults','iphone_se3':'CompactPhoneUIResults'}[scope]
+    markers=(b'PRIVACY_SYSTEM_OPEN_BASELINE:',b'PRIVACY_SYSTEM_OPEN_RECEIPT:') if path.name==base+'.log' else (b'PHOTO_IMPORT_WAIT_V1',b'PHOTO_IMPORT_WAIT_RETURN_V1',b'PHOTO_IMPORT_OBSERVATION_V1:',b'PHOTO_IMPORT_OBSERVATION_READ_V1') if path.name==base+'-imports.log' else ()
+    marker_lines=[]
+    for marker in markers:
+     matches=[line for line in data.splitlines() if marker in line]
+     maximum=2 if marker==b'PHOTO_IMPORT_OBSERVATION_V1:' else 1
+     if len(matches)>maximum or any(len(line)>2048 for line in matches):raise ValueError('Duplicate or oversized fixed native diagnostic log marker')
+     marker_lines.extend(line+b'\n' for line in matches)
+    if marker_lines and len(data)>tail:
+     body=data[-(tail-sum(map(len,marker_lines))):]
+     prefix=b''.join(line for line in marker_lines if line.rstrip(b'\n') not in body.splitlines())
+     retained=prefix+body
    used=sum(p.stat().st_size for p in out.iterdir())
    if used+len(retained)>limit-512*1024 or len(list(out.iterdir()))>=126:raise ValueError('Supplemental metadata exceeds its unchanged evidence allocation')
    target.write_bytes(retained)
@@ -220,8 +355,9 @@ def retain_supplement_records(identity,out,limit):
   retain(pathlib.Path(log),17*1024*1024,64*1024)
   if scope=='ipad_mini':retain(pathlib.Path(stem+'-summary.log'),17*1024*1024,64*1024)
  seed_stem={'iphone_pro':'PhoneUIResults-seed','iphone_se3':'CompactPhoneUIResults-seed','ipad_pro':'PadUIResults-seed','ipad_mini':'MiniUIResults-seed'}[scope]
- retain(pathlib.Path('build')/(seed_stem+'-command.json'),16*1024)
- retain(pathlib.Path(seed_stem+'.log'),17*1024*1024,64*1024)
+ if closed_stem is None:
+  retain(pathlib.Path('build')/(seed_stem+'-command.json'),16*1024)
+  retain(pathlib.Path(seed_stem+'.log'),17*1024*1024,64*1024)
  seed=records.get(seed_stem+'-command.json')
  seed_accepted=False
  if seed is not None:
@@ -232,7 +368,7 @@ def retain_supplement_records(identity,out,limit):
  report['photos_seed']={'receipt_retained':seed is not None,'acceptance':seed_accepted,'state':seed.get('state') if seed else None,'exit':seed.get('exit') if seed else None,'cleanup_confirmed':seed.get('cleanup_confirmed') is True if seed else False,'observations_qualify_pass':False}
  for stem in stems:
   value=classify_supplement_result(scope,stem,records,raw_summaries.get(stem+'-summary.json'))
-  if stem==stems[-1] and value['acceptance'] and not seed_accepted:value.update(acceptance=False,native_summary='retained_unqualified',reason='Required exact Photos seed receipt did not qualify')
+  if closed_stem is None and stem==stems[-1] and value['acceptance'] and not seed_accepted:value.update(acceptance=False,native_summary='retained_unqualified',reason='Required exact Photos seed receipt did not qualify')
   report['results'][stem]=value
  report['owned_process_uncertainty_observed']=supplement_export_blocked(identity)
  return report,records
@@ -247,10 +383,30 @@ def attachment_command(command,identity,**options):
  if identity and supplement_export_blocked(identity):raise ValueError('Supplemental attachment command blocked by owned uncertainty')
  return subprocess.run(command,**options)
 
+closed_phase_mode=None;closed_stem=None;closed_binding=None
+if len(sys.argv)>1 and sys.argv[1] in ('--retain-closed-phone-phase','--export-closed-phone-phase'):
+ if len(sys.argv)!=4:raise ValueError('Exact fixed closed-phase exporter arguments required')
+ closed_phase_mode,closed_stem,closed_start=sys.argv[1:]
+
 scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 selected_identity=supplement_identity()
-out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
+if closed_phase_mode:
+ if selected_identity is None:raise ValueError('Closed phone phase requires exact selected identity')
+ if closed_phase_mode=='--retain-closed-phone-phase':
+  retain_closed_phone_phase(selected_identity,closed_stem,closed_start);raise SystemExit(0)
+ from ipad_mini_setup import read_regular
+ closed_binding=closed_phone_binding(selected_identity,closed_stem)
+ pending=strict_record(read_regular(pathlib.Path('build/ios-platform-closed-phase')/closed_stem/'pending.json',16384))
+ expected_command=[sys.executable,'scripts/export_ios_platform_screenshots.py','--export-closed-phone-phase',closed_stem,closed_start]
+ if pending!={'binding':closed_binding,'owner_pid':os.getppid(),'command':expected_command} or float(closed_start)!=closed_binding['step']['step_started_monotonic'] or supplement_export_blocked(selected_identity):raise ValueError('Closed phase child owner/clock/fence mismatch')
+ closed_phone_deadline(closed_binding)
+out=pathlib.Path('build/ios-platform-closed-phase')/closed_stem/'evidence' if closed_phase_mode else pathlib.Path('build/ios-platform-evidence')
+out.mkdir(parents=True,exist_ok=True)
+if closed_phase_mode:
+ for earlier in out.parent.parent.glob('*/evidence/*'):
+  if earlier.parent!=out:limit-=len(read_regular(earlier,800*1024))
+
 if selected_identity and (out.is_symlink() or out.resolve()!=pathlib.Path.cwd()/out or any(out.iterdir())):raise ValueError('Fresh canonical supplemental evidence folder required')
 prepared=None
 if os.environ.get('GITHUB_REF') in {'refs/heads/codex/ios-original-release','refs/heads/codex/ios-original-supplement'}:
@@ -260,7 +416,10 @@ if os.environ.get('GITHUB_REF') in {'refs/heads/codex/ios-original-release','ref
  if report.exists() or report.is_symlink():
   from ios_import_continuation import read_regular
   (out/report.name).write_bytes(read_regular(report,64*1024))
- prepared=retain_prepared()
+ if closed_phase_mode:
+  from ios_original_release_route import RECEIPT
+  prepared=strict_record(read_regular(RECEIPT,4096));(out/RECEIPT.name).write_bytes(read_regular(RECEIPT,4096))
+ else:prepared=retain_prepared()
 summary={'scope':scope,'scope_limit_bytes':limit,'commit':selected_identity['source_sha'] if selected_identity else subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':prepared['tested_tree'] if selected_identity else subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'phone_result_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[],'ipad_share_traces':[]}
 if scope=='ipad_mini':
  from ipad_mini_setup import job_ledger_limit
@@ -298,7 +457,7 @@ if setup.exists() or (selected_identity and setup.is_symlink()):
  (out/setup.name).write_bytes(data)
 selected_records={}
 if selected_identity:
- selected_report,selected_records=retain_supplement_records(selected_identity,out,limit)
+ selected_report,selected_records=retain_supplement_records(selected_identity,out,limit,closed_stem)
  summary.update(diagnostic_only=True,full_original_row_qualification=False,release_qualification=False,selected_evidence=selected_report,evidence_complete=False)
  summary['not_selected']=[{'checkpoint':'phone-largest-history-result','state':'not_selected'},{'checkpoint':'phone-largest-history-result-top','state':'not_selected'},{'checkpoint':'phone-largest-history-result-end','state':'not_selected'}] if scope.startswith('iphone_') else []
  if scope=='ipad_mini':summary['not_selected']=[{'result_label':'ipad-mini-layout','state':'not_selected'},{'result_label':'ipad-mini-files','state':'not_selected'}]
@@ -339,13 +498,23 @@ def records(value):
 for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults.xcresult','watch-ui'),('WatchLargestUIResults.xcresult','watch-largest'),('WatchTraitStressUIResults.xcresult','watch-trait-stress'),('TVTestResults.xcresult','apple-tv'),('TVAuthorizedUIResults.xcresult','apple-tv-pregranted'),('TVRevokedUIResults.xcresult','apple-tv-revoked'),('TVLargestUIResults.xcresult','apple-tv-largest'),('TVTraitStressUIResults.xcresult','apple-tv-trait-stress'),('VisionTestResults.xcresult','vision-pro-unit'),('VisionUIResults.xcresult','vision-pro-ui'),('VisionPhotosUIResults.xcresult','vision-photos-ui'),('VisionFilesUIResults.xcresult','vision-files-ui'),('VisionChineseUIResults.xcresult','vision-chinese-ui'),('VisionLargestUIResults.xcresult','vision-largest'),('iOSUnitResults.xcresult','view-layout-host'),('PhoneUIResults.xcresult','pro-max'),('CompactPhoneUIResults.xcresult','SE3'),('PhoneUIResults-imports.xcresult','pro-max-imports'),('CompactPhoneUIResults-imports.xcresult','SE3-imports'),('PhoneUIResults-files.xcresult','pro-max-files'),('CompactPhoneUIResults-files.xcresult','SE3-files'),('PadUIResults-files.xcresult','ipad-pro-13-files'),('MiniUIResults-files.xcresult','ipad-mini-files'),('PadUIResults-layout.xcresult','ipad-pro-13-layout'),('MiniUIResults-layout.xcresult','ipad-mini-layout'),('MiniUIResults-warmup.xcresult','ipad-mini-warmup'),('PadUIResults.xcresult','ipad-pro-13'),('MiniUIResults.xcresult','ipad-mini')]:
  if label=='ipad-mini-warmup' and not selected_identity:continue
  if selected_identity:
-  stem=result.removesuffix('.xcresult');classification=summary['selected_evidence']['results'].get(stem)
+  stem=result.removesuffix('.xcresult')
+  if closed_stem and stem!=closed_stem:continue
+  classification=summary['selected_evidence']['results'].get(stem)
   if classification is None:
    summary['results'][label]={'not_produced':True,'not_selected':True};continue
   retained=selected_records.get(stem+'-summary.json')
   summary['results'][label]=dict(retained) if retained is not None else {'summary_unavailable':True,'not_produced':not pathlib.Path(result,'Info.plist').is_file()}
   summary['results'][label]['selected_case_acceptance']=classification['acceptance']
   summary['results'][label]['full_original_row_qualification']=False
+  if not closed_phase_mode and stem in closed_phone_stems(selected_identity):
+   try:
+    reuse_closed_phone_phase(selected_identity,stem,label,summary,out,limit)
+    classification['attachments']='retained_closed_phase_before_later_uncertainty'
+   except (OSError,ValueError,KeyError,TypeError) as error:
+    classification['attachments']='missing_closed_phase_evidence_UNKNOWN'
+    summary['selected_evidence']['missing'].append({'closed_phase':stem,'reason':str(error)[:240]})
+   continue
   export_blocked=supplement_export_blocked(selected_identity)
   if export_blocked or not classification['acceptance'] or not pathlib.Path(result,'Info.plist').is_file():
    classification['attachments']='not_exported_owned_uncertainty' if export_blocked else 'not_exported_unqualified_or_missing_result'
@@ -462,11 +631,15 @@ if selected_identity:
  summary['evidence_complete']=not (summary['selected_evidence']['missing'] or summary['selected_evidence']['invalid'] or summary['selected_evidence']['owned_process_uncertainty_observed'] or summary['omitted'] or summary['missing_phone_result_endpoints'] or summary['missing_import_audit_pairs']) and all(item['acceptance'] for item in summary['selected_evidence']['results'].values())
 ordinary_summary_bytes=len((json.dumps(summary,indent=2)+'\n').encode())
 ordinary_used=sum(p.stat().st_size for p in out.iterdir())
-summary['settings_discovery']=export_settings(scope,out,limit-ordinary_used-ordinary_summary_bytes-8192,export_started)
+if closed_phase_mode:
+ closed_phone_deadline(closed_binding)
+ summary.update(closed_phone_phase_binding=closed_binding,closed_phone_phase_owner_pid=os.getppid())
+else:summary['settings_discovery']=export_settings(scope,out,limit-ordinary_used-ordinary_summary_bytes-8192,export_started)
 encoded=json.dumps(summary,indent=2)+'\n'
 assert len(encoded.encode())<=(128*1024 if scope.startswith('watchos_') else 512*1024)
 (out/'manifest.json').write_text(encoded)
 size=sum(p.stat().st_size for p in out.iterdir())
+if closed_phase_mode and (size>limit or len(encoded.encode())>512*1024):raise ValueError('Closed-phase evidence exceeded unchanged allocation')
 mac=sum(p.stat().st_size for p in pathlib.Path('build/mac-evidence').glob('*') if p.is_file())
 print(json.dumps({'ios_evidence_bytes':size,'mac_evidence_bytes':mac,'combined_bytes':size+mac}),flush=True)
 assert size<=limit and size+mac<=20_000_000

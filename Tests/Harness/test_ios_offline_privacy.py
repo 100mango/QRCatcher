@@ -85,6 +85,55 @@ def browser_observation_contract(source):
         raise ValueError('Browser activity cannot manufacture the handoff')
     for getter in ('externalPolicy.exists', 'externalPolicy.enabled', 'externalPolicy.hittable'):
         if case.count(getter) != 1 or case.index(getter) >= case.index(action):
+            raise ValueError('The original policy button must be ready before its one tap')
+    start = case.index('NSPredicate *browserForeground =')
+    end = case.index('    }];', start)
+    predicate = case[start:end]
+    if predicate.count('browser.state') != 1:
+        raise ValueError('Each poll reads public Safari state exactly once')
+    before, after = predicate.split('browser.state')
+    if 'if (!timely()) return NO;' not in before or 'if (!timely()) return NO;' not in after:
+        raise ValueError('Safari state getters retain the original shared deadline')
+    for token in ('statePairs.count < 12', 'samplesOmitted = YES;',
+                  'return browserState == XCUIApplicationStateRunningForeground;',
+                  'timeout:10];', 'stateTraceData.length <= 2048',
+                  '@"observations_qualify_pass": [NSNumber numberWithBool:NO]',
+                  'if (handoff != XCTWaiterResultCompleted) return;',
+                  'PRIVACY_SYSTEM_OPEN_BASELINE:', 'PRIVACY_SYSTEM_OPEN_RECEIPT:',
+                  'baselineReadStarted', 'receiptReadStarted',
+                  'NSTimeInterval caseAllowance = self.executionTimeAllowance;',
+                  'QRPrivacySystemReadWithinCase(caseStarted, baselineReadStarted,',
+                  'QRPrivacySystemReadWithinCase(caseStarted, receiptReadStarted,',
+                  'systemData.length <= 1024', 'if (!baselineData || baselineData.length > 1024) systemBaseline = nil;',
+                  'if (!systemData || systemData.length > 1024) systemReceipt = nil;',
+                  'if (handoff != XCTWaiterResultCompleted) self.privacySystemReceiptUnknown = YES;',
+                  'XCTAssertNotNil(systemReceipt,'):
+        if token not in case:
+            raise ValueError('Missing closed real handoff, baseline, return or bounded system receipt')
+    if case.count('self.app.staticTexts[@"scan.status"].value') != 2:
+        raise ValueError('Exactly one baseline and one final owned diagnostic value read')
+    observation = case[case.index('    NSTimeInterval handoffStarted ='):case.index('    [self.app activate];')]
+    if any(token in observation for token in ('self.app.state', 'browser.windows', 'window.', 'screenshot',
+                                              'debugDescription', 'waitForExistence', 'matchingIdentifier:', 'matchingPredicate:')):
+        raise ValueError('System handoff cannot require browser selectors or page pixels')
+    if any(token in case for token in ('manual_review_required', 'captureRetained', 'privacy-browser-manual-review', 'fixture-payload')):
+        raise ValueError('No manual-page or decoded-payload acceptance obligation in this no-payload case')
+    tail = case[case.index('    [self.app activate];'):case.index('    NSTimeInterval receiptReadStarted =')] + '}\n'
+    if hashlib.sha256(tail.encode()).hexdigest() != '9c787ede9aa255b2536f03c0097c7c56d9e7d01e47d7ea7278790736d0c76752':
+        raise ValueError('Changed original privacy return, Close or denied scanner/empty-history restoration')
+    restore_phone_for_historical_observer(source)
+
+
+def historical_manual_browser_observation_contract(source):
+    case = test_methods(source)['testDeniedCameraAndEmptyHistory']
+    observer = 'XCUIApplication *browser = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.mobilesafari"];'
+    action = '[self.app.buttons[@"privacy.externalPolicy"] tap];'
+    if case.count(observer) != 1 or case.count(action) != 1 or case.index(observer) >= case.index(action):
+        raise ValueError('Safari observer must precede the unique real policy tap')
+    if re.search(r'\[browser\s+(?:launch|activate|terminate|open)\b', case):
+        raise ValueError('Browser activity cannot manufacture the handoff')
+    for getter in ('externalPolicy.exists', 'externalPolicy.enabled', 'externalPolicy.hittable'):
+        if case.count(getter) != 1 or case.index(getter) >= case.index(action):
             raise ValueError('The actual external policy action must be ready before tapping')
     start = case.index('NSPredicate *browserForeground =')
     end = case.index('    }];', start)
@@ -164,6 +213,14 @@ PHONE_READINESS_METHOD_REPLACEMENTS = [{'selector': 'assertOfflinePrivacyForChin
 PHONE_BROWSER_WINDOW_BLOCKS = [{'name': 'import', 'new': '#import <math.h>\n', 'sha256': '96a4cc35888f13a108e3f9ca0c7b42699961ebd9910b2ffac58b8fb3485840a2'}, {'name': 'property', 'new': '@property (nonatomic) BOOL privacyBrowserObservationLate;\n@property (nonatomic) BOOL privacyBrowserCaptureUnknown;\n', 'sha256': '1bea3334ff9fca0dd26141c043d1b7b259bd7ae5439341564fb48e95838d3da8'}, {'name': 'setup', 'new': '    self.privacyBrowserObservationLate = NO;\n    self.privacyBrowserCaptureUnknown = NO;\n', 'sha256': '26fba94d6307e61b7e30a57d85af323670afeffe73597a876ca8f179379ba73b'}, {'name': 'late_guard', 'new': '    if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {\n        // A late observation or unavailable capture leaves the handoff UNKNOWN. Stop all further\n        // test-authored AX reads/device actions while preserving XCTest cleanup.\n        [super tearDown];\n        if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '6e2c96b45afad540973db1ef06be246b9990caa86d0e707b4bfc450e9a5952df'}]
 PAD_SHARE_OBSERVATION_BLOCKS = [{'name': 'properties', 'new': '@property (nonatomic) BOOL shareSystemObservationAttempted;\n@property (nonatomic) BOOL shareSystemObservationLate;\n', 'sha256': '7420ecc4688453962145d6867bddecb0409ea32ce2f8f97145edfc9bd02a19ec'}, {'name': 'setup', 'new': '    self.shareSystemObservationAttempted = NO; self.shareSystemObservationLate = NO;\n', 'sha256': '13510ef96ac74b8e5e44724ebb91ce9ee6657fe278dc93d3ee541e99a3549dee'}, {'name': 'late_guard', 'new': '    if (self.shareSystemObservationLate) {\n        // A returned late system observation cannot justify another AX read or\n        // a test-authored device action. The already-failed case stays failed.\n        [super tearDown];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '9ae65d32e23cc39dccfa5d11b25cb570374836ae95826ff4fa19eb28fcb3cfeb'}, {'name': 'helper', 'new': '- (void)retainSpringboardShareObservation {\n    if (self.shareSystemObservationAttempted) return;\n    self.shareSystemObservationAttempted = YES;\n    NSTimeInterval started = NSProcessInfo.processInfo.systemUptime;\n    NSMutableDictionary *record = [@{@"version": @1, @"scope": @"springboard_unique_ActivityListView",\n        @"status": @"UNKNOWN", @"observations_qualify_pass": [NSNumber numberWithBool:NO],\n        @"activity_count": NSNull.null, @"activity_frame": NSNull.null,\n        @"payload_count": NSNull.null, @"payload_frame": NSNull.null,\n        @"copy_count": NSNull.null, @"copy_enabled": NSNull.null,\n        @"copy_hittable": NSNull.null, @"copy_frame": NSNull.null} mutableCopy];\n    // Each public AX getter may block until the unchanged case/outer timeout.\n    // A late return stops this observation and all later test-authored reads.\n    BOOL (^timely)(void) = ^BOOL {\n        NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n        BOOL valid = isfinite(elapsed) && elapsed >= 0 && elapsed < 10;\n        if (!valid) self.shareSystemObservationLate = YES;\n        return valid;\n    };\n    id (^frameValue)(CGRect) = ^id(CGRect frame) {\n        return QRPadFiniteNonemptyRect(frame) ? (id)@[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)] : (id)NSNull.null;\n    };\n    NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION_ENTER unqualified");\n    do {\n        XCUIApplication *system = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];\n        XCUIElementQuery *activities = [system.otherElements matchingIdentifier:@"ActivityListView"];\n        if (!timely()) break;\n        NSUInteger activityCount = activities.count;\n        record[@"activity_count"] = @(activityCount);\n        if (!timely() || activityCount != 1) break;\n        XCUIElement *activity = activities.firstMatch;\n        CGRect activityFrame = activity.frame;\n        record[@"activity_frame"] = frameValue(activityFrame);\n        if (!timely() || !QRPadFiniteNonemptyRect(activityFrame)) break;\n        XCUIElementQuery *payloads = [activity.otherElements matchingPredicate:[NSPredicate predicateWithFormat:@"label == %@", @"Native iPad QR result 你好"]];\n        NSUInteger payloadCount = payloads.count;\n        record[@"payload_count"] = @(payloadCount);\n        if (!timely()) break;\n        if (payloadCount == 1) {\n            record[@"payload_frame"] = frameValue(payloads.firstMatch.frame);\n            if (!timely()) break;\n        }\n        XCUIElementQuery *copies = [[activity.cells matchingIdentifier:@"actionGroupCell"]\n            containingPredicate:[NSPredicate predicateWithFormat:@"elementType == %lu AND identifier == %@ AND label == %@",\n                (unsigned long)XCUIElementTypeStaticText, @"cellTitleLabel", @"Copy"]];\n        NSUInteger copyCount = copies.count;\n        record[@"copy_count"] = @(copyCount);\n        if (!timely()) break;\n        if (copyCount == 1) {\n            XCUIElement *copy = copies.firstMatch;\n            record[@"copy_enabled"] = [NSNumber numberWithBool:copy.enabled];\n            if (!timely()) break;\n            record[@"copy_hittable"] = [NSNumber numberWithBool:copy.hittable];\n            if (!timely()) break;\n            record[@"copy_frame"] = frameValue(copy.frame);\n            if (!timely()) break;\n        }\n        record[@"status"] = @"scoped_observation_only";\n    } while (NO);\n    record[@"late_return"] = [NSNumber numberWithBool:self.shareSystemObservationLate];\n    NSTimeInterval elapsed = NSProcessInfo.processInfo.systemUptime - started;\n    record[@"elapsed"] = isfinite(elapsed) && elapsed >= 0 ? (id)@(elapsed) : (id)NSNull.null;\n    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];\n    if (data && data.length <= 3072) {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);\n    } else {\n        NSLog(@"IPAD_SHARE_SPRINGBOARD_OBSERVATION:UNKNOWN bounded serialization unavailable");\n    }\n}\n', 'sha256': 'a196957ba8d739a589c797743ed30b7bbe86219a65848766b2f38816008e52c4'}, {'name': 'call', 'new': '    if (readiness != XCTWaiterResultCompleted) [self retainSpringboardShareObservation];\n', 'sha256': 'af583824c9f3e3dfecbd5b8017632c852306b6d9f634b7384e8a19030aa52de1'}]
 
+# Current system-handoff additions are pinned separately from the historical
+# manual-page observer below. Both restore only their exact admitted blocks.
+SYSTEM_PHONE_HELPER_SHA256 = 'dcffc63011a4f1d7eca3e9b71a998530e365264e016e3fe9cd9aece1736cd174'
+SYSTEM_PHONE_CASE_SHA256 = '697bfd4451681664fa01a2be3634477863a46615556ac7661fa8ab3ecd46e688'
+SYSTEM_PHONE_BLOCKS = [{'new': '#import <math.h>\n#import <limits.h>\n', 'sha256': 'a094ac98de97ea31f82f9e25f2073d0568e0c6962cb984e8f167beac6187e266'}, {'new': '@property (nonatomic) BOOL privacyBrowserObservationLate;\n@property (nonatomic) BOOL privacySystemReceiptUnknown;\n', 'sha256': 'a01d4b4234f4c5681295b23a15de0f106cc3ab9ec5047f5601c2cbe8cd986c58'}, {'new': '    self.privacyBrowserObservationLate = NO;\n    self.privacySystemReceiptUnknown = NO;\n', 'sha256': '449e5f7ab440a891f1206b1db7e89b0eebeb9871330481a479fa577a133659f2'}, {'new': '    if (self.privacyBrowserObservationLate || self.privacySystemReceiptUnknown) {\n        // A late observation or invalid receipt leaves the handoff UNKNOWN. Stop all further\n        // test-authored AX reads/device actions while preserving XCTest cleanup.\n        [super tearDown];\n        if (self.cameraMonitor) [self removeUIInterruptionMonitor:self.cameraMonitor];\n        [self removeUIInterruptionMonitor:self.interruptionGuard];\n        return;\n    }\n', 'sha256': '8dc61fbeb210ff86f9aa26334b981de51ab107f7534a9f9a8695693e8d3c4f1e'}]
+UNIT_SYSTEM_HELPER_SHA256 = 'fb7e0e92d9e902eee9775bfe6d3096f2a5795e29e5ebe11b258af22bf33e972f'
+UNIT_SYSTEM_CALLS = '#if DEBUG\n    [self assertPrivacySystemObservationGateAndCompletionPolicy];\n#endif\n'
+
 def restore_phone_for_historical_observer(text):
     """Remove only the exact admitted observer/notice clauses, retaining old proof."""
     start = 'static NSString *QRObservedApplicationStateName('
@@ -171,7 +228,7 @@ def restore_phone_for_historical_observer(text):
         if any(token in text for token in ('PRIVACY_BROWSER_STATE_PAIRS:', 'noticeBeginning',
                                          'privacyBrowserObservationLate', 'QRPrivacyBrowserWindowQualifies',
                                          'PRIVACY_BROWSER_MANUAL_RECEIPT:', 'privacyBrowserCaptureUnknown',
-                                         'QRPrivacyManualCaptureRetainable')):
+                                         'QRPrivacyManualCaptureRetainable', 'privacySystemReceiptUnknown', 'QRPrivacySystemReceipt')):
             raise ValueError('Incomplete phone readiness observation')
         return text
     if text.count(start) != 1:
@@ -179,6 +236,20 @@ def restore_phone_for_historical_observer(text):
     begin = text.index(start)
     end = text.index('@interface', begin)
     helper = text[begin:end]
+    if hashlib.sha256(helper.encode()).hexdigest() == SYSTEM_PHONE_HELPER_SHA256:
+        text = text[:begin] + text[end:]
+        for entry in SYSTEM_PHONE_BLOCKS:
+            block = entry['new']
+            if text.count(block) != 1 or hashlib.sha256(block.encode()).hexdigest() != entry['sha256']:
+                raise ValueError('Changed admitted system receipt import or cleanup clause')
+            text = text.replace(block, '', 1)
+        for entry in PHONE_READINESS_METHOD_REPLACEMENTS:
+            current = method(text, entry['selector'])
+            digest = SYSTEM_PHONE_CASE_SHA256 if entry['selector'] == 'testDeniedCameraAndEmptyHistory' else entry['new_sha256']
+            if hashlib.sha256(current.encode()).hexdigest() != digest:
+                raise ValueError('Changed admitted system handoff or policy method')
+            text = text.replace(current, entry['old'], 1)
+        return text
     if hashlib.sha256(helper.encode()).hexdigest() != PHONE_READINESS_HELPER_SHA256:
         raise ValueError('Changed admitted symbolic state helper')
     text = text[:begin] + text[end:]
@@ -215,6 +286,16 @@ UNIT_PRIVACY_CALLS = '    [self assertPrivacyWebsiteNoticeAtCompactWidthForCateg
 
 def restore_unit_for_historical_observer(text):
     """Keep the old unit inventory proof while binding this exact added exercise."""
+    system = '#if DEBUG\n- (void)assertPrivacySystemObservationGateAndCompletionPolicy'
+    if system in text:
+        begin = text.index(system)
+        end = text.index('- (void)testPrivacyOfflineBodyAndExplicitBrowserActionKeepCloseIdempotent {', begin)
+        helper = text[begin:end]
+        if text.count(system) != 1 or hashlib.sha256(helper.encode()).hexdigest() != UNIT_SYSTEM_HELPER_SHA256 or text.count(UNIT_SYSTEM_CALLS) != 1:
+            raise ValueError('Changed admitted system gate and completion unit seam')
+        text = (text[:begin] + text[end:]).replace(UNIT_SYSTEM_CALLS, '', 1)
+    elif 'assertPrivacySystemObservationGateAndCompletionPolicy' in text:
+        raise ValueError('Incomplete system completion unit seam')
     marker = '- (void)assertPrivacyWebsiteNoticeAtCompactWidthForCategory:'
     if marker not in text:
         if 'assertPrivacyWebsiteNoticeAtCompactWidthForCategory:' in text:
@@ -362,6 +443,140 @@ int main(void) {
     return json.loads(result.stdout)
 
 
+def system_boundary_contract(source):
+    actual = method(source, 'openExternalURL:')
+    required = ('#if DEBUG', 'if (QRPrivacySystemEnabled)',
+                'void (^originalCompletion)(BOOL) = completion;',
+                'QRPrivacySystemRecordCompletion(opened, !controller || controller.closing);',
+                'if (originalCompletion) originalCompletion(opened);',
+                'QRPrivacySystemRecordRequest(URL);', '#endif',
+                '[UIApplication.sharedApplication openURL:URL options:@{} completionHandler:completion];')
+    if any(token not in actual for token in required):
+        raise ValueError('Observation must wrap only the actual existing public completion boundary')
+    if actual.index('QRPrivacySystemRecordRequest(URL);') >= actual.index('[UIApplication.sharedApplication openURL:'):
+        raise ValueError('Actual request marker must immediately precede UIApplication')
+    if 'QRPrivacySystemRecord' in method(source, 'openPolicyInBrowser'):
+        raise ValueError('Host spy must not manufacture actual system acceptance')
+    for token in ('uiCount != 1 || tokenCount != 1 || requestCount != 1 || appPID <= 0',
+                  'index + 1 >= arguments.count', '[request.UUIDString isEqualToString:requestID]',
+                  'if ([arguments containsObject:@"-photo-import-observation-v1"]) return NO;',
+                  'NSUUID.UUID.UUIDString', 'data.length > 1024',
+                  'QRPrivacySystemRequests != 1 || QRPrivacySystemCompletions != 0 || !NSThread.isMainThread',
+                  'if (closed || !NSThread.isMainThread || !QRPrivacySystemOpenObservationQualifies(',
+                  '@"page_rendered": @"UNKNOWN"', '@"case": @"testDeniedCameraAndEmptyHistory"'):
+        if token not in source:
+            raise ValueError('Missing exact gate, current process identity, cap or UNKNOWN invalidation')
+
+
+def system_receipt_read_contract(phone):
+    begin = phone.index('static NSDictionary *QRPrivacySystemReceipt(')
+    helper = phone[begin:phone.index('@interface', begin)]
+    for token in ('> 4096', 'parts.count != 2', 'data.length == 0 || data.length > 1024',
+                  'isEqualToSet:keys', 'options:NSJSONWritingSortedKeys error:nil',
+                  'if (!canonical || ![canonical isEqualToData:data]) return nil;',
+                  'record[@"request_id"] isEqual:requestID',
+                  'initWithUUIDString:record[@"launch_id"]].UUIDString isEqual:record[@"launch_id"]',
+                  'QRPrivacySystemInteger(record[@"app_pid"], 1, INT_MAX)',
+                  'QRPrivacySystemInteger(record[@"requests"], 0, 0)',
+                  'QRPrivacySystemInteger(record[@"completions"], 0, 0)',
+                  'record[@"opened"] != NSNull.null', 'record[@"url"] != NSNull.null',
+                  'record[@"request_uptime"] != NSNull.null', 'record[@"completion_uptime"] != NSNull.null',
+                  'record[@"launch_id"] isEqual:baseline[@"launch_id"]',
+                  'record[@"app_pid"] isEqual:baseline[@"app_pid"]',
+                  'QRPrivacySystemInteger(record[@"requests"], 1, 1)',
+                  'QRPrivacySystemInteger(record[@"completions"], 1, 1)',
+                  '!= CFBooleanGetTypeID() || ![record[@"opened"] boolValue]',
+                  'record[@"url"] isEqual:@"https://100mango.github.io/app-privacy/"',
+                  'record[@"status"] isEqual:@"system_accepted"',
+                  'QRPrivacySystemFiniteNumber(record[@"request_uptime"])',
+                  'QRPrivacySystemFiniteNumber(record[@"completion_uptime"])',
+                  'QRPrivacyObservationTimely([record[@"request_uptime"] doubleValue], [record[@"completion_uptime"] doubleValue])'):
+        if token not in helper:
+            raise ValueError('Missing closed schema, duplicate, current launch, true BOOL or timely completion gate')
+    browser_observation_contract(phone)
+
+
+def compiled_system_completion_policy(source, phone):
+    compiler = shutil.which('cc') or shutil.which('clang')
+    if not compiler:
+        raise AssertionError('C compiler required for actual completion-policy checks')
+    begin = source.index('int QRPrivacySystemOpenObservationQualifies(')
+    end = source.index('BOOL QRPrivacySystemOpenObservationLaunchGate(', begin)
+    producer = source[begin:end]
+    begin = phone.index('static BOOL QRPrivacySystemReadWithinCase(')
+    end = phone.index('static BOOL QRPrivacySystemInteger(', begin)
+    reader = phone[begin:end].replace('BOOL', 'int').replace('NSTimeInterval', 'double')
+    program = '#include <math.h>\n#include <stdio.h>\n' + producer + reader + r'''
+int main(void) {
+    printf("{\"positive\":%d,\"invalid\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d],\"case_reads\":[%d,%d,%d,%d,%d,%d]}\n",
+        QRPrivacySystemOpenObservationQualifies(1,1,1,0,100,109.999),
+        QRPrivacySystemOpenObservationQualifies(0,0,1,0,100,100),
+        QRPrivacySystemOpenObservationQualifies(1,0,1,0,100,100),
+        QRPrivacySystemOpenObservationQualifies(2,1,1,0,100,100),
+        QRPrivacySystemOpenObservationQualifies(1,2,1,0,100,100),
+        QRPrivacySystemOpenObservationQualifies(1,1,0,0,100,100),
+        QRPrivacySystemOpenObservationQualifies(1,1,1,1,100,100),
+        QRPrivacySystemOpenObservationQualifies(1,1,1,0,100,110),
+        QRPrivacySystemOpenObservationQualifies(1,1,1,0,100,99),
+        QRPrivacySystemOpenObservationQualifies(1,1,1,0,NAN,100),
+        QRPrivacySystemOpenObservationQualifies(1,1,1,0,100,INFINITY),
+        QRPrivacySystemReadWithinCase(100,101,179.99,80),
+        QRPrivacySystemReadWithinCase(100,101,180,80),
+        QRPrivacySystemReadWithinCase(100,99,101,80),
+        QRPrivacySystemReadWithinCase(100,102,101,80),
+        QRPrivacySystemReadWithinCase(100,101,102,0),
+        QRPrivacySystemReadWithinCase(NAN,101,102,80));
+    return 0;
+}
+'''
+    with tempfile.TemporaryDirectory() as directory:
+        executable = str(Path(directory)/'system-completion-policy')
+        subprocess.run([compiler, '-std=c11', '-Wall', '-Wextra', '-Werror', '-O2', '-x', 'c', '-', '-o', executable, '-lm'],
+                       input=program, text=True, capture_output=True, check=True, timeout=10)
+        result = subprocess.run([executable], text=True, capture_output=True, check=True, timeout=10)
+    return json.loads(result.stdout)
+
+
+def restore_privacy_policy_parent(source, *, header=False):
+    """Remove only exact admitted DEBUG additions and prove original bytes.
+
+    The frozen predecessor was verified locally before deriving these pins.
+    This checkout-only contract does not require a sibling source or network.
+    """
+    expected = ('37d967751ebeecd14876bdff9bd32d0f14841fb82770fdfb2ea75d98c2e73ce6' if header else
+                '4303215922f7e1a72a1c535eb3d757d785601d296b54034717de7046936a1fe3')
+    if hashlib.sha256(source.encode()).hexdigest() == expected:
+        return source
+    regions = ([('\n#if DEBUG\n// Test-only observation of the existing public UIApplication', '#endif\n',
+                 'de53d3b0a589c4e5a8a61c046321d461fc24b6b81dd90158619a3cb6b62b35eb')]
+        if header else [
+            ('\n\n#if DEBUG\n#include <math.h>', '#endif',
+             'a0f33a8fc8ee0daa5dd7218c7633b8550a5a0ad88b96be88ecd84309fa270ec4'),
+            ('#if DEBUG\n    if (QRPrivacySystemEnabled)', '#endif\n',
+             '3ed89f1028f9a380c55fae7bce36a94a42ac9b957ec7122a04f71ab05bbc6e52')])
+    for begin, end, digest in regions:
+        if source.count(begin) != 1:
+            raise ValueError('Missing unique admitted privacy observation region')
+        start = source.index(begin)
+        stop = source.index(end, start) + len(end)
+        if hashlib.sha256(source[start:stop].encode()).hexdigest() != digest:
+            raise ValueError('Changed admitted privacy observation region')
+        source = source[:start] + source[stop:]
+    if hashlib.sha256(source.encode()).hexdigest() != expected:
+        raise ValueError('Original privacy parent source changed')
+    return source
+
+
+def release_preprocessed(source):
+    # Public-framework imports are unavailable here. The real C preprocessor
+    # still evaluates every observation conditional before token comparison.
+    source = re.sub(r'^#import[^\n]*\n', '', source, flags=re.M)
+    compiler = shutil.which('cc') or shutil.which('clang')
+    result = subprocess.run([compiler, '-E', '-P', '-x', 'c', '-undef', '-DDEBUG=0', '-'], input=source,
+                            text=True, capture_output=True, check=True, timeout=10)
+    return result.stdout
+
+
 class OfflinePrivacyTests(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT/'QRCatcher/QRPrivacyViewController.m').read_text()
@@ -435,7 +650,7 @@ class OfflinePrivacyTests(unittest.TestCase):
     def test_phone_real_external_browser_return_and_both_languages_keep_all_audits(self):
         case = test_methods(self.phone)['testDeniedCameraAndEmptyHistory']
         for token in ('[self.app.buttons[@"privacy.externalPolicy"] tap]', 'com.apple.mobilesafari',
-                      'browser.state', 'XCUIScreen.mainScreen.screenshot.image', '[self.app activate]',
+                      'browser.state', 'PRIVACY_SYSTEM_OPEN_RECEIPT:', '[self.app activate]',
                       '[self assertOfflinePrivacyForChinese:NO]', '[done tap]'):
             self.assertIn(token, case)
         self.assertIn('[self assertOfflinePrivacyForChinese:YES]', self.phone)
@@ -473,7 +688,7 @@ class OfflinePrivacyTests(unittest.TestCase):
 
     def test_closed_symbolic_state_labels_and_twelve_pairs_fit_diagnostic_bytes(self):
         start = self.phone.index('static NSString *QRObservedApplicationStateName(')
-        end = self.phone.index('static BOOL QRPrivacyFiniteNonemptyRect(', start)
+        end = self.phone.index('static BOOL QRPrivacyObservationTimely(', start)
         helper = self.phone[start:end]
         labels = {'NotRunning': 'not_running', 'RunningBackground': 'background',
                   'RunningBackgroundSuspended': 'suspended', 'RunningForeground': 'foreground',
@@ -489,101 +704,144 @@ class OfflinePrivacyTests(unittest.TestCase):
                               'observations_qualify_pass': False}, separators=(',', ':')).encode()
         self.assertLessEqual(len(encoded), 2048)
 
-    def test_real_c_browser_predicate_rejects_missing_hidden_covered_invalid_and_late(self):
-        for scalar, bits in [('float', 32), ('double', 64)]:
-            with self.subTest(scalar=scalar):
-                observed = compiled_browser_window_predicates(self.phone, scalar)
-                self.assertEqual(observed['scalar_bits'], bits)
-                self.assertEqual(observed['positive'], 1)
-                self.assertEqual(observed['invalid_frames'], [0] * 12)
-                self.assertEqual(observed['wrong_states'], [0] * 4)
-                self.assertEqual(observed['missing_hidden_covered'], [0] * 3)
-                self.assertEqual(observed['timely'], [1, 1])
-                self.assertEqual(observed['late_getter_returns'], [0] * 6)
-                self.assertEqual(observed['invalid_start'], [0, 0])
-                self.assertEqual(observed['capture_bounds'], [1, 1, 0, 0, 0, 0])
+    def test_real_c_completion_policy_rejects_missing_duplicate_false_unknown_and_late(self):
+        observed = compiled_system_completion_policy(self.source, self.phone)
+        self.assertEqual(observed['positive'], 1)
+        self.assertEqual(observed['invalid'], [0] * 10)
+        self.assertEqual(observed['case_reads'], [1, 0, 0, 0, 0, 0])
 
-    def test_real_c_mutations_expose_weakened_exists_hittable_finite_frame_or_deadline(self):
-        mutations = [('&& exists &&', '&& (exists || 1) &&', 'missing_hidden_covered', 0),
-                     ('QRPrivacyFiniteNonemptyRect(frame) && hittable;',
-                      'QRPrivacyFiniteNonemptyRect(frame) && (hittable || 1);', 'missing_hidden_covered', 1),
-                     ('frame.size.width > 0', 'frame.size.width >= 0', 'invalid_frames', 6),
-                     ('isfinite(frame.origin.x + frame.size.width)', '1', 'invalid_frames', 10),
-                     ('elapsed < 10;', 'elapsed < 11;', 'late_getter_returns', 0),
-                     ('bytes <= 500 * 1024;', 'bytes <= 501 * 1024;', 'capture_bounds', 5),
-                     ('bytes > 0', '(bytes || 1)', 'capture_bounds', 4),
-                     ('return width > 0', 'return (width || 1)', 'capture_bounds', 2),
-                     ('height > 0 && bytes', '(height || 1) && bytes', 'capture_bounds', 3)]
-        for before, after, field, index in mutations:
-            changed = self.phone.replace(before, after, 1)
+    def test_real_c_mutations_expose_weakened_counts_boolean_unknown_and_deadline(self):
+        mutations = [('requests == 1', 'requests <= 2', 2), ('completions == 1', 'completions <= 2', 3),
+                     ('&& opened &&', '&& (opened || 1) &&', 4), ('&& !unknown &&', '&& (!unknown || 1) &&', 5),
+                     ('elapsed < 10;', 'elapsed < 11;', 6), ('elapsed >= 0', 'elapsed >= -1', 7),
+                     ('isfinite(started) &&', '1 &&', 8)]
+        for before, after, index in mutations:
+            changed = self.source.replace(before, after, 1)
             with self.subTest(mutation=before):
-                self.assertNotEqual(changed, self.phone)
-                with self.assertRaises(ValueError):
-                    restore_phone_for_historical_observer(changed)
-                observed = compiled_browser_window_predicates(changed, 'double')
-                self.assertEqual(observed[field][index], 1)
+                self.assertNotEqual(changed, self.source)
+                # Removing one finite check may still be protected by the
+                # elapsed finite check; source-boundary mutations cannot pass
+                # by claiming a fabricated finite timestamp.
+                observed = compiled_system_completion_policy(changed, self.phone)
+                if index != 8:
+                    self.assertEqual(observed['invalid'][index], 1)
+                else:
+                    self.assertEqual(observed['invalid'][index], 0)
+        changed = self.phone.replace('returned - caseStarted < allowance;', 'returned - caseStarted <= allowance;', 1)
+        self.assertEqual(compiled_system_completion_policy(self.source, changed)['case_reads'][1], 1)
+        with self.assertRaises(ValueError):
+            restore_phone_for_historical_observer(changed)
 
-    def test_safari_owner_query_real_tap_visibility_and_all_return_clauses_cannot_be_erased(self):
-        mutations = [
+    def test_actual_system_boundary_and_closed_receipt_mutations_cannot_qualify(self):
+        system_boundary_contract(self.source)
+        system_receipt_read_contract(self.phone)
+        product_mutations = [
+            ('QRPrivacySystemRecordRequest(URL);', '/* actual request omitted */'),
+            ('QRPrivacySystemRecordCompletion(opened, !controller || controller.closing);', 'QRPrivacySystemRecordCompletion(YES, NO);'),
+            ('uiCount != 1 || tokenCount != 1 || requestCount != 1 || appPID <= 0', 'uiCount == 0'),
+            ('[request.UUIDString isEqualToString:requestID]', 'YES'),
+            ('data.length > 1024', 'data.length > 4096'),
+            ('if (closed || !NSThread.isMainThread || !QRPrivacySystemOpenObservationQualifies(', 'if (NO && !QRPrivacySystemOpenObservationQualifies(')]
+        for before, after in product_mutations:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                system_boundary_contract(self.source.replace(before, after, 1))
+        phone_mutations = [
+            ('parts.count != 2', 'parts.count < 2'), ('data.length == 0 || data.length > 1024', 'data.length == 0'),
+            ('if (!canonical || ![canonical isEqualToData:data]) return nil;', 'if (!canonical) return nil;'),
+            ('QRPrivacySystemFiniteNumber(record[@"request_uptime"])', '[record[@"request_uptime"] isKindOfClass:NSNumber.class]'),
+            ('QRPrivacySystemFiniteNumber(record[@"completion_uptime"])', '[record[@"completion_uptime"] isKindOfClass:NSNumber.class]'),
+            ('record[@"request_id"] isEqual:requestID', 'record[@"request_id"] isEqual:record[@"request_id"]'),
+            ('record[@"launch_id"] isEqual:baseline[@"launch_id"]', 'record[@"launch_id"] isEqual:record[@"launch_id"]'),
+            ('record[@"app_pid"] isEqual:baseline[@"app_pid"]', 'record[@"app_pid"] isEqual:record[@"app_pid"]'),
+            ('QRPrivacySystemInteger(record[@"requests"], 0, 0)', 'QRPrivacySystemInteger(record[@"requests"], 0, 1)'),
+            ('QRPrivacySystemInteger(record[@"requests"], 1, 1)', 'QRPrivacySystemInteger(record[@"requests"], 1, 2)'),
+            ('QRPrivacySystemInteger(record[@"completions"], 1, 1)', 'QRPrivacySystemInteger(record[@"completions"], 0, 1)'),
+            ('!= CFBooleanGetTypeID() || ![record[@"opened"] boolValue]', '!= CFBooleanGetTypeID()'),
+            ('https://100mango.github.io/app-privacy/', 'https://example.com/'),
             ('initWithBundleIdentifier:@"com.apple.mobilesafari"', 'initWithBundleIdentifier:@"com.apple.springboard"'),
-            ('return browserState == XCUIApplicationStateRunningForeground;', 'return YES;'),
-            ('UIImage *image = XCUIScreen.mainScreen.screenshot.image;', 'UIImage *image = self.app.screenshot.image;'),
-            ('UIImage *image = XCUIScreen.mainScreen.screenshot.image;', 'UIImage *image = XCUIScreen.mainScreen.screenshot.image; (void)XCUIScreen.mainScreen.screenshot;'),
-            ('if (handoff == XCTWaiterResultCompleted && timely())', 'if (handoff == XCTWaiterResultCompleted)'),
-            ('if (timely() && image.CGImage)', 'if (image.CGImage)'),
-            ('CGImageGetWidth(image.CGImage)', '(size_t)1440'),
-            ('CGImageGetHeight(image.CGImage)', '(size_t)1440'),
-            ('UIImageJPEGRepresentation(image, 0.55)', 'UIImageJPEGRepresentation(image, 0.25)'),
-            ('if (timely() && QRPrivacyManualCaptureRetainable(width, height, JPEG.length))', 'if (JPEG)'),
-            ('attachment.name = @"privacy-browser-manual-review";', 'attachment.name = @"privacy-browser";'),
-            ('attachment.name = @"privacy-browser-manual-review";\n                    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;', 'attachment.name = @"privacy-browser-manual-review";\n                    attachment.lifetime = XCTAttachmentLifetimeDeleteOnSuccess;'),
-            ('captureRetained = timely();', 'captureRetained = YES;'),
-            ('if (!captureRetained) self.privacyBrowserCaptureUnknown = YES;', '/* unknown capture ignored */'),
-            ('if (!timely()) handoff = XCTWaiterResultTimedOut;', '/* late result ignored */'),
-            ('if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown) {', 'if (NO) {'),
             ('[self.app.buttons[@"privacy.externalPolicy"] tap];', '/* real tap omitted */'),
-            ('XCTAssertTrue(externalPolicy.exists);', ''),
-            ('XCTAssertTrue(externalPolicy.enabled);', ''),
-            ('XCTAssertTrue(externalPolicy.hittable);', ''),
-            ('[self.app activate];\n    XCTAssertTrue([done waitForExistenceWithTimeout:10]);', '/* return omitted */'),
-            ('[done tap];', '/* Close omitted */'),
-            ('@"manual_review_required": [NSNumber numberWithBool:YES]', '@"manual_review_required": [NSNumber numberWithBool:NO]'),
-            ('@"automatic_page_qualification": [NSNumber numberWithBool:NO]', '@"automatic_page_qualification": [NSNumber numberWithBool:YES]'),
-            ('@"runtime_precise_url": @"UNKNOWN"', '@"runtime_precise_url": @"https://100mango.github.io/app-privacy/"'),
-            ('manualData.length <= 1024', 'manualData.length <= 4096'),
-        ]
-        for before, after in mutations:
+            ('XCTAssertTrue(externalPolicy.exists);', ''), ('XCTAssertTrue(externalPolicy.enabled);', ''),
+            ('XCTAssertTrue(externalPolicy.hittable);', ''), ('[done tap];', '/* Close omitted */'),
+            ('if (self.privacyBrowserObservationLate || self.privacySystemReceiptUnknown) {', 'if (NO) {')]
+        for before, after in phone_mutations:
             changed = self.phone.replace(before, after, 1)
             with self.subTest(mutation=before):
                 self.assertNotEqual(changed, self.phone)
                 with self.assertRaises(ValueError):
-                    browser_observation_contract(changed)
+                    system_receipt_read_contract(changed)
                 with self.assertRaises(ValueError):
                     restore_phone_for_historical_observer(changed)
 
-    def test_window_receipt_is_once_bounded_and_keeps_runtime_address_unknown(self):
+    def test_system_receipt_is_once_bounded_and_proves_only_external_link_handoff(self):
         case = test_methods(self.phone)['testDeniedCameraAndEmptyHistory']
-        self.assertEqual(case.count('NSData *manualData ='), 1)
-        self.assertEqual(case.count('PRIVACY_BROWSER_MANUAL_RECEIPT:%@'), 1)
-        self.assertIn('@"runtime_precise_url": @"UNKNOWN"', case)
-        sample = {'version': 1, 'owner': 'com.apple.mobilesafari', 'source': 'XCUIScreen.mainScreen',
-                  'status': 'manual_review_required', 'runtime_precise_url': 'UNKNOWN',
-                  'manual_review_required': True, 'automatic_page_qualification': False,
-                  'browser_raw': 18446744073709551615, 'capture_attempts': 1,
-                  'native_width': 18446744073709551615, 'native_height': 18446744073709551615,
-                  'source_bytes': 500 * 1024, 'attachment_name': 'privacy-browser-manual-review',
-                  'late_return': False, 'capture_unknown': False}
-        encoded = json.dumps(sample, separators=(',', ':')).encode()
-        self.assertLessEqual(len(encoded), 1024)
-        self.assertLessEqual(2048 + len(encoded) + 256, 4096)
+        self.assertEqual(case.count('PRIVACY_SYSTEM_OPEN_RECEIPT:%@'), 1)
+        self.assertEqual(case.count('PRIVACY_SYSTEM_OPEN_BASELINE:%@'), 1)
+        self.assertNotIn('manual_review_required', case)
+        self.assertNotIn('privacy-browser-manual-review', case)
+        sample = {'version': 1, 'case': 'testDeniedCameraAndEmptyHistory',
+                  'request_id': 'FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF',
+                  'launch_id': 'FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF', 'app_pid': 2147483647,
+                  'requests': 1, 'completions': 1, 'opened': True,
+                  'url': 'https://100mango.github.io/app-privacy/', 'request_uptime': 1.7976931348623157e308,
+                  'completion_uptime': 1.7976931348623157e308, 'status': 'system_accepted', 'page_rendered': 'UNKNOWN'}
+        self.assertLessEqual(len(json.dumps(sample, separators=(',', ':')).encode()), 1024)
         guard = method(self.phone, 'tearDown').split('    if (self.testRun.failureCount > 0)', 1)[0]
-        for required in ('if (self.privacyBrowserObservationLate || self.privacyBrowserCaptureUnknown)', '[super tearDown];',
-                         'removeUIInterruptionMonitor:self.cameraMonitor',
-                         'removeUIInterruptionMonitor:self.interruptionGuard', 'return;'):
+        for required in ('if (self.privacyBrowserObservationLate || self.privacySystemReceiptUnknown)', '[super tearDown];',
+                         'removeUIInterruptionMonitor:self.cameraMonitor', 'removeUIInterruptionMonitor:self.interruptionGuard', 'return;'):
             self.assertIn(required, guard)
-        for operation in ('debugDescription', 'screenshot', 'self.app.state', '.exists',
-                          '[self.app terminate]', 'orientation ='):
+        for operation in ('debugDescription', 'screenshot', 'self.app.state', '.exists', '[self.app terminate]', 'orientation ='):
             self.assertNotIn(operation, guard)
+
+    def test_combined_privacy_and_photos_tokens_disable_both_observations(self):
+        privacy_reject = 'if ([arguments containsObject:@"-photo-import-observation-v1"]) return NO;'
+        photos_reject = 'if ([args containsObject:@"-privacy-system-open-v1"] || [args containsObject:@"-mini-startup-observation-v1"]) return;'
+        scanner = (ROOT/'QRCatcher/QRCatchViewController.m').read_text()
+        def closed(source, camera):
+            gate = source[source.index('BOOL QRPrivacySystemOpenObservationLaunchGate('):source.index('static NSString *QRPrivacySystemEncodedValue(')]
+            photos = method(camera, 'beginPhotoObservationForGeneration:')
+            if privacy_reject not in gate or photos_reject not in photos:
+                raise ValueError('Combined observation tokens must disable both producers')
+            if photos.index(photos_reject) >= photos.index('self.photoObservationRequestID = requestID;'):
+                raise ValueError('Photos cannot create an observation before rejecting the privacy token')
+        closed(self.source, scanner)
+        for source, camera in ((self.source.replace(privacy_reject, '', 1), scanner),
+                               (self.source, scanner.replace(photos_reject, '', 1))):
+            with self.assertRaises(ValueError):
+                closed(source, camera)
+        self.assertIn('QRPrivacySystemOpenObservationLaunchGate([arguments arrayByAddingObject:@"-photo-import-observation-v1"], 123)', self.unit)
+
+    def test_release_preprocessor_removes_every_system_observation_token_without_behavior_change(self):
+        for path in ('QRCatcher/QRPrivacyViewController.m', 'QRCatcher/QRPrivacyViewController.h'):
+            source = (ROOT/path).read_text()
+            parent = restore_privacy_policy_parent(source, header=path.endswith('.h'))
+            self.assertEqual(release_preprocessed(source), release_preprocessed(parent), path)
+        release = release_preprocessed(self.source)
+        self.assertNotIn('QRPrivacySystem', release)
+        self.assertEqual(release.count('[UIApplication.sharedApplication openURL:URL options:@{} completionHandler:completion]'), 1)
+        for selector in ('viewDidLoad', 'openPolicyInBrowser', 'close'):
+            self.assertEqual(method(self.source, selector), method(restore_privacy_policy_parent(self.source), selector))
+
+    def test_self_contained_privacy_restoration_rejects_business_or_diagnostic_mutation(self):
+        for before, after in [('https://100mango.github.io/app-privacy/', 'https://example.com/'),
+                              ('elapsed < 10', 'elapsed < 100')]:
+            with self.subTest(mutation=before), self.assertRaises(ValueError):
+                restore_privacy_policy_parent(self.source.replace(before, after, 1))
+        header = (ROOT/'QRCatcher/QRPrivacyViewController.h').read_text()
+        with self.assertRaises(ValueError):
+            restore_privacy_policy_parent(header.replace('double completed', 'float completed', 1), header=True)
+
+    def test_existing_native_unit_case_exercises_exact_gate_and_real_spy_without_system_fabrication(self):
+        helper = method(self.unit, 'assertPrivacySystemObservationGateAndCompletionPolicy')
+        for token in ('QRPrivacySystemOpenObservationLaunchGate(arguments, 123)', 'arrayByAddingObject:flag',
+                      'QRPrivacySystemOpenObservationLaunchGate(arguments, 0)', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                      '-privacy-system-open-v1-suffix', 'QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, 109.999)',
+                      'QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, 100, 110)',
+                      'QRPrivacySystemOpenObservationQualifies(1, 1, YES, NO, NAN, 100)'):
+            self.assertIn(token, helper)
+        spy = self.unit[self.unit.index('@implementation QRTestPrivacyController'):self.unit.index('@interface QRCatcherTests')]
+        self.assertNotIn('QRPrivacySystemRecord', spy)
+        self.assertNotIn('UIApplication.sharedApplication openURL', spy)
+        self.assertEqual(len(test_methods(self.unit)), 12)
 
     def test_website_notice_keeps_real_height_and_existing_native_case_exercises_both_categories(self):
         loaded = method(self.source, 'viewDidLoad')
