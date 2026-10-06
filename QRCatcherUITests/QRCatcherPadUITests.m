@@ -1,6 +1,9 @@
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
 #include <math.h>
+#if DEBUG
+#import <CoreFoundation/CFDate.h>
+#endif
 #import "QRUIInterruptionSafety.h"
 static BOOL QRPadFiniteNonemptyRect(CGRect rect) {
     return isfinite(rect.origin.x) && isfinite(rect.origin.y) && isfinite(rect.size.width) && isfinite(rect.size.height) &&
@@ -19,21 +22,42 @@ static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
     attempt[@"active_term"] = NSNull.null;
     return result;
 }
+#if DEBUG
+static int QRPadStartupLogAllowance(unsigned long used, int finalEvent) {
+    unsigned long remaining = used < 4096 ? 4096 - used : 0;
+    // Reserve a fixed final UNKNOWN record, even if the returned app JSON fills
+    // its separate 4KiB value allowance. Cap fallback omits wall as UNKNOWN.
+    return finalEvent ? (int)remaining : remaining > 384 ? (int)(remaining - 384) : 0;
+}
+#endif
 @interface QRCatcherPadUITests : XCTestCase
 @property (nonatomic, strong) XCUIApplication *app;
 @property (nonatomic, strong) id interruptionGuard;
 @property (nonatomic, strong) NSMutableDictionary *shareReadinessTrace;
 @property (nonatomic) BOOL shareTraceRetained;
+#if DEBUG
+@property (nonatomic, copy) NSString *startupObservationSlot;
+@property (nonatomic, copy) NSString *startupObservationRequestID;
+@property (nonatomic) BOOL startupObservationReadAttempted;
+@property (nonatomic) NSUInteger startupObservationLogBytes;
+#endif
 @end
 @implementation QRCatcherPadUITests
 - (void)setUp {
     [super setUp]; self.continueAfterFailure = NO;
     self.shareReadinessTrace = nil; self.shareTraceRetained = NO;
+#if DEBUG
+    self.startupObservationSlot = nil; self.startupObservationRequestID = nil;
+    self.startupObservationReadAttempted = NO; self.startupObservationLogBytes = 0;
+#endif
     self.interruptionGuard = QRInstallFailClosedInterruptionMonitor(self);
     self.app = [XCUIApplication new];
 }
 - (void)tearDown {
     [self retainShareReadinessTrace];
+#if DEBUG
+    if (self.testRun.failureCount > 0) [self observeStartupValueOnce];
+#endif
     if (self.testRun.failureCount > 0) { NSLog(@"IPAD_FAILURE_UI:%@", self.app.debugDescription); [self capture:@"ipad-failure"]; }
     [self.app terminate]; XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait; [super tearDown];
     [self removeUIInterruptionMonitor:self.interruptionGuard];
@@ -52,9 +76,88 @@ static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
     attachment.name = @"ipad-share-readiness-trace"; attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
     [self addAttachment:attachment];
 }
+#if DEBUG
+// These records use only the existing native layout log. Public AX value may
+// block until the unchanged case/outer bound; no per-getter deadline exists.
+// An outer-killed launch can leave only launch_enter, or value_read_enter.
+- (void)logStartupEvent:(NSString *)event observation:(NSDictionary *)observation {
+    if (!self.startupObservationRequestID) return;
+    double wall = CFAbsoluteTimeGetCurrent();
+    NSMutableDictionary *record = [@{@"version": @1, @"event": event,
+        @"request_id": self.startupObservationRequestID, @"slot": self.startupObservationSlot,
+        @"wall": isfinite(wall) ? (id)@(wall) : (id)NSNull.null,
+        @"clock": @"WALL_CF2001", @"interval_state": @"UNKNOWN",
+        @"observations_qualify_pass": [NSNumber numberWithBool:NO]} mutableCopy];
+    if (observation) record[@"observation"] = observation;
+    BOOL finalEvent = [event isEqualToString:@"value_read_return"];
+    NSUInteger allowance = QRPadStartupLogAllowance(self.startupObservationLogBytes, finalEvent);
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+    if (!data || data.length > allowance) {
+        if (!finalEvent) return;
+        record[@"wall"] = NSNull.null;
+        record[@"observation"] = @{@"retrieval": @"UNKNOWN_log_cap", @"startup_record_omitted": [NSNumber numberWithBool:YES]};
+        data = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys error:nil];
+        if (!data || data.length > allowance) return;
+    }
+    self.startupObservationLogBytes += data.length;
+    NSLog(@"IPAD_MINI_STARTUP_OBSERVATION:%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+}
+- (void)observeStartupValueOnce {
+    if (!self.startupObservationRequestID || self.startupObservationReadAttempted) return;
+    // Claim before entering the getter: an exception or existing timeout never
+    // causes a retry from failure capture. No exists/hittable/readiness query.
+    self.startupObservationReadAttempted = YES;
+    [self logStartupEvent:@"value_read_enter" observation:nil];
+    id value = nil;
+    @try { value = self.app.staticTexts[@"scan.status"].value; }
+    @catch (NSException *exception) {
+        [self logStartupEvent:@"value_read_return" observation:@{@"retrieval": @"UNKNOWN_getter_exception"}];
+        return;
+    }
+    NSDictionary *observation = @{@"retrieval": @"UNKNOWN_missing_invalid_or_wrong_launch"};
+    if ([value isKindOfClass:NSString.class] && [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= 4096) {
+        NSRange marker = [value rangeOfString:@" mini_startup_v1="];
+        if (marker.location != NSNotFound) {
+            NSString *json = [value substringFromIndex:NSMaxRange(marker)];
+            id parsed = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+            if ([parsed isKindOfClass:NSDictionary.class] &&
+                [parsed[@"request_id"] isKindOfClass:NSString.class] &&
+                [parsed[@"request_id"] isEqualToString:self.startupObservationRequestID] &&
+                [parsed[@"slot"] isKindOfClass:NSString.class] &&
+                [parsed[@"slot"] isEqualToString:self.startupObservationSlot] &&
+                [parsed[@"launch_id"] isKindOfClass:NSString.class] &&
+                [[NSUUID alloc] initWithUUIDString:parsed[@"launch_id"]] != nil &&
+                [parsed[@"app_pid"] isKindOfClass:NSNumber.class] && [parsed[@"app_pid"] intValue] > 0 &&
+                [parsed[@"events"] isKindOfClass:NSArray.class] && [parsed[@"events"] count] <= 16) {
+                observation = @{@"retrieval": @"returned_current_request_wall_only", @"startup": parsed};
+            }
+        }
+    }
+    [self logStartupEvent:@"value_read_return" observation:observation];
+}
+- (void)launchPadWithStartupSlot:(NSString *)slot {
+    self.startupObservationSlot = slot;
+    self.startupObservationRequestID = nil;
+    self.startupObservationReadAttempted = NO; self.startupObservationLogBytes = 0;
+    if (slot) {
+        self.startupObservationRequestID = NSUUID.UUID.UUIDString;
+        self.app.launchArguments = [self.app.launchArguments arrayByAddingObjectsFromArray:@[
+            @"-mini-startup-observation-v1", @"-mini-startup-launch-id", self.startupObservationRequestID,
+            @"-mini-startup-slot", slot]];
+        [self logStartupEvent:@"launch_enter" observation:nil];
+    }
+    [self.app launch];
+    [self logStartupEvent:@"launch_return" observation:nil];
+    [self observeStartupValueOnce];
+}
+#endif
 - (void)launchWithArguments:(NSArray *)extra {
     self.app.launchArguments = [@[@"-ui-testing", @"-reset-history", @"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US", @"-fixture-payload", @"Native iPad QR result 你好"] arrayByAddingObjectsFromArray:extra];
+#if DEBUG
+    [self launchPadWithStartupSlot:self.startupObservationSlot];
+#else
     [self.app launch];
+#endif
     XCTAssertTrue([self.app.staticTexts[@"scan.result"] waitForExistenceWithTimeout:15]);
 }
 - (void)capture:(NSString *)name {
@@ -64,6 +167,9 @@ static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
     attachment.name = name; attachment.lifetime = XCTAttachmentLifetimeKeepAlways; [self addAttachment:attachment];
 }
 - (void)testSplitSelectionRotationAndAnchoredShare {
+#if DEBUG
+    self.startupObservationSlot = @"split-initial";
+#endif
     [self launchWithArguments:@[]];
     XCUIElement *history = self.app.tables[@"history.table"];
     XCTAssertTrue([history waitForExistenceWithTimeout:5]);
@@ -179,7 +285,11 @@ static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
     [self capture:@"ipad-split-portrait"];
     [self.app terminate];
     self.app.launchArguments = @[@"-ui-testing", @"-AppleLanguages", @"(en)"];
+#if DEBUG
+    [self launchPadWithStartupSlot:@"split-reopen"];
+#else
     [self.app launch];
+#endif
     XCTAssertTrue([self.app.tables[@"history.table"].cells.firstMatch waitForExistenceWithTimeout:10]);
     [self.app.tables[@"history.table"].cells.firstMatch tap];
     XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, @"Native iPad QR result 你好");
@@ -210,6 +320,9 @@ static BOOL QRPadObserveShareTerm(NSMutableDictionary *attempt, NSString *name,
     [self capture:@"ipad-imported-photo"];
 }
 - (void)testLargeTextImportCancellationAndPrivacyReturn {
+#if DEBUG
+    self.startupObservationSlot = @"largest-initial";
+#endif
     [self launchWithArguments:@[@"-UIPreferredContentSizeCategoryName", @"UICTContentSizeCategoryAccessibilityXXXL"]];
     [self.app.scrollViews.firstMatch swipeUp]; [self.app.scrollViews.firstMatch swipeUp];
     XCTAssertTrue(self.app.buttons[@"scan.import"].hittable);

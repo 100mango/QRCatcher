@@ -85,6 +85,9 @@
     self.statusLabel.numberOfLines = 0;
     self.statusLabel.textAlignment = NSTextAlignmentCenter;
     self.statusLabel.accessibilityIdentifier = @"scan.status";
+#if DEBUG
+    QRStartupObservationAttach(self.statusLabel);
+#endif
     self.resultLabel = [UILabel new];
     self.resultLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
     self.resultLabel.adjustsFontForContentSizeCategory = YES;
@@ -156,13 +159,23 @@
     NSUInteger index = [args indexOfObject:@"-fixture-payload"];
     if ([args containsObject:@"-ui-testing"] && !self.appliedFixture && index != NSNotFound && index + 1 < args.count) {
         self.appliedFixture = YES;
+        QRStartupObservationMark(QRStartupFixtureEncodeEnter);
         UIImage *QR = [QRCodeCodec imageForPayload:args[index + 1]];
+        QRStartupObservationMark(QRStartupFixtureEncodeReturn);
+        QRStartupObservationMark(QRStartupFixtureDecodeEnter);
         NSString *decoded = [[QRCodeCodec payloadsInImage:QR] firstObject];
+        QRStartupObservationMark(QRStartupFixtureDecodeReturn);
+        QRStartupObservationMark(QRStartupFixtureHandleSaveEnter);
         [self handlePayload:decoded];
+        QRStartupObservationMark(QRStartupFixtureHandleSaveReturn);
+        QRStartupObservationScheduleMainQueueTurn();
         return;
     }
 #endif
     [self resumeCamera];
+#if DEBUG
+    QRStartupObservationScheduleMainQueueTurn();
+#endif
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
@@ -203,9 +216,10 @@
     }
     // Debug-only AX diagnostics survive a failing UI test even when the app's
     // console is not forwarded into xcodebuild's UI-runner output.
-    self.statusLabel.accessibilityValue = [NSString stringWithFormat:@"event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d ready=%d wants=%d", event,
+    NSString *cameraValue = [NSString stringWithFormat:@"event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d ready=%d wants=%d", event,
         (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
         (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState, self.visible, self.ready, self.wantsCamera];
+    self.statusLabel.accessibilityValue = QRStartupObservationMergeCameraValue(cameraValue);
     NSLog(@"QRCATCHER_CAMERA_TRACE event=%@ epoch=%lu authorization=%ld scene=%ld app=%ld visible=%d result=%d importing=%d presented=%@ policy=%d ready=%d wants=%d status=%@",
           event, (unsigned long)self.cameraDiagnosticEpoch, (long)[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo],
           (long)self.view.window.windowScene.activationState, (long)UIApplication.sharedApplication.applicationState,

@@ -8,9 +8,15 @@
 
 #import <UIKit/UIKit.h>
 #import "AppDelegate.h"
+#if DEBUG
+#import <CoreFoundation/CFDate.h>
+#endif
 
 int main(int argc, char * argv[]) {
     @autoreleasepool {
+#if DEBUG
+        QRStartupObservationBegin(CFAbsoluteTimeGetCurrent());
+#endif
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
     }
 }
