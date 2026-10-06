@@ -49,6 +49,12 @@ and identical architecture/LC_UUID pairs to that same bound test executable.
 Optional Relocations/<boundarch>/QRCatcherTests.yml supports only dsymutil's
 bounded emitted YAML mapping/flow-record shape, owned by that same binary and
 Apple iOS simulator architecture. Unknown fields/formats are unsupported.
+RelocationMap's triple can instead be the closed public Mach-O architecture
+form arm64-apple-darwin or x86_64-apple-darwin: DebugMap uses header CPU/subtype
+only. It is architecture metadata, never simulator proof. The bound executable
+still requires Mach-O platform7 and exact CPU/subtype/UUID symbol pairing.
+https://github.com/llvm/llvm-project/blob/93b307b610102a62bdd81deb89aaf4b824dc546b/llvm/tools/dsymutil/MachODebugMapParser.cpp
+https://github.com/llvm/llvm-project/blob/93b307b610102a62bdd81deb89aaf4b824dc546b/llvm/lib/Object/MachOObjectFile.cpp
 Other external resources (Swift interfaces, remarks, CAS, embedded resources)
 are unsupported. __DWARF,__swift_ast remains bounded debug section evidence.
 Within this exact bound MH_DSYM only, regular __DWARF sections may have zero
@@ -133,6 +139,15 @@ TEST_RELOCATION_FILES = {TEST_RELOCATIONS + '/' + architecture + '/QRCatcherTest
                          for architecture in RELOCATION_ARCHITECTURES}
 TEST_RELOCATION_DIRECTORIES = {TEST_RELOCATIONS} | {
     TEST_RELOCATIONS + '/' + architecture for architecture in RELOCATION_ARCHITECTURES}
+TEST_DARWIN_RELOCATION_TRIPLES = {'arm64-apple-darwin': 'aarch64',
+                                'x86_64-apple-darwin': 'x86_64'}
+TEST_RELOCATION_REJECTIONS = {
+    'test_relocation_bytes_limit', 'test_relocation_runtime_code', 'test_relocation_encoding',
+    'test_relocation_node_limit', 'unsupported_test_relocation_format',
+    'unsupported_test_relocation_field', 'duplicate_test_relocation_field',
+    'test_relocation_binary_path', 'test_relocation_platform', 'test_relocation_architecture',
+    'test_relocation_symbol_limit', 'test_relocation_size',
+}
 MINIMUM_OS = 15 << 16
 CAMERA_USAGE = 'QRCatcher uses the camera to scan QR codes. Camera images are not stored or uploaded.'
 EXPECTED_PRIVACY = {
@@ -554,7 +569,9 @@ def relocation_scalar(value, label):
     return value
 
 
-def parse_test_relocations(data, label, limits, test_binary):
+def parse_test_relocations(data, label, limits, test_binary, observation=None):
+    if observation is not None:
+        observation['stage'] = 'encoding'
     require(len(data) <= limits.plist_bytes, 'test_relocation_bytes_limit', label)
     require(data[:4] not in MACH_MAGICS, 'test_relocation_runtime_code', label)
     try:
@@ -564,6 +581,9 @@ def parse_test_relocations(data, label, limits, test_binary):
     require(all(character.isprintable() or character in '\n\r' for character in value),
             'test_relocation_encoding', label)
     lines = value.splitlines()
+    if observation is not None:
+        observation['stage'] = 'document-structure'
+        observation['lines_observed'] = len(lines)
     require(len(lines) <= limits.plist_nodes, 'test_relocation_node_limit', label)
     require(len(lines) >= 5 and lines[0] == '---' and lines[-1] == '...',
             'unsupported_test_relocation_format', label)
@@ -586,12 +606,38 @@ def parse_test_relocations(data, label, limits, test_binary):
             and (bool(rows) or fields['relocations'] == '[]'), 'unsupported_test_relocation_format', label)
     triple = relocation_scalar(fields['triple'], label)
     binary_path = relocation_scalar(fields['binary-path'], label)
-    require(binary_path == str(test_binary), 'test_relocation_binary_path', label)
+    path_matched = binary_path == str(test_binary)
+    if observation is not None:
+        observation['stage'] = 'binary-path-binding'
+        observation['declared_version'] = 'absent-in-this-format'
+        observation['top_field_types'] = {'triple': 'scalar-string', 'binary-path': 'scalar-string',
+                                         'relocations': 'flow-record-sequence'}
+        encoded = triple.encode('utf-8')
+        observation['triple_bytes'] = len(encoded)
+        observation['triple_sha256'] = hashlib.sha256(encoded).hexdigest()
+        technical = len(encoded) <= 128 and re.fullmatch(
+            r'(?:arm64|aarch64|x86_64)-apple-(?:darwin|ios|tvos|watchos|macosx)(?:[0-9]+(?:\.[0-9]+){0,2})?(?:-(?:simulator|macabi))?', triple)
+        observation['triple'] = triple if technical else 'UNKNOWN: unsupported technical scalar'
+        observation['binary_path_exact_match'] = path_matched
+        observation['binary_path'] = TEST_BUNDLE + '/QRCatcherTests' if path_matched else 'UNKNOWN: outside exact bound executable'
+        observation['relocation_rows_observed'] = len(rows)
+        observation['numeric_widths_bits'] = {'offset': 64, 'size': 32, 'addend': 64,
+                                             'symObjAddr': 64, 'symBinAddr': 64, 'symSize': 32}
+    require(path_matched, 'test_relocation_binary_path', label)
     architecture = Path(label).parent.name
     triple_match = re.fullmatch(r'(aarch64|arm64|x86_64)-apple-ios(?:[0-9]+(?:\.[0-9]+){0,2})?-simulator', triple)
-    require(triple_match is not None, 'test_relocation_platform', label)
-    triple_architecture = {'arm64': 'aarch64'}.get(triple_match[1], triple_match[1])
+    darwin_architecture = TEST_DARWIN_RELOCATION_TRIPLES.get(triple)
+    if observation is not None:
+        observation['stage'] = 'architecture-metadata'
+        observation['architecture_directory'] = architecture
+        observation['triple_classification'] = ('mach-o-architecture-only' if darwin_architecture else
+                                                 'explicit-ios-simulator-metadata' if triple_match else 'unsupported')
+        observation['simulator_platform_proof'] = 'not-provided-by-relocation-metadata'
+    require(triple_match is not None or darwin_architecture is not None, 'test_relocation_platform', label)
+    triple_architecture = darwin_architecture or {'arm64': 'aarch64'}.get(triple_match[1], triple_match[1])
     require(triple_architecture == architecture, 'test_relocation_architecture', label)
+    if observation is not None:
+        observation['stage'] = 'relocation-records'
     nodes = len(fields) + 1
     required = {'offset', 'size', 'addend', 'symName', 'symBinAddr', 'symSize'}
     for row in rows:
@@ -638,8 +684,13 @@ def parse_test_relocations(data, label, limits, test_binary):
             require(re.fullmatch(r'0x[0-9a-fA-F]{1,' + str(digits) + '}', record[key]) is not None,
                     'unsupported_test_relocation_format', label)
         require(int(record['size'], 16) in {4, 8}, 'test_relocation_size', label)
+    if observation is not None:
+        observation['stage'] = 'parsed-metadata-only'
     return {'classification': 'test-symbol-relocation-metadata', 'architecture': architecture,
-            'triple': triple, 'binary_path': binary_path, 'relocation_count': len(rows)}
+            'triple': triple, 'triple_classification': 'mach-o-architecture-only' if darwin_architecture else 'explicit-ios-simulator-metadata',
+            'simulator_platform_proof': 'independently-validated-bound-test-mach-o-required',
+            'binary_path': TEST_BUNDLE + '/QRCatcherTests', 'binary_path_exact_match': True,
+            'relocation_count': len(rows)}
 
 
 def inventory(app, limits, release=True, test_bound=False, archive_app=None, initial_totals=None, symbol_observations=None):
@@ -712,8 +763,19 @@ def inventory(app, limits, release=True, test_bound=False, archive_app=None, ini
                 sha = hashlib.sha256(data).hexdigest()
                 files[relative] = {'bytes': len(data), 'sha256': sha}
                 if symbol_only and relative in TEST_RELOCATION_FILES:
-                    files[relative]['relocation_map'] = parse_test_relocations(
-                        data, relative, limits, app / TEST_BUNDLE / 'QRCatcherTests')
+                    relocation_observation = None
+                    if symbol_observations is not None:
+                        relocation_observation = {'path': relative, 'bytes': len(data), 'sha256': sha,
+                                                  'qualification': 'unqualified'}
+                        symbol_observations.setdefault('relocations', []).append(relocation_observation)
+                    try:
+                        files[relative]['relocation_map'] = parse_test_relocations(
+                            data, relative, limits, app / TEST_BUNDLE / 'QRCatcherTests', relocation_observation)
+                    except ValidationError as exc:
+                        if relocation_observation is not None:
+                            relocation_observation['rejection_enum'] = (exc.code if exc.code in TEST_RELOCATION_REJECTIONS
+                                                                         else 'UNKNOWN: relocation validation rejection')
+                        raise
                 digest.update(('F\0' + relative + '\0' + sha + '\0').encode('utf-8'))
                 if name.endswith(('.plist', '.xcprivacy')):
                     plists[relative] = parse_plist(data, relative, limits, release,

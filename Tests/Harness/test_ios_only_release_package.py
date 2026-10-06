@@ -1042,6 +1042,155 @@ class IOSOnlyPackageTests(unittest.TestCase):
         with self.assertRaises(gate.ValidationError):
             gate.verify_package(archive)
 
+    def test_official_darwin_relocation_triples_are_architecture_metadata_with_bound_relative_path(self):
+        options = self.hosted(format_version=2)
+        for architecture, cpu, triples in (('aarch64', ARM64, ('arm64-apple-darwin', 'aarch64-apple-ios17.0.0-simulator')),
+                                            ('x86_64', X86_64, ('x86_64-apple-darwin', 'x86_64-apple-ios17.0.0-simulator'))):
+            for endian in ('<', '>'):
+                self.write_test_binary(cpu=cpu, endian=endian, extra=[
+                    dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity', endian=endian),
+                    dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest', endian=endian),
+                    uuid_command(TEST_UUID, endian)])
+                self.symbols(symbol_macho(cpu=cpu, endian=endian, platform=None, debug_flags=0))
+                for triple in triples:
+                    path = self.relocations(architecture=architecture)
+                    path.write_bytes(self.relocation_yaml(architecture=architecture, triple=triple))
+                    with patch('subprocess.run', side_effect=AssertionError('no native metadata tools')):
+                        report = gate.verify_package(self.app, **options)
+                    metadata = report['hosted_tests']['symbols']['relocation_metadata'][0]['relocation_map']
+                    self.assertEqual(metadata['triple'], triple)
+                    self.assertEqual(metadata['architecture'], architecture)
+                    self.assertEqual(metadata['triple_classification'],
+                                     'mach-o-architecture-only' if triple.endswith('-darwin') else 'explicit-ios-simulator-metadata')
+                    self.assertEqual(metadata['binary_path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+                    self.assertIs(metadata['binary_path_exact_match'], True)
+                    self.assertNotIn(str(self.base), json.dumps(metadata))
+                    self.assertEqual(report['hosted_tests']['symbols']['binding'],
+                                     'identical-cpu-type-subtype-and-LC_UUID-for-every-slice')
+                    path.unlink()
+                    path.parent.rmdir()
+
+    def test_darwin_metadata_cannot_replace_real_test_platform_cpu_subtype_or_uuid_gates(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0, platform=None))
+        path = self.relocations()
+        path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin'))
+        for platform in (2, 4, 9):
+            self.write_test_binary(platform=platform)
+            self.rejected('mach_o_platform', **options)
+        self.write_test_binary()
+        for data, reason in ((symbol_macho(debug_flags=0, platform=None, cpu=X86_64), 'test_symbol_architecture'),
+                             (symbol_macho(debug_flags=0, platform=None, subtype=1), 'test_symbol_architecture'),
+                             (symbol_macho(debug_flags=0, platform=None, uuid=bytes(range(17, 33))), 'test_symbol_uuid')):
+            dwarf.write_bytes(data)
+            self.rejected(reason, **options)
+        dwarf.write_bytes(symbol_macho(debug_flags=0, platform=None))
+        self.assertEqual(gate.verify_package(self.app, **options)['status'], 'pass')
+        self.rejected('xctestrun_scope', platform='simulator', configuration='Release', xctestrun=options['xctestrun'])
+
+    def test_darwin_enum_rejects_unknown_vendor_version_environment_alias_and_wrong_directory(self):
+        options = self.hosted()
+        self.symbols(symbol_macho(debug_flags=0))
+        path = self.relocations()
+        rejected = ('aarch64-apple-darwin', 'arm64-apple-darwin23.0.0', 'arm64-apple-darwin-simulator',
+                    'arm64-other-darwin', 'arm64e-apple-darwin', 'arm64-apple-macosx',
+                    'aarch64-apple-ios17.0.0', 'arm64-apple-tvos17.0-simulator',
+                    'arm64-apple-watchos10.0-simulator', 'arm64-apple-ios17.0-macabi')
+        for triple in rejected:
+            with self.subTest(triple=triple):
+                path.write_bytes(self.relocation_yaml(triple=triple))
+                self.rejected('test_relocation_platform', **options)
+        path.write_bytes(self.relocation_yaml(triple='x86_64-apple-darwin'))
+        self.rejected('test_relocation_architecture', **options)
+
+    def test_relocation_failure_retains_safe_top_metadata_without_paths_symbols_or_second_read(self):
+        options = self.hosted()
+        self.symbols(symbol_macho(debug_flags=0))
+        path = self.relocations()
+        row = "{ offset: 0x8, size: 0x8, addend: 0x0, symName: 'private symbol sentinel', symBinAddr: 0x100000000, symSize: 0x10 }"
+        path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin23', records=(row,)))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('test_relocation_platform', **options)
+        observed = error.symbol_observations['relocations'][0]
+        self.assertEqual(observed['qualification'], 'unqualified')
+        self.assertEqual(observed['triple'], 'arm64-apple-darwin23')
+        self.assertEqual(observed['architecture_directory'], 'aarch64')
+        self.assertEqual(observed['stage'], 'architecture-metadata')
+        self.assertEqual(observed['rejection_enum'], 'test_relocation_platform')
+        self.assertEqual(observed['declared_version'], 'absent-in-this-format')
+        self.assertEqual(observed['relocation_rows_observed'], 1)
+        self.assertIs(observed['binary_path_exact_match'], True)
+        self.assertEqual(observed['binary_path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+        self.assertEqual(observed['bytes'], path.stat().st_size)
+        self.assertEqual(sum(call.args[3] == str(path.relative_to(self.app)) for call in reader.call_args_list), 1)
+        encoded = json.dumps(error.symbol_observations)
+        self.assertNotIn(str(self.base), encoded)
+        self.assertNotIn('private symbol sentinel', encoded)
+        path.write_bytes(self.relocation_yaml(triple='private-sensitive-token', binary_path='/private/unowned/secret'))
+        error = self.rejected('test_relocation_binary_path', **options)
+        observed = error.symbol_observations['relocations'][0]
+        self.assertEqual(observed['triple'], 'UNKNOWN: unsupported technical scalar')
+        self.assertEqual(observed['triple_bytes'], len('private-sensitive-token'))
+        self.assertEqual(len(observed['triple_sha256']), 64)
+        self.assertIs(observed['binary_path_exact_match'], False)
+        self.assertEqual(observed['binary_path'], 'UNKNOWN: outside exact bound executable')
+        self.assertNotIn('private-sensitive-token', json.dumps(error.symbol_observations))
+        self.assertNotIn('/private/unowned/secret', json.dumps(error.symbol_observations))
+
+    def test_darwin_metadata_keeps_all_yaml_scalar_flow_field_number_and_size_rejections(self):
+        options = self.hosted()
+        self.symbols(symbol_macho(debug_flags=0))
+        path = self.relocations()
+        good = self.relocation_yaml(triple='arm64-apple-darwin')
+        row = "{ offset: 0x8, size: 0x8, addend: 0x0, symName: 'synthetic', symBinAddr: 0x100000000, symSize: 0x10 }"
+        cases = ((good.replace(b'triple:', b'unknown:'), 'unsupported_test_relocation_field'),
+                 (good.replace(b'binary-path:', b'triple:'), 'duplicate_test_relocation_field'),
+                 (good.replace(b"'arm64-apple-darwin'", b'&alias arm64-apple-darwin'), 'unsupported_test_relocation_format'),
+                 (self.relocation_yaml(triple='arm64-apple-darwin', records=(row.replace('0x8, size', '0x10000000000000000, size'),)), 'unsupported_test_relocation_format'),
+                 (self.relocation_yaml(triple='arm64-apple-darwin', records=(row.replace('size: 0x8', 'size: 0x100000000'),)), 'unsupported_test_relocation_format'),
+                 (self.relocation_yaml(triple='arm64-apple-darwin', records=(row.replace('size: 0x8', 'size: 0x2'),)), 'test_relocation_size'),
+                 (self.relocation_yaml(triple='arm64-apple-darwin', records=(row.replace('symSize:', 'unknown:'),)), 'unsupported_test_relocation_field'))
+        for data, reason in cases:
+            with self.subTest(reason=reason):
+                path.write_bytes(data)
+                self.rejected(reason, **options)
+
+    def test_relocation_observations_respect_original_caps_and_unknown_summary_omission(self):
+        options = self.hosted()
+        self.symbols(symbol_macho(debug_flags=0))
+        path = self.relocations()
+        path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin23'))
+        error = self.rejected('test_relocation_platform', limits=replace(gate.DEFAULT_LIMITS, report_bytes=512), **options)
+        self.assertEqual(error.symbol_observations['summaries_omitted'], 'existing-report-budget')
+        path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin'))
+        report = gate.verify_package(self.app, **options)
+        self.assertEqual(report['limits'], asdict(gate.DEFAULT_LIMITS))
+        with self.assertRaises(gate.ValidationError) as raised:
+            gate.parse_test_relocations(path.read_bytes(), str(path.relative_to(self.app)),
+                                        replace(gate.DEFAULT_LIMITS, plist_bytes=128), self.test_bundle / 'QRCatcherTests')
+        self.assertEqual(raised.exception.code, 'test_relocation_bytes_limit')
+
+    def test_darwin_cli_qualification_and_unknown_failed_metadata_remain_strict_under_optimization(self):
+        options = self.hosted()
+        self.symbols(symbol_macho(debug_flags=0))
+        path = self.relocations()
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin'))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            metadata = report['hosted_tests']['symbols']['relocation_metadata'][0]['relocation_map']
+            self.assertEqual(metadata['binary_path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+            self.assertEqual(metadata['triple_classification'], 'mach-o-architecture-only')
+            self.assertNotIn(str(self.base), json.dumps(metadata))
+            path.write_bytes(self.relocation_yaml(triple='arm64-apple-darwin23'))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'test_relocation_platform')
+            self.assertEqual(report['test_symbol_observations']['relocations'][0]['triple'], 'arm64-apple-darwin23')
+            self.assertEqual(report['test_symbol_observations']['relocations'][0]['rejection_enum'], 'test_relocation_platform')
+            self.assertLessEqual(len(result.stdout.encode()), gate.DEFAULT_LIMITS.report_bytes)
+
     def test_optional_relocation_metadata_accepts_public_empty_and_nonempty_flow_maps(self):
         options = self.hosted(format_version=2)
         self.symbols()
@@ -1059,7 +1208,8 @@ class IOSOnlyPackageTests(unittest.TestCase):
                 metadata = resources[0]['relocation_map']
                 self.assertEqual(metadata['classification'], 'test-symbol-relocation-metadata')
                 self.assertEqual(metadata['relocation_count'], len(records))
-                self.assertEqual(metadata['binary_path'], str(self.test_bundle / 'QRCatcherTests'))
+                self.assertEqual(metadata['binary_path'], gate.TEST_BUNDLE + '/QRCatcherTests')
+                self.assertIs(metadata['binary_path_exact_match'], True)
                 self.assertEqual([image['path'] for image in report['mach_o']], ['QRCatcher'])
                 self.assertEqual(len(report['hosted_tests']['mach_o']), 1)
         for triple in ('arm64-apple-ios17.0.0-simulator', 'aarch64-apple-ios-simulator'):
