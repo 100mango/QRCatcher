@@ -286,8 +286,11 @@ class MiniManagedRouteTests(unittest.TestCase):
                     state=states.pop(0)
                     raw=json.dumps({'devices':{module.RUNTIME:[{'udid':module.DEVICE,'name':'QRCatcher Mini 123-1',
                         'deviceTypeIdentifier':module.TYPE,'isAvailable':True,'state':state}]}})
+                elif command[:3]==['xcrun','simctl','bootstatus']:
+                    from test_ipad_mini_state_handoff import bootstatus_output
+                    raw=bootstatus_output('QRCatcher Mini 123-1',module.DEVICE)
                 else:raw='Explicit state-handoff double; no simulator execution'
-                return 0,raw,{'state':'completed','exit':0,'cleanup_confirmed':True,'elapsed_seconds':.01}
+                return 0,raw,{'state':'completed','exit':0,'cleanup_confirmed':True,'elapsed_seconds':.01,'output_bytes':len(raw.encode())}
             return original(command,cap,**kwargs)
         return execute
 
@@ -311,14 +314,38 @@ class MiniManagedRouteTests(unittest.TestCase):
     def test_full_diagnostic_row_shutdown_recovers_once_at_both_handoffs(self):
         owner,module=self.diagnostic_row_fixture()
         try:
-            states=['Shutdown','Booted','Shutdown','Booted'];owner.f.executor=self.diagnostic_row_executor(owner,module,states)
+            states=['Shutdown','Shutdown'];owner.f.executor=self.diagnostic_row_executor(owner,module,states)
             self.assertEqual(owner.f.row(),0);self.assertEqual(states,[]);self.assertEqual(owner.f.setup()['unexecuted'],[])
             self.assertEqual([cap for command,cap in owner.f.calls if command[:3]==['xcrun','simctl','boot']],[30,30])
             self.assertEqual([cap for command,cap in owner.f.calls if command[:3]==['xcrun','simctl','bootstatus']],[90,90])
             handoffs=owner.f.budget.state['phases']['mini']['state_handoffs']
             self.assertEqual(set(handoffs),{'before_files_fixture','before_photos_seed'})
-            self.assertTrue(all(value['boot_attempts']==1 and value['state']=='booted_snapshot_only' for value in handoffs.values()))
+            self.assertEqual(len([command for command,cap in owner.f.calls if command==['xcrun','simctl','list','devices','available','-j']]),3)
+            self.assertEqual([len(value['observations']) for value in handoffs.values()],[1,1])
+            self.assertEqual([value['observations'][0]['state'] for value in handoffs.values()],['Shutdown','Shutdown'])
+            self.assertTrue(all(value['boot_attempts']==1 and value['state']=='bootstatus_completion_observation_only' and
+                                value['readiness_basis']=='exact_owned_uuid_bootstatus_completion' for value in handoffs.values()))
             self.assertTrue((owner.f.root/'build/ipad-mini-row-dispatched.json').exists())
+        finally:owner.tearDown()
+
+    def test_full_diagnostic_row_failed_files65_still_attempts_photos_after_two_shutdown_handoffs(self):
+        owner,module=self.diagnostic_row_fixture()
+        try:
+            owner.f.file_exit=65;states=['Shutdown','Shutdown']
+            owner.f.executor=self.diagnostic_row_executor(owner,module,states)
+            self.assertEqual(owner.f.row(),65);self.assertEqual(states,[])
+            setup=owner.f.setup();self.assertEqual(setup['unexecuted'],[])
+            self.assertEqual(setup['real_files_case_exit'],65);self.assertEqual(setup['real_photo_case_exit'],0)
+            cases=[(command,cap) for command,cap in owner.f.calls if command[:2]==['xcodebuild','test-without-building']]
+            self.assertEqual([cap for command,cap in cases],[480,240,360]);self.assertEqual(len(cases),3)
+            self.assertTrue(any('/testRealFilesImportAndReopen' in arg for arg in cases[1][0]))
+            self.assertTrue(any('/testRealPhotoImportReplacesSelectionAndPreservesBothRecords' in arg for arg in cases[2][0]))
+            self.assertEqual([cap for command,cap in owner.f.calls if command[:3]==['xcrun','simctl','addmedia']],[210])
+            handoffs=owner.f.budget.state['phases']['mini']['state_handoffs']
+            self.assertEqual([value['observations'][0]['state'] for value in handoffs.values()],['Shutdown','Shutdown'])
+            self.assertEqual([value['boot_attempts'] for value in handoffs.values()],[1,1])
+            self.assertEqual([value['state'] for value in handoffs.values()],['bootstatus_completion_observation_only']*2)
+            self.assertFalse(owner.f.budget.state['full_job_accepted'])
         finally:owner.tearDown()
 
     def test_full_diagnostic_row_unknown_state_stops_before_files_and_photos(self):

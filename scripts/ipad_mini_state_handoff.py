@@ -3,6 +3,10 @@
 The parent must admit the diagnostic identity/profile and wire these two fixed
 handoffs. This module creates no device, installs no app and resets no clock.
 A Booted inventory is a momentary observation, not service/daemon-cleanup proof.
+The Shutdown path observes a closed exact-owned bootstatus completion and a clean,
+timely process return, not a fresh Booted JSON snapshot or continuous state.
+Human CLI output is not a general stable API: only the retained Xcode27 output
+shape is admitted here; current authoritative help bytes were not available.
 """
 import hashlib
 import math
@@ -12,7 +16,9 @@ import re
 import ipad_mini_setup as mini
 
 HANDOFFS=('before_files_fixture','before_photos_seed')
-CAPS={'precheck':30,'boot':30,'bootstatus':90,'readback':30}
+CAPS={'precheck':30,'boot':30,'bootstatus':90}
+READINESS={'booted_snapshot_only':'fresh_unique_owned_booted_inventory',
+           'bootstatus_completion_observation_only':'exact_owned_uuid_bootstatus_completion'}
 
 
 def ownership(controller,device,receipt):
@@ -76,10 +82,45 @@ def qualified_prior(controller,device,handoff):
                      'Prior case/summary is late, unclean, incomplete or conflicting')
 
 
+def completed_owned_command(controller,command,cap,offset):
+    matches=[operation for operation in controller.record['operations'][offset:] if operation.get('command')==command]
+    mini.require(len(matches)==1,'Exact once-only owned boot operation required')
+    operation=matches[0];elapsed=operation.get('elapsed_seconds')
+    mini.require(operation.get('cap')==cap and operation.get('state')=='completed' and
+                 operation.get('cleanup_confirmed') is True and type(operation.get('exit')) is int and operation['exit']==0 and
+                 type(elapsed) in (int,float) and math.isfinite(elapsed) and 0<=elapsed<cap+2,
+                 'Owned boot operation is nonzero, late, unclean or incomplete')
+    return operation
+
+
+def completed_bootstatus(raw,expected):
+    """Fail closed on any output outside the retained public Xcode27 shape."""
+    mini.require(isinstance(raw,str) and 0<len(raw.encode())<=65536,'Missing or oversized bootstatus output')
+    header='Monitoring boot status for '+expected['name']+' ('+expected['device']+').\n'
+    proof={'stdout_sha256':hashlib.sha256(raw.encode()).hexdigest(),'stdout_bytes':len(raw.encode())}
+    # This wording is separately retained from an actual Xcode27 bootstatus -b
+    # stdout. It proves no terminal status/Finished field; current operation
+    # completion/cleanup and the original lease are still checked by the caller.
+    if raw==header+'Device already booted, nothing to do.\n\n':
+        return {**proof,'completion_kind':'already_booted_no_work',
+                'completion_message':'Device already booted, nothing to do.'}
+    stamp=r'\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{4}\] '
+    elapsed=r'Elapsed=[0-9]{2}:[0-5][0-9]\.\n'
+    # Intermediate status/detail blocks are bounded, unqualified progress.
+    # Only the final known terminal outcome contributes readiness evidence.
+    progress=stamp+r'Status=(?!4294967295,)[0-9]{1,10}, isTerminal=NO, '+elapsed+\
+             r'(?:\t{1,4}(?!Finished\n)[^\x00-\x1f\x7f]{1,1024}\n){1,16}\n'
+    finished=stamp+r'Status=4294967295, isTerminal=YES, '+elapsed+r'\tFinished\n\n'
+    mini.require(re.fullmatch(re.escape(header)+'(?:'+progress+')*'+finished,raw) is not None,
+                 'Unknown bootstatus output or missing exact owned terminal Finished')
+    return {**proof,'completion_kind':'terminal_finished','terminal_status':4294967295,'isTerminal':True,'terminal_message':'Finished'}
+
+
 def ensure_owned_booted(controller,device,receipt,handoff):
-    """One precheck; Shutdown permits one bounded boot/status/readback sequence."""
+    """One precheck; Shutdown permits one bounded exact-owned boot/status pair."""
     mini.require(handoff in HANDOFFS,'Only the two original full-row handoffs are permitted')
     expected=ownership(controller,device,receipt)
+    lease=mini._ROW_LEASE
     qualified_prior(controller,device,handoff)
     layout=controller.record.get('results',{}).get('MiniUIResults-layout.xcresult',{})
     mini.require(layout=={'totalTestCount':2,'passedTests':2,'failedTests':0,'skippedTests':0,'expectedFailures':0},
@@ -89,7 +130,8 @@ def ensure_owned_booted(controller,device,receipt,handoff):
         mini.require(files.get('totalTestCount')==1 and files.get('skippedTests')==0 and files.get('expectedFailures')==0 and
                      type(files.get('passedTests')) is int and type(files.get('failedTests')) is int and
                      files['passedTests']+files['failedTests']==1,'The original Files case must qualify before seed handoff')
-        mini.require(controller.record.get('state_handoffs',{}).get('before_files_fixture',{}).get('state')=='booted_snapshot_only',
+        prior=controller.record.get('state_handoffs',{}).get('before_files_fixture',{})
+        mini.require(prior.get('state') in READINESS and prior.get('readiness_basis')==READINESS[prior['state']],
                      'The original fixture handoff must complete first')
     records=controller.record.setdefault('state_handoffs',{})
     mini.require(handoff not in records,'This handoff cannot retry or reset its clock')
@@ -97,21 +139,37 @@ def ensure_owned_booted(controller,device,receipt,handoff):
             'caps':dict(CAPS),'started_monotonic':controller.budget.clock(),'row_deadline_monotonic':controller.deadline,
             'observations':[],'service_completion_claimed':False,'daemon_cleanup_claimed':False}
     records[handoff]=record;controller.budget.persist()
+    operation_start=len(controller.record['operations'])
     try:
         state=read_state(controller,expected,CAPS['precheck'],record)
         if state=='Shutdown':
             # Refuse before the first mutation if the entire once-only recovery
-            # chain, its three existing two-second cleanup bounds and the
+            # pair, its two existing two-second cleanup bounds and the
             # original twenty-second admission reserve cannot still fit.
-            controller.budget.next('mini',CAPS['boot']+CAPS['bootstatus']+CAPS['readback']+6,controller.deadline)
+            controller.budget.next('mini',CAPS['boot']+CAPS['bootstatus']+4,controller.deadline)
             record['boot_attempts']=1;controller.budget.persist()
-            code,_=controller.command(['xcrun','simctl','boot',device],CAPS['boot'])
-            mini.require(code==0,'The one permitted owned boot did not complete successfully')
+            boot=['xcrun','simctl','boot',device]
+            code,_=controller.command(boot,CAPS['boot'])
+            mini.require(type(code) is int and code==0,'The one permitted owned boot did not complete successfully')
+            completed_owned_command(controller,boot,CAPS['boot'],operation_start)
             record['bootstatus_attempts']=1;controller.budget.persist()
-            code,_=controller.command(['xcrun','simctl','bootstatus',device,'-b'],CAPS['bootstatus'])
-            mini.require(code==0,'The one permitted bootstatus did not return successfully')
-            mini.require(read_state(controller,expected,CAPS['readback'],record)=='Booted','Recovery returned without a Booted readback')
-        record['state']='booted_snapshot_only';record['completed_monotonic']=controller.budget.clock();controller.budget.persist()
+            status=['xcrun','simctl','bootstatus',device,'-b']
+            code,raw=controller.command(status,CAPS['bootstatus'])
+            mini.require(type(code) is int and code==0,'The one permitted bootstatus did not return successfully')
+            operation=completed_owned_command(controller,status,CAPS['bootstatus'],operation_start)
+            proof=completed_bootstatus(raw,expected)
+            mini.require(type(operation.get('output_bytes')) is int and operation['output_bytes']==proof['stdout_bytes'],
+                         'Bootstatus output is incomplete or its size is unknown')
+            record['bootstatus_completion']={**expected,**proof,'state':operation['state'],'exit':operation['exit'],
+                                            'elapsed_seconds':operation['elapsed_seconds'],'cleanup_confirmed':True,
+                                            'observed_monotonic':controller.budget.clock()}
+            record['state']='bootstatus_completion_observation_only'
+        else:record['state']='booted_snapshot_only'
+        record['readiness_basis']=READINESS[record['state']]
+        record['completed_monotonic']=controller.budget.clock();controller.budget.persist()
+        if state=='Shutdown':
+            mini.require(mini._ROW_LEASE is lease and ownership(controller,device,receipt)==expected,
+                         'Original owned Mini lease changed during bootstatus')
         return record
     except BaseException as error:
         record['state']='failed_or_refused';record['stop_reason']=str(error)[:200];controller.budget.persist();raise

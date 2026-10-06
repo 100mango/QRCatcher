@@ -12,6 +12,15 @@ import ipad_mini_state_handoff as handoff
 import owned_process_barrier as barrier
 import test_ipad_mini_setup as base
 
+# Exact retained public Xcode27 output shape, with synthetic owned identity.
+# This command double is not evidence of simulator or app execution.
+def bootstatus_output(name,device):
+    return ('Monitoring boot status for '+name+' ('+device+').\n'
+            '[2026-10-06 01:04:59 +0000] Status=4, isTerminal=NO, Elapsed=00:47.\n'
+            '\tWaiting on System App\n\n'
+            '[2026-10-06 01:05:15 +0000] Status=4294967295, isTerminal=YES, Elapsed=01:03.\n'
+            '\tFinished\n\n')
+
 class MiniStateHandoffTests(unittest.TestCase):
     def setUp(self):
         self.f=base.Fixture();self.receipt=self.f.configure();phase=self.f.budget.state['phases']['mini'];phase['status']='row_running'
@@ -23,7 +32,7 @@ class MiniStateHandoffTests(unittest.TestCase):
                 phase['operations'].append({'command':command,'cap':limit,'state':'completed','exit':0,'cleanup_confirmed':True,'elapsed_seconds':.01})
         self.lease=mini.Claim(self.f.budget,None,'full_row_dispatched_once',mini.STOP);mini._ROW_LEASE=self.lease
         self.controller=mini.Controller(self.f.budget,'mini',phase['deadline'],self.execute)
-        self.calls=[];self.states=['Booted'];self.edit=None;self.boot_exit=0;self.status_exit=0;self.operation_edit=None;self.after=None;self.raw_override=None
+        self.calls=[];self.states=['Booted'];self.edit=None;self.boot_exit=0;self.status_exit=0;self.operation_edit=None;self.after=None;self.raw_override=None;self.status_raw=bootstatus_output(self.receipt['name'],base.DEVICE)
     def tearDown(self):
         self.lease.close(False);mini._ROW_LEASE=None;self.f.close()
     def execute(self,command,cap,**kwargs):
@@ -34,9 +43,9 @@ class MiniStateHandoffTests(unittest.TestCase):
             if self.edit:self.edit(value)
             raw=self.raw_override if self.raw_override is not None else json.dumps(value)
         elif command==['xcrun','simctl','boot',base.DEVICE]:raw='Explicit owned boot double';code=self.boot_exit
-        elif command==['xcrun','simctl','bootstatus',base.DEVICE,'-b']:raw='Explicit bootstatus double';code=self.status_exit
+        elif command==['xcrun','simctl','bootstatus',base.DEVICE,'-b']:raw=self.status_raw;code=self.status_exit
         else:raise AssertionError(command)
-        operation={'state':'completed','exit':code,'cleanup_confirmed':True,'elapsed_seconds':.01}
+        operation={'state':'completed','exit':code,'cleanup_confirmed':True,'elapsed_seconds':.01,'output_bytes':len(raw.encode())}
         if self.operation_edit:self.operation_edit(operation,command)
         if self.after:self.after(command)
         return code,raw,operation
@@ -45,15 +54,20 @@ class MiniStateHandoffTests(unittest.TestCase):
     def test_booted_proceeds_with_one_read_only_precheck(self):
         record=self.first();self.assertEqual(record['state'],'booted_snapshot_only');self.assertEqual(record['boot_attempts'],0)
         self.assertEqual([cap for command,cap in self.calls],[30]);self.assertFalse(record['service_completion_claimed']);self.assertFalse(record['daemon_cleanup_claimed'])
-    def test_shutdown_one_bounded_recovery_then_verified_booted(self):
-        self.states=['Shutdown','Booted'];record=self.first()
-        self.assertEqual([cap for command,cap in self.calls],[30,30,90,30]);self.assertEqual(record['boot_attempts'],1);self.assertEqual(record['bootstatus_attempts'],1)
-        self.assertEqual([r['state'] for r in record['observations']],['Shutdown','Booted']);self.assertEqual(record['state'],'booted_snapshot_only')
+    def test_shutdown_one_bounded_pair_observes_exact_bootstatus_finished(self):
+        self.states=['Shutdown'];record=self.first()
+        self.assertEqual([cap for command,cap in self.calls],[30,30,90]);self.assertEqual(record['boot_attempts'],1);self.assertEqual(record['bootstatus_attempts'],1)
+        self.assertEqual([r['state'] for r in record['observations']],['Shutdown']);self.assertEqual(record['state'],'bootstatus_completion_observation_only')
+        self.assertEqual(record['readiness_basis'],'exact_owned_uuid_bootstatus_completion')
+        proof=record['bootstatus_completion'];self.assertEqual(proof['stdout_sha256'],hashlib.sha256(self.status_raw.encode()).hexdigest())
+        self.assertEqual(proof['stdout_bytes'],len(self.status_raw.encode()));self.assertEqual(proof['exit'],0);self.assertTrue(proof['cleanup_confirmed'])
+        self.assertEqual(proof['completion_kind'],'terminal_finished');self.assertEqual(proof['terminal_status'],4294967295);self.assertTrue(proof['isTerminal']);self.assertEqual(proof['terminal_message'],'Finished')
+        self.assertFalse(record['service_completion_claimed']);self.assertFalse(record['daemon_cleanup_claimed'])
         self.assertEqual(record['row_deadline_monotonic'],self.controller.deadline)
     def test_second_handoff_booted_after_original_files(self):
         self.first();self.calls.clear();record=self.second();self.assertEqual(record['state'],'booted_snapshot_only');self.assertEqual(len(self.calls),1)
     def test_second_handoff_shutdown_recovery_is_separate_once(self):
-        self.first();self.calls.clear();self.states=['Shutdown','Booted'];self.second();self.assertEqual([cap for command,cap in self.calls],[30,30,90,30])
+        self.first();self.calls.clear();self.states=['Shutdown'];self.second();self.assertEqual([cap for command,cap in self.calls],[30,30,90])
     def test_known_complete_failed_files_does_not_block_independent_seed_handoff(self):
         self.first();self.controller.record['results']['MiniUIResults-files.xcresult'].update(passedTests=0,failedTests=1)
         next(item for item in self.controller.record['operations'] if item['command']==mini.test_command(base.DEVICE,mini.FILES,'MiniUIResults-files.xcresult'))['exit']=65
@@ -121,19 +135,126 @@ class MiniStateHandoffTests(unittest.TestCase):
         count=len(self.calls);self.states=['Booted']
         with self.assertRaises(ValueError):self.first()
         self.assertEqual(len(self.calls),count)
-    def test_boot_nonzero_stops_without_bootstatus_or_readback(self):
+    def test_boot_nonzero_stops_without_bootstatus(self):
         self.states=['Shutdown'];self.boot_exit=149
         with self.assertRaises(ValueError):self.first()
         self.assertEqual([cap for command,cap in self.calls],[30,30])
-    def test_bootstatus_nonzero_stops_without_readback(self):
+    def test_bootstatus_nonzero_stops_without_more_commands(self):
         self.states=['Shutdown'];self.status_exit=124
         with self.assertRaises(ValueError):self.first()
         self.assertEqual([cap for command,cap in self.calls],[30,30,90])
-    def test_shutdown_final_readback_stops_without_boot_retry(self):
-        self.states=['Shutdown','Shutdown']
+    def test_shutdown_never_dispatches_a_third_device_query_or_retry(self):
+        self.states=['Shutdown','Booted'];self.first()
+        self.assertEqual(self.states,['Booted']);self.assertEqual([cap for command,cap in self.calls],[30,30,90])
         with self.assertRaises(ValueError):self.first()
-        self.assertEqual([cap for command,cap in self.calls],[30,30,90,30])
+        self.assertEqual(len(self.calls),3)
+    def test_lease_mutated_between_bootstatus_and_return_refuses(self):
+        self.states=['Shutdown']
+        self.after=lambda command:self.lease.path.write_text('changed lease') if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.first()
+        self.assertEqual([cap for command,cap in self.calls],[30,30,90])
         self.assertEqual(self.controller.record['state_handoffs']['before_files_fixture']['state'],'failed_or_refused')
+    def test_lease_removed_between_bootstatus_and_return_refuses(self):
+        self.states=['Shutdown']
+        self.after=lambda command:self.lease.path.unlink() if command[2]=='bootstatus' else None
+        with self.assertRaises((ValueError,OSError)):self.first()
+        self.assertEqual(len(self.calls),3)
+    def test_lease_mutated_during_final_receipt_persistence_refuses_return(self):
+        self.states=['Shutdown'];original=self.f.budget.persist
+        def mutate():
+            original()
+            record=self.controller.record.get('state_handoffs',{}).get('before_files_fixture',{})
+            if record.get('state')=='bootstatus_completion_observation_only':self.lease.path.write_text('changed before return')
+        self.f.budget.persist=mutate
+        with self.assertRaises(ValueError):self.first()
+        self.assertEqual(len(self.calls),3)
+        self.assertEqual(self.controller.record['state_handoffs']['before_files_fixture']['state'],'failed_or_refused')
+    def test_consumer_accepts_exact_bootstatus_completion_kind(self):
+        self.states=['Shutdown'];self.first();self.calls.clear();self.states=['Booted']
+        self.assertEqual(self.second()['state'],'booted_snapshot_only');self.assertEqual(len(self.calls),1)
+    def test_consumer_rejects_arbitrary_or_mismatched_readiness_kind(self):
+        self.first();prior=self.controller.record['state_handoffs']['before_files_fixture'];original=copy.deepcopy(prior);self.calls.clear()
+        for state,basis in [('Booted','fresh_unique_owned_booted_inventory'),('bootstatus_completion_observation_only','fresh_unique_owned_booted_inventory'),('booted_snapshot_only',None),('finished',None),('failed_or_refused',None)]:
+            with self.subTest(state=state,basis=basis):
+                prior.update(state=state,readiness_basis=basis)
+                with self.assertRaises(ValueError):self.second()
+                self.assertEqual(self.calls,[])
+        prior.clear();prior.update(original)
+    def test_bootstatus_wrong_uuid_or_name_or_unknown_finished_shape_refuses(self):
+        original=self.status_raw
+        bad=[original.replace(base.DEVICE,'11111111-2222-4333-8444-555555555555'),
+             original.replace(self.receipt['name'],'Other owned device'),
+             original.replace('\tFinished\n\n',''),original.replace('\tFinished','\tUnknown'),
+             original.replace('Status=4294967295','Status=5'),original.replace('isTerminal=YES','isTerminal=NO'),
+             original+'Unexpected trailing output\n',original.replace('Status=4, isTerminal=NO','Status=4294967295, isTerminal=NO'),
+             original.replace('Status=4, isTerminal=NO','Status=4, isTerminal=YES'),
+             original.replace('\tWaiting on System App','\tFinished'),
+             original+original[original.index('[2026-10-06 01:05:15'):],
+             'Finished\n',original+original,'x'*65537]
+        for raw in bad:
+            with self.subTest(raw=raw[:80]):
+                self.status_raw=raw;self.states=['Shutdown']
+                with self.assertRaises(ValueError):self.first()
+                self.assertEqual([cap for command,cap in self.calls],[30,30,90])
+                self.assertEqual(self.controller.record['state_handoffs']['before_files_fixture']['state'],'failed_or_refused')
+                self.controller.record['state_handoffs'].clear();self.calls.clear()
+                self.controller.record['operations']=[operation for operation in self.controller.record['operations'] if operation['command'][:3] not in (['xcrun','simctl','boot'],['xcrun','simctl','bootstatus'])]
+        self.status_raw=original
+    def test_alternate_nonterminal_progress_is_unqualified_and_final_finished_still_decides(self):
+        self.states=['Shutdown']
+        self.status_raw=self.status_raw.replace('Status=4, isTerminal=NO','Status=2, isTerminal=NO').replace('\tWaiting on System App','\tWaiting on Data Migration\n\t\tReason: synthetic migration progress')
+        record=self.first();self.assertEqual(record['state'],'bootstatus_completion_observation_only')
+        self.assertEqual(record['readiness_basis'],'exact_owned_uuid_bootstatus_completion')
+        self.assertEqual(record['bootstatus_completion']['terminal_status'],4294967295)
+        self.assertEqual([cap for command,cap in self.calls],[30,30,90])
+        self.assertNotIn('nonterminal_status',record['bootstatus_completion'])
+    def test_exact_retained_already_booted_form_records_no_fabricated_terminal_fields(self):
+        self.states=['Shutdown']
+        self.status_raw='Monitoring boot status for '+self.receipt['name']+' ('+base.DEVICE+').\nDevice already booted, nothing to do.\n\n'
+        record=self.first();proof=record['bootstatus_completion']
+        self.assertEqual(record['state'],'bootstatus_completion_observation_only')
+        self.assertEqual(proof['completion_kind'],'already_booted_no_work')
+        self.assertEqual(proof['completion_message'],'Device already booted, nothing to do.')
+        for key in ['terminal_status','isTerminal','terminal_message']:self.assertNotIn(key,proof)
+        self.assertEqual(proof['stdout_sha256'],hashlib.sha256(self.status_raw.encode()).hexdigest())
+        self.assertEqual(proof['stdout_bytes'],len(self.status_raw.encode()));self.assertTrue(proof['cleanup_confirmed'])
+        self.assertEqual([cap for command,cap in self.calls],[30,30,90]);self.assertFalse(record['service_completion_claimed'])
+        self.calls.clear();self.states=['Booted'];self.assertEqual(self.second()['state'],'booted_snapshot_only')
+    def test_already_booted_near_match_mixed_duplicate_or_foreign_identity_refuses(self):
+        good='Monitoring boot status for '+self.receipt['name']+' ('+base.DEVICE+').\nDevice already booted, nothing to do.\n\n'
+        bad=[good.replace(base.DEVICE,'11111111-2222-4333-8444-555555555555'),good.replace(self.receipt['name'],'Foreign name'),
+             good.replace('nothing to do.','nothing to do'),good.replace('already booted','Already booted'),
+             good+good,good+self.status_raw[ self.status_raw.index('[2026-10-06 01:05:15'):],
+             good.replace('Device already booted, nothing to do.','Device booted, nothing to do.'),
+             good.replace('Device already booted, nothing to do.','Device already booted, doing more.')]
+        for raw in bad:
+            with self.subTest(raw=raw[:80]):
+                self.states=['Shutdown'];self.status_raw=raw
+                with self.assertRaises(ValueError):self.first()
+                self.assertEqual(len(self.calls),3)
+                self.controller.record['state_handoffs'].clear();self.calls.clear()
+                self.controller.record['operations']=[operation for operation in self.controller.record['operations'] if operation['command'][:3] not in (['xcrun','simctl','boot'],['xcrun','simctl','bootstatus'])]
+    def test_already_booted_wording_does_not_replace_current_cleanup_evidence(self):
+        self.states=['Shutdown'];self.status_raw='Monitoring boot status for '+self.receipt['name']+' ('+base.DEVICE+').\nDevice already booted, nothing to do.\n\n'
+        self.operation_edit=lambda operation,command:operation.pop('cleanup_confirmed',None) if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.first()
+        self.assertEqual(len(self.calls),3);self.assertTrue(barrier.blocked())
+    def test_bootstatus_completion_requires_actual_zero_timely_clean_operation(self):
+        for edit in [dict(exit=149),dict(elapsed_seconds=92),dict(elapsed_seconds=None),dict(elapsed_seconds=float('nan')),dict(output_bytes=None),dict(output_bytes=1)]:
+            with self.subTest(edit=edit):
+                self.states=['Shutdown'];self.operation_edit=lambda operation,command:operation.update(edit) if command[2]=='bootstatus' else None
+                with self.assertRaises(ValueError):self.first()
+                self.assertEqual(len(self.calls),3)
+                self.controller.record['state_handoffs'].clear();self.calls.clear()
+                self.controller.record['operations']=[operation for operation in self.controller.record['operations'] if operation['command'][:3] not in (['xcrun','simctl','boot'],['xcrun','simctl','bootstatus'])]
+    def test_unknown_bootstatus_cleanup_stops_return(self):
+        self.states=['Shutdown'];self.operation_edit=lambda operation,command:operation.update(cleanup_confirmed=None) if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.first()
+        self.assertEqual(len(self.calls),3);self.assertTrue(barrier.blocked())
+    def test_actual_late_bootstatus_return_stops(self):
+        self.states=['Shutdown'];self.after=lambda command:setattr(self.f.clock,'now',self.f.clock.now+92) if command[2]=='bootstatus' else None
+        with self.assertRaises(ValueError):self.first()
+        self.assertEqual(len(self.calls),3);self.assertTrue(barrier.blocked())
     def test_unconfirmed_precheck_cleanup_stops_later_commands(self):
         self.operation_edit=lambda operation,command:operation.update(cleanup_confirmed=False)
         with self.assertRaises(ValueError):self.first()
@@ -158,16 +279,16 @@ class MiniStateHandoffTests(unittest.TestCase):
             if operations and operations[-1]['command'][2]==action and operations[-1].get('state')=='completed':self.f.clock.now=self.controller.deadline-remaining
         self.f.budget.persist=consume
     def test_missing_complete_recovery_window_refused_before_boot(self):
-        self.states=['Shutdown'];self.consume_after_completed('list',175.99)
+        self.states=['Shutdown'];self.consume_after_completed('list',143.99)
         with self.assertRaises(ValueError):self.first()
         self.assertEqual(len(self.calls),1);self.assertEqual(self.controller.record['state_handoffs']['before_files_fixture']['boot_attempts'],0)
     def test_missing_bootstatus_full_window_refused_after_one_returned_boot(self):
         self.states=['Shutdown'];self.consume_after_completed('boot',109.99)
         with self.assertRaises(ValueError):self.first()
         self.assertEqual(len(self.calls),2)
-    def test_missing_final_readback_window_refused_after_returned_bootstatus(self):
+    def test_finished_bootstatus_needs_no_redundant_readback_window(self):
         self.states=['Shutdown'];self.consume_after_completed('bootstatus',49.99)
-        with self.assertRaises(ValueError):self.first()
+        record=self.first();self.assertEqual(record['state'],'bootstatus_completion_observation_only')
         self.assertEqual(len(self.calls),3)
     def test_persistence_consumes_precheck_window_before_dispatch(self):
         self.f.clock.now=self.controller.deadline-50
@@ -184,9 +305,10 @@ class MiniStateHandoffTests(unittest.TestCase):
         self.assertEqual(self.controller.deadline,deadline);self.assertEqual(self.controller.record['started'],start)
         self.assertEqual(self.receipt['pretest_boot_completion'],'not_requested');self.assertEqual(self.receipt['state'],'configured_shutdown_device_only')
     def test_caps_and_worst_case_arithmetic_are_explicit(self):
-        self.assertEqual(handoff.CAPS,{'precheck':30,'boot':30,'bootstatus':90,'readback':30})
-        self.assertEqual(1500+2*sum(handoff.CAPS.values()),1860)
-        self.assertEqual(1860+18*2,1896);self.assertEqual(1860+20*2,1900)
+        self.assertEqual(handoff.CAPS,{'precheck':30,'boot':30,'bootstatus':90})
+        self.assertEqual(1500+2*sum(handoff.CAPS.values()),1800)
+        self.assertEqual(1800+16*2,1832);self.assertEqual(1800+18*2,1836)
+        self.assertEqual(handoff.CAPS['boot']+handoff.CAPS['bootstatus']+4+mini.CLEANUP,144)
 
     def test_malformed_or_duplicate_json_stops_without_boot(self):
         for raw in ['not JSON','{"devices":{},"devices":{}}','{"devices":{"x":NaN}}']:
@@ -198,13 +320,13 @@ class MiniStateHandoffTests(unittest.TestCase):
         self.operation_edit=lambda operation,command:operation.update(state='timed_out',exit=124)
         with self.assertRaises(ValueError):self.first()
         self.assertEqual(len(self.calls),1);self.assertTrue(barrier.blocked())
-    def test_timed_out_bootstatus_stops_final_readback(self):
+    def test_timed_out_bootstatus_stops_return(self):
         self.states=['Shutdown'];self.operation_edit=lambda operation,command:operation.update(state='timed_out',exit=124) if command[2]=='bootstatus' else None
         with self.assertRaises(ValueError):self.first()
         self.assertEqual(len(self.calls),3);self.assertTrue(barrier.blocked())
     def test_exact_recovery_chain_admission_boundary(self):
-        self.states=['Shutdown','Booted'];self.consume_after_completed('list',176)
-        record=self.first();self.assertEqual(record['state'],'booted_snapshot_only');self.assertEqual(len(self.calls),4)
+        self.states=['Shutdown','Booted'];self.consume_after_completed('list',144)
+        record=self.first();self.assertEqual(record['state'],'bootstatus_completion_observation_only');self.assertEqual(len(self.calls),3)
 
     def test_unclean_prior_case_refused_before_handoff(self):
         next(item for item in self.controller.record['operations'] if item['command']==mini.test_command(base.DEVICE,mini.LAYOUT,'MiniUIResults-layout.xcresult'))['cleanup_confirmed']=False
