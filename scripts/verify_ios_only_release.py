@@ -51,6 +51,13 @@ bounded emitted YAML mapping/flow-record shape, owned by that same binary and
 Apple iOS simulator architecture. Unknown fields/formats are unsupported.
 Other external resources (Swift interfaces, remarks, CAS, embedded resources)
 are unsupported. __DWARF,__swift_ast remains bounded debug section evidence.
+Within this exact bound MH_DSYM only, regular __DWARF sections may have zero
+flags: dsymutil passes Flags=0 to MachObjectWriter.writeSection, which writes
+that field directly. The public debug-attribute form remains supported; stored
+instructions, nonregular types, relocations, invalid ranges and UUID mismatches
+remain forbidden. Fixed official source declarations:
+https://github.com/llvm/llvm-project/blob/93b307b610102a62bdd81deb89aaf4b824dc546b/llvm/tools/dsymutil/MachOUtils.cpp
+https://github.com/llvm/llvm-project/blob/93b307b610102a62bdd81deb89aaf4b824dc546b/llvm/lib/MC/MachObjectWriter.cpp
 Optional LC_TARGET_TRIPLE follows Apple's public target_triple_command;
 symbol companions require one bounded simulator/architecture string matching
 the same bound binary slice exactly. Absence on both sides is permitted.
@@ -69,7 +76,9 @@ https://github.com/apple-oss-distributions/cctools/blob/main/include/mach-o/load
 These declarations establish the supported format, not observed native bytes.
 Validation failures may retain bounded, unqualified observations from the same
 owned companion inspection: relative path/types, fixed plist keys and Mach-O
-type/architecture/UUID summaries. No raw DWARF or second traversal is retained.
+type/architecture/UUID summaries and at most 16 already-read __DWARF section
+headers per slice. Omitted header counts remain explicit. No raw DWARF, symbol
+names, source paths, private section content or second traversal is retained.
 """
 
 import argparse
@@ -374,7 +383,19 @@ def parse_thin(data, label, limits, release=True, allow_watch=False, symbol_comp
                 require(segname == name and align <= 31, 'malformed_section', label)
                 section_name = sectname.rstrip(b'\0')
                 if symbol_companion and segment_name == b'__DWARF':
-                    require(flags & 0x02000000 and flags & 255 == 0,
+                    if observed is not None:
+                        headers = observed.setdefault('debug_sections', [])
+                        observed['debug_section_headers_observed'] = observed.get('debug_section_headers_observed', 0) + 1
+                        if len(headers) < 16:
+                            headers.append({'segment': segment_name.decode('ascii', errors='backslashreplace'),
+                                            'section': section_name.decode('ascii', errors='backslashreplace'),
+                                            'flags': flags, 'type': flags & 255, 'bytes': section_size,
+                                            'file_offset': offset, 'relocations': nreloc})
+                        else:
+                            observed['debug_section_headers_omitted'] = observed.get('debug_section_headers_omitted', 0) + 1
+                    # dsymutil writes flags=0 in companion headers; S_ATTR_DEBUG
+                    # is an object-section attribute, not required on MH_DSYM.
+                    require((flags == 0 or flags & 0x02000000) and flags & 255 == 0,
                             'test_symbol_debug_section', label)
                 if symbol_companion and segment_name != b'__DWARF' and section_name != b'__eh_frame':
                     require(offset == 0 and reloff == 0 and nreloc == 0,

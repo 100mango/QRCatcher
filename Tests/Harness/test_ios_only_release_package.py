@@ -7,7 +7,7 @@ All admission checks and unittest assertion methods stay active under -O.
 The byte builders use Apple's public layouts, without mocking native tools.
 """
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 import importlib.util
 import json
 import os
@@ -51,7 +51,8 @@ def target_triple_command(value='arm64-apple-ios17.0.0-simulator', endian='<', o
 
 
 def symbol_macho(cpu=ARM64, subtype=0, endian='<', uuid=TEST_UUID,
-                 platform=7, filetype=0xA, extra=(), markers=b''):
+                 platform=7, filetype=0xA, extra=(), markers=b'',
+                 debug_flags=0x02000000, debug_sections=1):
     """Public dsymutil layout: virtual original sections plus stored DWARF.
 
     These are synthetic structural fixtures, not retained Xcode dSYM bytes.
@@ -62,7 +63,7 @@ def symbol_macho(cpu=ARM64, subtype=0, endian='<', uuid=TEST_UUID,
     if platform is not None:
         commands.append(struct.pack(endian + '6I', 0x32, 24, platform, 17 << 16, 27 << 16, 0))
     commands.extend(extra)
-    byte_count = sum(map(len, commands)) + 304
+    byte_count = sum(map(len, commands)) + 224 + debug_sections * 80
     data_offset = 32 + byte_count
     payload = b'synthetic DWARF\0' + markers
     text_name = b'__TEXT'.ljust(16, b'\0')
@@ -71,12 +72,28 @@ def symbol_macho(cpu=ARM64, subtype=0, endian='<', uuid=TEST_UUID,
                                 0x100000000, 0x1000, 0, 0, 5, 5, 1, 0)
                     + struct.pack(endian + '16s16sQQIIIIIIII', b'__text'.ljust(16, b'\0'), text_name,
                                   0x100000400, 256, 0, 2, 0, 0, 0x80000400, 0, 0, 0))
-    commands.append(struct.pack(endian + 'II16sQQQQIIII', 0x19, 152, dwarf_name,
-                                0x100001000, 0x1000, data_offset, len(payload), 7, 3, 1, 0)
-                    + struct.pack(endian + '16s16sQQIIIIIIII', b'__debug_info'.ljust(16, b'\0'), dwarf_name,
-                                  0x100001000, len(payload), data_offset, 0, 0, 0, 0x02000000, 0, 0, 0))
+    commands.append(struct.pack(endian + 'II16sQQQQIIII', 0x19, 72 + debug_sections * 80, dwarf_name,
+                                0x100001000, 0x1000, data_offset, len(payload) * debug_sections,
+                                7, 3, debug_sections, 0)
+                    + b''.join(struct.pack(endian + '16s16sQQIIIIIIII',
+                                  (b'__debug_info' if index == 0 else b'__debug_line').ljust(16, b'\0'), dwarf_name,
+                                  0x100001000 + index * len(payload), len(payload), data_offset + index * len(payload),
+                                  0, 0, 0, debug_flags, 0, 0, 0) for index in range(debug_sections)))
     return struct.pack(endian + '8I', 0xFEEDFACF, cpu, subtype, filetype,
-                        len(commands), byte_count, 0, 0) + b''.join(commands) + payload
+                        len(commands), byte_count, 0, 0) + b''.join(commands) + payload * debug_sections
+
+
+def edit_dwarf_section(data, field_offset, fmt, value):
+    """Mutate only the first __DWARF header of a little-endian fixture."""
+    result = bytearray(data)
+    offset = 32
+    for _ in range(struct.unpack_from('<I', result, 16)[0]):
+        command, length = struct.unpack_from('<2I', result, offset)
+        if command == 0x19 and bytes(result[offset + 8:offset + 24]).rstrip(b'\0') == b'__DWARF':
+            struct.pack_into('<' + fmt, result, offset + 72 + field_offset, value)
+            return bytes(result)
+        offset += length
+    raise ValueError('Missing synthetic __DWARF segment')
 
 
 def macho(platform=2, cpu=ARM64, subtype=0, filetype=2, minimum=15 << 16,
@@ -689,6 +706,123 @@ class IOSOnlyPackageTests(unittest.TestCase):
         dwarf = self.app / gate.TEST_DWARF
         dwarf.write_bytes(symbol_macho(platform=None))
         self.assertIsNone(gate.verify_package(self.app, **options)['hosted_tests']['symbols']['dwarf']['slices'][0]['platform'])
+
+    def test_dsymutil_zero_flags_and_debug_attribute_keep_exact_bound_symbol_scope(self):
+        options = self.hosted(format_version=2)
+        for cpu in (ARM64, X86_64):
+            for endian in ('<', '>'):
+                self.write_test_binary(cpu=cpu, endian=endian, extra=[
+                    dylib_command('/System/Library/Frameworks/WatchConnectivity.framework/WatchConnectivity', endian=endian),
+                    dylib_command('/Developer/Library/Frameworks/XCTest.framework/XCTest', endian=endian),
+                    uuid_command(TEST_UUID, endian)])
+                for flags in (0, 0x02000000):
+                    with self.subTest(cpu=cpu, endian=endian, flags=flags):
+                        self.symbols(symbol_macho(cpu=cpu, endian=endian, debug_flags=flags))
+                        with patch('subprocess.run', side_effect=AssertionError('no native symbol tools')):
+                            report = gate.verify_package(self.app, **options)
+                        symbols = report['hosted_tests']['symbols']
+                        self.assertEqual(symbols['classification'], 'test-symbols')
+                        self.assertEqual(symbols['dwarf']['slices'][0]['uuid'], TEST_UUID.hex())
+                        self.assertEqual(symbols['dwarf']['slices'][0]['file_type'], 0xA)
+                        self.assertEqual([row['path'] for row in report['mach_o']], ['QRCatcher'])
+
+    def test_zero_flags_do_not_admit_nonregular_types_instructions_relocations_or_ranges(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0))
+        good = dwarf.read_bytes()
+        cases = [(symbol_macho(debug_flags=flags), 'test_symbol_debug_section')
+                 for flags in (1, 2, 0xC, 0x12, 0x02000001, 0x80000400)]
+        cases.extend([(symbol_macho(debug_flags=0x82000400), 'test_symbol_runtime_code'),
+                      (edit_dwarf_section(good, 60, 'I', 1), 'test_symbol_runtime_code'),
+                      (edit_dwarf_section(good, 56, 'I', len(good) + 1), 'mach_o_range'),
+                      (edit_dwarf_section(good, 48, 'I', len(good) + 1), 'mach_o_range'),
+                      (edit_dwarf_section(good, 40, 'Q', len(good) + 1), 'mach_o_range'),
+                      (edit_dwarf_section(good, 0, '16s', b'__other'.ljust(16, b'\0')),
+                       'missing_test_symbol_debug_info')])
+        for data, reason in cases:
+            with self.subTest(reason=reason):
+                dwarf.write_bytes(data)
+                self.rejected(reason, **options)
+
+    def test_zero_flags_keep_filetype_cpu_uuid_binding_and_release_rejections(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0))
+        for data, reason in ((symbol_macho(debug_flags=0, filetype=8), 'test_symbol_file_type'),
+                             (symbol_macho(debug_flags=0, cpu=X86_64), 'test_symbol_architecture'),
+                             (symbol_macho(debug_flags=0, subtype=1), 'test_symbol_architecture'),
+                             (symbol_macho(debug_flags=0, uuid=bytes(range(17, 33))), 'test_symbol_uuid')):
+            with self.subTest(reason=reason):
+                dwarf.write_bytes(data)
+                self.rejected(reason, **options)
+        dwarf.write_bytes(symbol_macho(debug_flags=0))
+        self.rejected('release_test_bundle', platform='simulator', configuration='Debug')
+        self.rejected('xctestrun_scope', platform='simulator', configuration='Release', xctestrun=options['xctestrun'])
+        self.test_target['TestHostBundleIdentifier'] = 'example.foreign'
+        self.write_xctestrun()
+        self.rejected('test_host_binding', **options)
+        archive = self.archive()
+        with self.assertRaises(gate.ValidationError):
+            gate.verify_package(archive)
+
+    def test_zero_flag_debug_header_failure_retention_is_bounded_and_contains_no_dwarf_content(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0, uuid=bytes(range(17, 33)),
+                                           markers=b'private DWARF content sentinel'))
+        with patch.object(gate, 'read_regular', wraps=gate.read_regular) as reader:
+            error = self.rejected('test_symbol_uuid', **options)
+        observed = error.symbol_observations['mach_o'][0]['slices'][0]
+        self.assertEqual(observed['debug_section_headers_observed'], 1)
+        self.assertEqual(observed['debug_sections'][0]['segment'], '__DWARF')
+        self.assertEqual(observed['debug_sections'][0]['section'], '__debug_info')
+        self.assertEqual(observed['debug_sections'][0]['flags'], 0)
+        self.assertEqual(observed['debug_sections'][0]['type'], 0)
+        self.assertEqual(observed['debug_sections'][0]['relocations'], 0)
+        self.assertNotIn('debug_section_headers_omitted', observed)
+        encoded = gate.encode_report({'schema_version': 1, 'status': 'fail', 'reason': error.code,
+                                      'test_symbol_observations': error.symbol_observations})
+        self.assertNotIn(b'private DWARF content sentinel', encoded)
+        self.assertLessEqual(len(encoded), gate.DEFAULT_LIMITS.report_bytes)
+        self.assertEqual(sum(call.args[3] == gate.TEST_DWARF for call in reader.call_args_list), 1)
+        dwarf.write_bytes(symbol_macho(debug_flags=2))
+        error = self.rejected('test_symbol_debug_section', **options)
+        observed = error.symbol_observations['mach_o'][0]['slices'][0]
+        self.assertEqual(observed['debug_sections'][0]['flags'], 2)
+        self.assertEqual(observed['debug_sections'][0]['type'], 2)
+        self.assertEqual(error.symbol_observations['qualification'], 'unqualified')
+
+    def test_debug_header_retention_caps_sixteen_without_waiving_later_section_validation(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0, debug_sections=17, uuid=bytes(range(17, 33))))
+        error = self.rejected('test_symbol_uuid', **options)
+        observed = error.symbol_observations['mach_o'][0]['slices'][0]
+        self.assertEqual(observed['debug_section_headers_observed'], 17)
+        self.assertEqual(observed['debug_section_headers_omitted'], 1)
+        self.assertEqual(len(observed['debug_sections']), 16)
+        bad = bytearray(symbol_macho(debug_flags=0, debug_sections=17))
+        offset = 32 + 24 + 24 + 152 + 72 + 16 * 80 + 64
+        struct.pack_into('<I', bad, offset, 2)
+        dwarf.write_bytes(bad)
+        error = self.rejected('test_symbol_debug_section', **options)
+        self.assertEqual(error.symbol_observations['mach_o'][0]['slices'][0]['debug_section_headers_omitted'], 1)
+        dwarf.write_bytes(symbol_macho(debug_flags=0))
+        report = gate.verify_package(self.app, **options)
+        self.assertEqual(report['limits'], asdict(gate.DEFAULT_LIMITS))
+
+    def test_zero_flag_cli_success_and_header_failure_remain_active_under_optimization(self):
+        options = self.hosted()
+        _, dwarf = self.symbols(symbol_macho(debug_flags=0))
+        arguments = ('--platform', 'simulator', '--configuration', 'Debug', '--xctestrun', str(options['xctestrun']))
+        for optimized in (False, True):
+            dwarf.write_bytes(symbol_macho(debug_flags=0))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(report['hosted_tests']['symbols']['classification'], 'test-symbols')
+            dwarf.write_bytes(symbol_macho(debug_flags=2, markers=b'private content sentinel'))
+            result, report = self.cli(*arguments, optimized=optimized)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report['reason'], 'test_symbol_debug_section')
+            self.assertEqual(report['test_symbol_observations']['mach_o'][0]['slices'][0]['debug_sections'][0]['flags'], 2)
+            self.assertNotIn('private content sentinel', json.dumps(report))
 
     def test_symbols_match_every_fat_slice_by_architecture_not_position(self):
         options = self.hosted()
