@@ -39,6 +39,10 @@ class StoreCaptureTests(unittest.TestCase):
         self.assertEqual(result['unchanged_files'], 455)
         self.assertFalse(result['physical_camera_scan_proven'])
         self.assertFalse(result['shipping_release_qualification'])
+        self.assertEqual(capture.PUBLIC_PARENT, '57fd7e32a499cc5237a091e30f04d99edf9e7705')
+        self.assertEqual(capture.PUBLIC_PARENT_TREE, '001e0aa8b33ea53039d6c47a59a84465aef9f139')
+        self.assertEqual(capture.CHANGED, {capture.UI_PATH, 'scripts/store_capture.py',
+            'Tests/Harness/test_store_capture.py', 'docs/STORE_SCREENSHOTS.md'})
 
     def test_original_methods_and_projects_unchanged(self):
         contract = json.loads((ROOT / 'scripts/store_capture_source.json').read_text())
@@ -54,12 +58,17 @@ class StoreCaptureTests(unittest.TestCase):
         self.assertNotIn(b'UIImagePNGRepresentation', block)
         self.assertIn(b'@"(zh-Hans)"', block)
         self.assertIn(b'@"-fixture-payload"', block)
+        self.assertIn('周末计划：上午逛市集，下午喝咖啡'.encode(), block)
+        self.assertNotIn('周末计划\\n上午逛市集，下午喝咖啡'.encode(), block)
+        self.assertIn(b'XCTAssertEqualObjects(self.app.staticTexts[@"scan.result"].label, payload);', block)
         self.assertEqual(len(contract['files']), 456)
 
     def test_fixed_owned_models_and_dimensions(self):
         selected = capture.select_devices(*fixtures())
         self.assertEqual([t['model'] for t in selected], ['iPhone 17 Pro', 'iPad Pro 13-inch (M5)'])
         self.assertEqual([t['pixels'] for t in selected], [[1206, 2622], [2064, 2752]])
+        self.assertEqual([t['capture_labels'] for t in selected], [['history'], ['result', 'history']])
+        self.assertEqual(sum(len(t['capture_labels']) for t in selected), 3)
 
     def test_missing_model_or_ambiguous_runtime_fails(self):
         r, t, d = fixtures()
@@ -190,7 +199,8 @@ class StoreCaptureTests(unittest.TestCase):
         self.assertNotIn('altool', text)
         self.assertNotIn('notarytool', text)
         self.assertNotIn('git push', text)
-        self.assertIn("600 if label == 'result' else 420", text)
+        self.assertIn("600 if index == 0 else 420", text)
+        self.assertIn("['git', 'diff', '--name-only', PUBLIC_PARENT, 'HEAD']", text)
         self.assertIn("(2940 if tail else 2700)", text)
         self.assertIn("time.monotonic() + cap + 20 < endpoint", text)
         self.assertIn("'-maximum-test-execution-time-allowance', '240'", text)

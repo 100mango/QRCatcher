@@ -20,15 +20,16 @@ from watch_process import execute
 ROOT = Path(__file__).resolve().parents[1]
 BASE_COMMIT = '991af41dfdc01bc1332218cb8969f4ca40198304'
 BASE_TREE = 'd5357beefe435c278f7bfc793eae5059df5b0cfb'
+PUBLIC_PARENT = '57fd7e32a499cc5237a091e30f04d99edf9e7705'
+PUBLIC_PARENT_TREE = '001e0aa8b33ea53039d6c47a59a84465aef9f139'
 UI_PATH = 'QRCatcherUITests/QRCatcherUITests.m'
 CONTRACT_SHA = '621f69768e5c5c8ec2e4aee824a881c878053e6f4f3d50e21e3574022d079368'
-DISPLAY_SHA = '40de291f2f27f0cf169b7cc63255963329465c76c165d74e04cc2c19e263c3b9'
-CHANGED = {UI_PATH, 'scripts/store_capture.py', 'scripts/store_capture_source.json',
-           'Tests/Harness/test_store_capture.py', 'docs/STORE_SCREENSHOTS.md',
-           '.github/workflows/ios-store-screenshots.yml'}
+DISPLAY_SHA = '596d9985acca9b9cbf4ba6b03d804eba7794914a5dad52810bd6c511b2662c64'
+CHANGED = {UI_PATH, 'scripts/store_capture.py',
+           'Tests/Harness/test_store_capture.py', 'docs/STORE_SCREENSHOTS.md'}
 TARGETS = (
-    {'row': 'iphone-17-pro', 'model': 'iPhone 17 Pro', 'pixels': [1206, 2622]},
-    {'row': 'ipad-13-m5', 'model': 'iPad Pro 13-inch (M5)', 'pixels': [2064, 2752]},
+    {'row': 'iphone-17-pro', 'model': 'iPhone 17 Pro', 'pixels': [1206, 2622], 'capture_labels': ['history']},
+    {'row': 'ipad-13-m5', 'model': 'iPad Pro 13-inch (M5)', 'pixels': [2064, 2752], 'capture_labels': ['result', 'history']},
 )
 CASES = {'result': 'testStoreNormalResultScreenshot', 'history': 'testStoreNormalHistoryScreenshot'}
 MAX_SCREENSHOT = 8_000_000
@@ -83,7 +84,7 @@ def verify_source(root=ROOT):
     return {'product_source': BASE_COMMIT, 'product_tree': BASE_TREE,
             'unchanged_files': 455, 'reversible_ui_test_file': UI_PATH,
             'original_test_methods_unchanged': True, 'locale': 'zh-Hans',
-            'synthetic_demo_payloads': ['https://example.com', '周末计划\n上午逛市集，下午喝咖啡'],
+            'synthetic_demo_payloads': ['https://example.com', '周末计划：上午逛市集，下午喝咖啡'],
             'debug_encode_decode_save': True, 'physical_camera_scan_proven': False,
             'shipping_release_qualification': False, 'visual_review': 'pending'}
 
@@ -303,12 +304,12 @@ class Capture:
         _, head = self.command('source-head', ['git', 'rev-parse', 'HEAD'], 15)
         need(head.strip() == self.source['source_sha'], 'Wrong actual source commit')
         _, parent = self.command('source-parent', ['git', 'show', '-s', '--format=%P', 'HEAD'], 15)
-        need(parent.strip() == BASE_COMMIT, 'Exact sole base parent required')
+        need(parent.strip() == PUBLIC_PARENT, 'Exact sole public parent required')
         _, tree = self.command('source-tree', ['git', 'rev-parse', 'HEAD^{tree}', 'HEAD^1^{tree}'], 15)
         trees = tree.splitlines()
-        need(len(trees) == 2 and trees[1] == BASE_TREE, 'Wrong base tree')
+        need(len(trees) == 2 and trees[1] == PUBLIC_PARENT_TREE, 'Wrong public parent tree')
         self.source['source_tree'] = trees[0]
-        _, changed = self.command('source-delta', ['git', 'diff', '--name-only', BASE_COMMIT, 'HEAD'], 15)
+        _, changed = self.command('source-delta', ['git', 'diff', '--name-only', PUBLIC_PARENT, 'HEAD'], 15)
         need(set(changed.splitlines()) == CHANGED, 'Unreviewed changed path inventory')
         self.command('source-clean', ['git', 'diff', '--exit-code', 'HEAD', '--'], 15)
         _, xcode = self.command('xcode', ['xcodebuild', '-version'], 30)
@@ -351,7 +352,8 @@ class Capture:
             self.command(row + '-install', ['xcrun', 'simctl', 'install', udid, str(app)], 600)
             self.installed(target, row + '-installed-before')
             self.command(row + '-light', ['xcrun', 'simctl', 'ui', udid, 'appearance', 'light'], 60)
-            for label, method in CASES.items():
+            for index, label in enumerate(target['capture_labels']):
+                method = CASES[label]
                 stem = row + '-' + label
                 result = self.work / (stem + '.xcresult')
                 started = time.time()
@@ -362,7 +364,7 @@ class Capture:
                     '-test-timeouts-enabled', 'YES', '-default-test-execution-time-allowance', '180',
                     '-maximum-test-execution-time-allowance', '240', '-only-testing:QRCatcherUITests/QRCatcherStoreCaptureUITests/' + method,
                     '-resultBundlePath', str(result), 'CODE_SIGNING_ALLOWED=NO'],
-                    600 if label == 'result' else 420, accept=(0, 65), output=16_000_000)
+                    600 if index == 0 else 420, accept=(0, 65), output=16_000_000)
                 folder = self.work / (stem + '-attachments')
                 self.command(stem + '-export', ['xcrun', 'xcresulttool', 'export', 'attachments',
                     '--path', str(result), '--output-path', str(folder)], 45, tail=True)
@@ -404,7 +406,7 @@ def upload_admission():
     need(packet.is_dir() and not packet.is_symlink(), 'Missing retained evidence')
     files = sorted(packet.iterdir())
     need(files and len(files) <= 256, 'Unbounded evidence membership')
-    names = {t['row'] + '-' + label + '.png': t['pixels'] for t in TARGETS for label in CASES}
+    names = {t['row'] + '-' + label + '.png': t['pixels'] for t in TARGETS for label in t['capture_labels']}
     total = 0
     for path in files:
         # A successful command may have no stdout. Keep that real empty log;

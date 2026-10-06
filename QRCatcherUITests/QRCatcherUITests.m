@@ -584,7 +584,7 @@ static BOOL QRPrivacyManualCaptureRetainable(size_t width, size_t height, NSUInt
     self.executionTimeAllowance = 240;
     [self storeLaunchPayload:@"https://example.com" reset:YES];
     [self.app terminate];
-    NSString *note = @"周末计划\n上午逛市集，下午喝咖啡";
+    NSString *note = @"周末计划：上午逛市集，下午喝咖啡";
     [self storeLaunchPayload:note reset:NO];
     XCUIElement *historyTab = self.app.tabBars.buttons[@"history.tab"];
     BOOL phone = historyTab.exists;
