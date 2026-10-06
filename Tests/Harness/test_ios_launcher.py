@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='qrcatcher-launcher-routing-') as direct
     folder=alias.resolve();binary=folder/'bin';binary.mkdir();(folder/'scripts').mkdir()
     fixture_env={**os.environ,'GITHUB_WORKSPACE':str(folder),'GITHUB_ENV':str(folder/'fixture-github-env')}
     fixture_env.pop('QRCATCHER_OWNED_CLEANUP_UNCONFIRMED',None)
+    fixture_env.pop('EVIDENCE_SCOPE',None)
     for name in ['run_ios_platform_ui.sh','run_bounded.py','watch_process.py','owned_process_group.py','owned_process_barrier.py','atomic_json.py','stage_owned_import_fixture.py', 'fixture_query_guard.py','ios_import_continuation.py']:
         shutil.copyfile(root/'scripts'/name,folder/'scripts'/name)
     rejected=subprocess.run(['python3','scripts/owned_process_barrier.py','--check'],cwd=folder,
@@ -45,8 +46,8 @@ if len(args)>1 and args[1]=='addmedia':raise SystemExit(int(os.environ.get('SEED
     scenarios=[(0,0,0,0,False),(13,0,0,0,False),(124,0,0,0,False),(0,7,0,0,False),(0,0,65,0,False),(0,0,0,65,False),(0,0,126,0,False),(13,0,65,0,False),(0,0,65,7,False),(0,0,65,126,False),(0,0,0,0,True)]
     profiles=[('QRCatcherUITests','PhoneUIResults.xcresult',360),
               ('QRCatcherUITests','CompactPhoneUIResults.xcresult',240),
-              ('QRCatcherPadUITests','PadUIResults.xcresult',240),
-              ('QRCatcherPadUITests','MiniUIResults.xcresult',240)]
+              ('QRCatcherPadUITests','PadUIResults.xcresult',240)]
+    # Mini now has its closed full-row/owned-destination executable suite.
     for test_class,result_name,file_cap in profiles:
       for seed,test_exit,file_exit,photo_exit,barrier in scenarios:
         observed=folder/'command.json';observed.unlink(missing_ok=True)

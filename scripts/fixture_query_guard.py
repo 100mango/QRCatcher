@@ -16,6 +16,15 @@ def signature(info):
 
 @contextlib.contextmanager
 def query_guard(command):
+    mini=sys.modules.get('ipad_mini_setup')
+    if mini is None:
+        with _original_query_guard(command):yield
+    else:
+        with mini.fixture_query(command):
+            with _original_query_guard(command):yield
+
+@contextlib.contextmanager
+def _original_query_guard(command):
     if blocked():raise SystemExit(126)
     if (len(command)!=6 or command[:3]!=['xcrun','simctl','get_app_container'] or
             command[4]!='100mango.QRCatcher' or command[5] not in {'app','data'}):

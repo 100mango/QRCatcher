@@ -1,5 +1,9 @@
 #!/bin/bash
 set -euo pipefail
+if [ "${EVIDENCE_SCOPE:-}" = ipad_mini ] || [ "${2:-}" = MiniUIResults.xcresult ]; then
+  python3 -u scripts/ipad_mini_setup.py row "$@"
+  exit $?
+fi
 STEP_STARTED=$(python3 -c 'import time;print(time.monotonic())')
 python3 scripts/owned_process_barrier.py --check
 DEVICE=$1

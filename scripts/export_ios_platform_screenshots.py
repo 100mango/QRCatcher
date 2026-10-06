@@ -3,21 +3,21 @@
 import hashlib,json,math,os,pathlib,re,struct,subprocess,time
 from export_settings_discovery import export_settings
 export_started=time.monotonic()
-def required_alert_endpoints(mode):
- if mode=='scrolled':return {'phone-largest-history-alert-top','phone-largest-history-alert-end'}
- if mode=='unscrolled':return {'phone-largest-history-alert'}
- raise ValueError('Unknown native alert evidence mode')
-def missing_alert_endpoints(requirements,screenshots,expected_results):
+def required_phone_result_endpoints(mode):
+ if mode=='scrolled':return {'phone-largest-history-result-top','phone-largest-history-result-end'}
+ if mode=='unscrolled':return {'phone-largest-history-result'}
+ raise ValueError('Unknown app-owned result evidence mode')
+def missing_phone_result_endpoints(requirements,screenshots,expected_results):
  missing=[];seen=set()
  for requirement in requirements:
   label=requirement['result_label']
-  if label not in {'pro-max','SE3'} or label in seen:raise ValueError('Unknown or duplicate native alert evidence result')
+  if label not in {'pro-max','SE3'} or label in seen:raise ValueError('Unknown or duplicate app-owned result evidence result')
   seen.add(label)
-  required=required_alert_endpoints(requirement['mode'])
+  required=required_phone_result_endpoints(requirement['mode'])
   retained={item.get('checkpoint') for item in screenshots if item.get('result_label')==label}
   absent=sorted(required-retained)
   if absent:missing.append({'result_label':label,'missing':absent})
- for label in sorted(set(expected_results)-seen):missing.append({'result_label':label,'missing':['native alert evidence mode and required pixels']})
+ for label in sorted(set(expected_results)-seen):missing.append({'result_label':label,'missing':['app-owned result evidence mode and required pixels']})
  return missing
 def missing_import_audit_pairs(requirements,screenshots,attachments,expected_results=()):
  missing=[];seen=set()
@@ -26,12 +26,26 @@ def missing_import_audit_pairs(requirements,screenshots,attachments,expected_res
   if label not in allowed or label in seen:raise ValueError('Unknown or duplicate phone audit-pair receipt')
   seen.add(label)
   before='image-import-real-files' if label.endswith('-files') else 'image-import-real-photos'
-  required={before,'image-import-history-after-cancel','image-import-alert-audit-tree','image-import-history-audit-tree','image-import-audit-pair-receipts'}
+  required={before,'image-import-history-after-cancel','image-import-result-audit-tree','image-import-history-audit-tree','image-import-audit-pair-receipts'}
   retained={row['checkpoint'] for row in screenshots+attachments if row['result_label']==label}
   absent=sorted(required-retained)
   if absent:missing.append({'result_label':label,'missing':absent})
  for label in sorted(set(expected_results)-seen):missing.append({'result_label':label,'missing':['audit-pair requirement and paired evidence']})
  return missing
+
+def validate_import_audit_pair_receipts(data):
+ # Retain audit failures honestly. This validates evidence shape, never a pass.
+ if len(data)>4096:raise ValueError('Audit-pair receipt exceeded 4KB')
+ receipts=json.loads(data)
+ if not isinstance(receipts,list) or len(receipts)!=2:raise ValueError('Missing distinct audit phases')
+ required={'phase','callback_issues','registered_failure_delta','api_returned_success','error'}
+ if any(not isinstance(row,dict) or set(row)!=required for row in receipts):raise ValueError('Unknown audit receipt fields')
+ if [row['phase'] for row in receipts]!=['app-owned-result','same-history-after-cancel']:raise ValueError('Missing distinct audit phases')
+ for row in receipts:
+  if any(type(row[key]) is not int or row[key]<0 for key in ['callback_issues','registered_failure_delta']):raise ValueError('Invalid raw audit counts')
+  if type(row['api_returned_success']) is not bool:raise ValueError('Missing audit API outcome')
+  if not isinstance(row['error'],str):raise ValueError('Missing audit error text')
+ return receipts
 
 def validate_ipad_share_trace(data):
  if len(data)>4096:raise ValueError('iPad share trace exceeds4KiB')
@@ -81,7 +95,14 @@ def is_ipad_share_trace(entry):
 scope=os.environ['EVIDENCE_SCOPE']
 limit=json.loads(pathlib.Path('scripts/evidence-allocation.json').read_text())['scope_limits_bytes'][scope]
 out=pathlib.Path('build/ios-platform-evidence');out.mkdir(parents=True,exist_ok=True)
-summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'alert_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[],'ipad_share_traces':[]}
+summary={'scope':scope,'scope_limit_bytes':limit,'commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'run_id':os.environ.get('GITHUB_RUN_ID'),'screenshots':[],'omitted':[],'results':{},'phone_result_evidence_requirements':[],'import_audit_pair_requirements':[],'import_audit_attachments':[],'ipad_share_traces':[]}
+if scope=='ipad_mini':
+ from ipad_mini_setup import job_ledger_limit
+ for name,cap in [('ipad-mini-job-state.json',job_ledger_limit()),('ipad-mini-owned-device.json',4096),('ipad-mini-inflight.json',4096),('ipad-mini-host-inflight.json',4096),('ipad-mini-row-dispatched.json',4096)]:
+  path=pathlib.Path('build')/name
+  if path.exists() or path.is_symlink():
+   from ipad_mini_setup import read_regular
+   data=read_regular(path,cap);(out/name).write_bytes(data)
 barrier=pathlib.Path('build/owned-process-cleanup.json')
 if barrier.exists():
  assert not barrier.is_symlink() and barrier.stat().st_size<=2048
@@ -112,7 +133,7 @@ for label,relative in [('watch','QRCatcherWatch/Assets.xcassets/AppIcon.appicons
 for name in ['release-watch.log','release-tv.log','release-vision.log','watch-test-build.log','watch-unit.log','watch-ui.log','tv-test-build.log','tv-test.log','tv-authorized-test.log','tv-revoked-test.log','vision-test-build.log','vision-test.log','vision-ui-test.log','ios-test-build.log','ios-unit.log','PhoneUIResults.log','CompactPhoneUIResults.log','PadUIResults.log','MiniUIResults.log','PadUIResults-layout.log','MiniUIResults-layout.log','PhoneUIResults-imports.log','CompactPhoneUIResults-imports.log','PhoneUIResults-files.log','CompactPhoneUIResults-files.log','PadUIResults-files.log','MiniUIResults-files.log']:
  path=pathlib.Path(name)
  if path.is_file():(out/name).write_bytes(path.read_bytes()[-64*1024:])
-names=('image-import-history-after-cancel','phone-largest-history-alert-top','phone-largest-history-alert-end','phone-largest-history-alert','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
+names=('image-import-history-after-cancel','phone-largest-history-result-top','phone-largest-history-result-end','phone-largest-history-result','watch-trait-initial-payload-top','watch-trait-initial-payload-bottom','watch-trait-reopened-payload-top','watch-trait-reopened-payload-bottom','image-import-files-decoded','image-import-photos-decoded','image-import-real-photos','image-import-real-files','image-import-failure','tv-history-after-removal','tv-history-focused-record','tv-history-focused-delete','tv-history-list','tv-offline-policy','tv-chinese-result','watch-recovered-journal','watch-saved-preview','phone-failure','tv-revoked-photos','watch-empty','watch-offline-policy','watch-fixture-offline-result','watch-system-picker-unavailable','watch-reopened-qr','watch-failure','tv-real-photo-result','tv-verified-photos-output','tv-reopened-history','tv-failure','vision-imported-qr','vision-reopened-history','vision-failure','synthetic-scan-result','synthetic-history','privacy-open-diagnostic','privacy-return-diagnostic','ipad-anchored-share','ipad-split-portrait','ipad-large-text','ipad-imported-photo','ipad-failure','view-layout-320x568-largest-text','view-layout-568x320-largest-text')
 def records(value):
  if isinstance(value,dict):
   if 'exportedFileName' in value:yield value
@@ -138,35 +159,30 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
    filename=label+'-share-readiness-trace.json';(out/filename).write_bytes(data)
    summary['ipad_share_traces'].append({'result_label':label,'name':filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'observations_qualify_pass':False})
    continue
-  audit_name=next((value for value in ['image-import-audit-pair-required','image-import-alert-audit-tree','image-import-history-audit-tree','image-import-audit-pair-receipts'] if value in text),None)
+  audit_name=next((value for value in ['image-import-audit-pair-required','image-import-result-audit-tree','image-import-history-audit-tree','image-import-audit-pair-receipts'] if value in text),None)
   if audit_name:
    path=(folder/entry['exportedFileName']).resolve()
    if not path.is_relative_to(folder.resolve()):raise ValueError('Audit-pair attachment escaped its result directory')
    data=path.read_bytes()
    if len(data)>64*1024:raise ValueError('Audit-pair text exceeded its bounded allocation')
    if audit_name=='image-import-audit-pair-required':
-    if data.decode('utf-8').strip()!='phone-alert-history':raise ValueError('Unknown import audit-pair requirement')
+    if data.decode('utf-8').strip()!='phone-result-history':raise ValueError('Unknown import audit-pair requirement')
     summary['import_audit_pair_requirements'].append(label)
    elif audit_name=='image-import-audit-pair-receipts':
-    if len(data)>4096:raise ValueError('Audit-pair receipt exceeded 4KB')
-    receipts=json.loads(data)
-    if not isinstance(receipts,list) or [row.get('phase') for row in receipts]!=['native-alert','same-history-after-cancel']:raise ValueError('Missing distinct audit phases')
-    for row in receipts:
-     if any(type(row.get(key)) is not int or row[key]<0 for key in ['callback_issues','registered_failure_delta']):raise ValueError('Invalid raw audit counts')
-     if type(row.get('api_returned_success')) is not bool:raise ValueError('Missing audit API outcome')
+    validate_import_audit_pair_receipts(data)
    filename=label+'-'+audit_name+'.txt';(out/filename).write_bytes(data)
    summary['import_audit_attachments'].append({'result_label':label,'checkpoint':audit_name,'name':filename,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
    continue
-  if 'phone-largest-alert-hierarchy' in text:
+  if 'phone-largest-result-hierarchy' in text:
    path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
    data=path.read_bytes();assert len(data)<=64*1024
-   (out/(label+'-native-alert-hierarchy.txt')).write_bytes(data);continue
-  if 'phone-largest-alert-evidence-requirement' in text:
+   (out/(label+'-app-owned-result-hierarchy.txt')).write_bytes(data);continue
+  if 'phone-largest-result-evidence-requirement' in text:
    path=(folder/entry['exportedFileName']).resolve();assert path.is_relative_to(folder.resolve())
    data=path.read_bytes();assert len(data)<=32
-   mode=data.decode('utf-8').strip();required_alert_endpoints(mode)
-   summary['alert_evidence_requirements'].append({'result_label':label,'mode':mode})
-   (out/(label+'-native-alert-evidence-mode.txt')).write_bytes(data);continue
+   mode=data.decode('utf-8').strip();required_phone_result_endpoints(mode)
+   summary['phone_result_evidence_requirements'].append({'result_label':label,'mode':mode})
+   (out/(label+'-app-owned-result-evidence-mode.txt')).write_bytes(data);continue
   if not name or 'accessibility' in text:continue
   # Keep the complete largest-size case result, with representative actual
   # result/focus/Chinese pixels inside the unchanged TV evidence allocation.
@@ -208,8 +224,8 @@ for result,label in [('WatchUnitResults.xcresult','watch-unit'),('WatchUIResults
   item={'name':filename,'result_label':label,'checkpoint':name,'bytes':len(data),'source_attachment_bytes':source_bytes,'sha256':hashlib.sha256(data).hexdigest()}
   if native_dimensions:item.update(native_pixel_dimensions=native_dimensions,source_bytes_preserved=True)
   summary['screenshots'].append(item);print(json.dumps(item),flush=True)
-expected_alert_results=[label for label in ['pro-max','SE3'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
-summary['missing_alert_endpoints']=missing_alert_endpoints(summary['alert_evidence_requirements'],summary['screenshots'],expected_alert_results)
+expected_phone_result_results=[label for label in ['pro-max','SE3'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
+summary['missing_phone_result_endpoints']=missing_phone_result_endpoints(summary['phone_result_evidence_requirements'],summary['screenshots'],expected_phone_result_results)
 expected_import_pairs=[label for label in ['pro-max-imports','pro-max-files','SE3-imports','SE3-files'] if not summary['results'].get(label,{'not_produced':True}).get('not_produced')]
 summary['missing_import_audit_pairs']=missing_import_audit_pairs(summary['import_audit_pair_requirements'],summary['screenshots'],summary['import_audit_attachments'],expected_import_pairs)
 ordinary_summary_bytes=len((json.dumps(summary,indent=2)+'\n').encode())
@@ -224,6 +240,6 @@ print(json.dumps({'ios_evidence_bytes':size,'mac_evidence_bytes':mac,'combined_b
 assert size<=limit and size+mac<=20_000_000
 if summary['omitted']:raise SystemExit('Required named screenshots exceeded the cap; review omitted entries instead of claiming complete visual evidence')
 
-if summary['missing_alert_endpoints']:raise SystemExit('Native alert endpoint evidence incomplete: '+json.dumps(summary['missing_alert_endpoints']))
+if summary['missing_phone_result_endpoints']:raise SystemExit('App-owned result endpoint evidence incomplete: '+json.dumps(summary['missing_phone_result_endpoints']))
 
 if summary['missing_import_audit_pairs']:raise SystemExit('Native import audit-pair evidence incomplete: '+json.dumps(summary['missing_import_audit_pairs']))

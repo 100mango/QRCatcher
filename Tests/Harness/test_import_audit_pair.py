@@ -17,7 +17,7 @@ class ImportAuditPairTests(unittest.TestCase):
         before = 'image-import-real-files' if label.endswith('-files') else 'image-import-real-photos'
         images = [{'result_label': label, 'checkpoint': name} for name in [before, 'image-import-history-after-cancel']]
         texts = [{'result_label': label, 'checkpoint': name} for name in
-                 ['image-import-alert-audit-tree', 'image-import-history-audit-tree', 'image-import-audit-pair-receipts']]
+                 ['image-import-result-audit-tree', 'image-import-history-audit-tree', 'image-import-audit-pair-receipts']]
         return images, texts
 
     def test_both_case_scoped_frames_trees_and_receipts_required(self):
@@ -54,7 +54,7 @@ class ImportAuditPairTests(unittest.TestCase):
 
     def test_actual_cancel_ownership_and_unchanged_rows_precede_second_audit(self):
         pair = SOURCE.split('- (void)auditCurrentResult {', 1)[1].split('- (void)chooseSource:', 1)[0]
-        self.assertIn('XCUIElement *cancel = alert.buttons[@"Cancel"]', pair)
+        self.assertIn('XCUIElement *cancel = result.buttons[@"history.result.cancel"]', pair)
         self.assertIn('cancel.exists && cancel.enabled && cancel.hittable', pair)
         self.assertLess(pair.index('if (!canCancel) return'), pair.index('[cancel tap]'))
         self.assertLess(pair.index('if (![after isEqual:before]) return'), pair.index('@"same-history-after-cancel"'))

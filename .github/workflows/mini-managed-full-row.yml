@@ -1,0 +1,171 @@
+name: Diagnostic full Mini managed row
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-apple-platforms
+  cancel-in-progress: false
+env:
+  DIAGNOSTIC_ONLY: 'true'
+jobs:
+  preflight:
+    name: Compile and verify setup before runtime matrix
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify exact source and prepare bounded build inputs
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        set -euo pipefail
+        test "$GITHUB_REPOSITORY" = 100mango/QRCatcher
+        python3 scripts/diagnostic_mini_managed_route.py validate
+        test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+        test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        git diff --exit-code HEAD --
+        git rev-parse 'HEAD^{tree}'
+        sw_vers
+        xcodebuild -version
+        xcodebuild -version | grep '27A266a'
+        test "$(uname -m)" = arm64
+        python3 -m unittest discover -s Tests/Harness -p 'test_*.py' -v
+        python3 scripts/verify_portable_source.py
+        python3 scripts/materialize_qr_fixtures.py
+        python3 scripts/materialize_mac_icons.py
+        python3 scripts/materialize_ipad_icons.py
+        xcrun swift scripts/materialize_native_icons.swift
+        python3 scripts/generate_project.py
+        git diff --exit-code -- QRCatcher.xcodeproj
+        python3 scripts/validate_evidence_budget.py --validate-allocation
+        git diff --exit-code 9abdd5e8150b47fc176d203db23db10854c81188 -- QRCatcher/QR.xcdatamodeld QRCatcher/QRHistoryStore.m QRCatcher/URLEntity.h QRCatcher/URLEntity.m
+    - name: Build all test schemes and verify actual Debug Watch embedding
+      timeout-minutes: 16
+      if: ${{ env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        python3 -u scripts/compile_platform_preflight.py
+    - name: Verify preflight source stayed unchanged
+      if: ${{ always() }}
+      run: git diff --exit-code HEAD --
+  platform:
+    needs: preflight
+    runs-on: xcode-27
+    timeout-minutes: 50
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      QRCATCHER_OWNED_PROCESS_BARRIER: ${{ github.workspace }}/build/owned-process-cleanup.json
+      EVIDENCE_SCOPE: ${{ matrix.scope }}
+    steps:
+    - name: Capture original Mini job clock before checkout
+      id: mini_clock
+      if: ${{ matrix.scope == 'ipad_mini' }}
+      timeout-minutes: 1
+      run: |
+        python3 - <<'PY_ORIGIN'
+        import time
+        started=time.monotonic()
+        import json,os,re
+        from pathlib import Path
+        def require(value):
+            if not value:raise ValueError('Invalid original Mini workflow clock binding')
+        require(started>0)
+        require(os.environ['GITHUB_REPOSITORY']=='100mango/QRCatcher')
+        require(os.environ['GITHUB_REF']=='refs/heads/codex/mini-managed-full-row')
+        require(os.environ.get('GITHUB_WORKFLOW_REF')=='100mango/QRCatcher/.github/workflows/mini-managed-full-row.yml@refs/heads/codex/mini-managed-full-row')
+        require(os.environ.get('GITHUB_EVENT_NAME')=='push' and os.environ.get('DIAGNOSTIC_ONLY')=='true')
+        require(os.environ.get('GITHUB_JOB')=='platform' and os.environ.get('EVIDENCE_SCOPE')=='ipad_mini')
+        require(os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA'])
+        require(re.fullmatch('[0-9a-f]{40}',os.environ['GITHUB_SHA']))
+        require(all(re.fullmatch('[1-9][0-9]{0,19}',os.environ[k]) for k in ['GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT']))
+        root=Path(os.environ['RUNNER_TEMP'])
+        require(root.is_absolute() and root.resolve(strict=True)==root)
+        path=root/('qrcatcher-mini-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'.json')
+        value={'version':1,'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'scope':'ipad_mini','started_monotonic':started,
+               'caps':{'checkout_main':60,'prepare':120,'build':480,'mini':1920,'export':180,'validate':30,'upload':60,'summary':30,'final':30,'checkout_post':60,'overhead':30}}
+        fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())
+        with open(os.environ['GITHUB_ENV'],'a') as out:out.write('QRCATCHER_MINI_JOB_ORIGIN='+str(path)+'\n')
+        require(time.monotonic()-started<30)
+        PY_ORIGIN
+    - name: Checkout Mini exact source with bounded main and post
+      if: ${{ matrix.scope == 'ipad_mini' && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 64
+        ref: ${{ github.sha }}
+    - name: Verify Mini exact source inside original job budget
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 2
+      run: python3 -u scripts/ipad_mini_setup.py phase prepare
+    - name: Compile Mini tests inside original job budget
+      id: mini_test_build
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_clock.outcome == 'success' && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 8
+      run: python3 -u scripts/ipad_mini_setup.py phase build
+    - name: Configure one newly owned Mini without manual boot or install
+      if: ${{ matrix.scope == 'ipad_mini' && !cancelled() && steps.mini_test_build.outcome == 'success' && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/select_ios_platform_matrix.py
+    - name: Run native iPad mini workflows
+      if: ${{ ((matrix.scope == 'ipad_mini') && (!cancelled() && steps.mini_test_build.outcome == 'success')) && env.QRCATCHER_OWNED_CLEANUP_UNCONFIRMED != 'true' }}
+      timeout-minutes: 32
+      run: |
+        python3 scripts/owned_process_barrier.py --check
+        bash scripts/run_ios_platform_ui.sh "$MINI_SIMULATOR_ID" MiniUIResults.xcresult QRCatcherPadUITests
+    - name: Export bounded complete Mini row evidence
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 3
+      run: python3 -u scripts/ipad_mini_setup.py phase export
+    - name: Validate Mini and whole-run evidence allocation
+      id: mini_evidence_budget
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase validate
+    - name: Admit complete Mini artifact action inside original clock
+      id: mini_upload_admit
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_evidence_budget.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py upload-enter
+    - name: Retain small phone and iPad evidence
+      id: platform_upload
+      timeout-minutes: ${{ matrix.scope == 'ipad_mini' && 1 || 45 }}
+      if: ${{ (matrix.scope != 'macos') && always() && ((matrix.scope == 'ipad_mini' && steps.mini_evidence_budget.outcome == 'success' && steps.mini_upload_admit.outcome == 'success') || (matrix.scope != 'ipad_mini' && steps.platform_evidence_budget.outcome == 'success')) }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: qrcatcher-diagnostic-mini-managed-${{ matrix.scope }}-evidence
+        path: build/ios-platform-evidence
+        retention-days: 1
+        compression-level: 9
+        if-no-files-found: error
+    - name: Observe Mini artifact action without claiming host-group cleanup
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.platform_upload.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py upload-exit
+    - name: Summarize all four Mini cases from exact exported results
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase summary
+    - name: Verify final Mini source while preserving checkout-post reserve
+      if: ${{ matrix.scope == 'ipad_mini' && always() && steps.mini_clock.outcome == 'success' }}
+      timeout-minutes: 1
+      run: python3 -u scripts/ipad_mini_setup.py phase final
+    name: ${{ matrix.scope }} · diagnostic-only fresh standard VM
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        scope:
+        - ipad_mini
+'on':
+  push:
+    branches:
+    - codex/mini-managed-full-row

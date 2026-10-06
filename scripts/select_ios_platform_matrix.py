@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Resolve real installed device IDs; only the missing SE3 device is created."""
 import json,os,subprocess
+if os.environ.get('EVIDENCE_SCOPE') == 'ipad_mini':
+ from ipad_mini_setup import configure
+ configure()
+ raise SystemExit(0)
 raw=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
 rows=[d for runtime,devices in raw['devices'].items() if runtime.endswith('iOS-27-0') for d in devices]
 def select(predicate):

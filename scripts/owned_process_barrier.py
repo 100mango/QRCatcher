@@ -22,6 +22,13 @@ def blocked(command=None):
         path=barrier_path()
         if path is not None and (path.exists() or path.is_symlink()):return True
         root=Path(os.environ.get('GITHUB_WORKSPACE',Path.cwd())).resolve()
+        mini=sys.modules.get('ipad_mini_setup')
+        mini_pending=root/'build'/'ipad-mini-inflight.json'
+        mini_stop=root/'build'/'ipad-mini-row-dispatched.json'
+        mini_host=root/'build'/'ipad-mini-host-inflight.json'
+        if mini is not None and mini.active_claim_exists():
+            if not mini.active_claim_is_current(command):return True
+        elif any(p.exists() or p.is_symlink() for p in [mini_pending,mini_stop,mini_host]):return True
         fixture_pending=root/'build'/'fixture-query-inflight.json'
         if fixture_pending.exists() or fixture_pending.is_symlink():return True
         discovery=sys.modules.get('settings_discovery_fence')
