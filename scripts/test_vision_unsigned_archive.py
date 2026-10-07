@@ -199,7 +199,7 @@ class SourceAndClock(unittest.TestCase):
   f=json.loads((ROOT/'scripts/fixtures/vision-archive-inputs.json').read_bytes());self.assertEqual(len(f['app_inputs']),52)
   for path,h in f['app_inputs'].items():self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),h,path)
  def test_fixed_archive_has_no_signing_launch_or_test(self):
-  a=m.ARCHIVE_COMMAND;self.assertEqual(a[-1],'archive');self.assertIn('CODE_SIGNING_ALLOWED=NO',a);self.assertIn('ARCHS=arm64',a);self.assertIn('generic/platform=visionOS',a)
+  a=m.ARCHIVE_COMMAND;self.assertEqual(a[-1],'archive');self.assertNotIn('-quiet',a);self.assertIn('CODE_SIGNING_ALLOWED=NO',a);self.assertIn('ARCHS=arm64',a);self.assertIn('generic/platform=visionOS',a)
   for bad in ['test','test-without-building','allowProvisioning','exportArchive','codesign']:self.assertFalse(any(bad==x or bad in x.lstrip('-') for x in a if x.startswith('-')),bad)
  def test_workflow_uploads_only_proof_and_is_push_once(self):
   w=(ROOT/m.WORKFLOW).read_text();self.assertIn('path: build/archive-proof/report.json',w);self.assertIn('timeout-minutes: 20',w);self.assertEqual(w.count('runs-on: xcode-27'),1)
@@ -238,7 +238,7 @@ class SourceAndClock(unittest.TestCase):
   self.assertEqual(receipts[0]['reason'],'byte-limit');self.assertTrue(receipts[0]['owned_cleanup_confirmed'])
  def test_historical_evidence_never_becomes_current_ui_execution(self):
   f=json.loads((ROOT/'scripts/fixtures/vision-archive-inputs.json').read_bytes())['functional_evidence_reused']
-  self.assertEqual(f['privacy']['source'],m.BASE);self.assertEqual(f['privacy']['workflow_conclusion'],'failure');self.assertFalse(f['privacy']['strict_structured_qualified']);self.assertFalse(f['privacy']['pixels_qualified']);self.assertIn('no UI or hosted test executes',f['scope'])
+  self.assertEqual(f['privacy']['source'],m.PRODUCT_BASE);self.assertEqual(f['privacy']['workflow_conclusion'],'failure');self.assertFalse(f['privacy']['strict_structured_qualified']);self.assertFalse(f['privacy']['pixels_qualified']);self.assertIn('no UI or hosted test executes',f['scope'])
 
  def test_workflow_contains_no_signing_keys_credentials_or_paid_runner(self):
   value=(ROOT/m.WORKFLOW).read_text()
@@ -254,7 +254,7 @@ class SourceIdentity(unittest.TestCase):
   for path in set(self.fixture['app_inputs'])|set(m.NEW_PATHS):
    dest=self.root/path;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/path,dest)
   self.env={'GITHUB_REPOSITORY':'100mango/QRCatcher','GITHUB_REF':m.BRANCH,'GITHUB_WORKFLOW_REF':'100mango/QRCatcher/'+m.WORKFLOW+'@'+m.BRANCH,'GITHUB_RUN_ATTEMPT':'1','GITHUB_JOB':'archive','DEVELOPER_DIR':'/Applications/Xcode_27.app/Contents/Developer','GITHUB_EVENT_NAME':'push','GITHUB_SHA':'a'*40,'GITHUB_WORKFLOW_SHA':'a'*40,'GITHUB_RUN_ID':'1'}
-  self.parent=m.BASE;self.diff=['A\t'+p for p in m.NEW_PATHS];self.dirty=''
+  self.parent=m.BASE;self.diff=['M\t'+p for p in m.MODIFIED_PATHS];self.dirty=''
  def tearDown(self):self.temp.cleanup()
  def git(self,argv,**kwargs):
   mapping={('rev-parse','HEAD'):'a'*40,('rev-parse',m.BASE+'^{tree}'):m.BASE_TREE,('rev-list','--parents','-n','1','HEAD'):'a'*40+' '+self.parent,('status','--porcelain','--untracked-files=all'):self.dirty,('diff','--name-status',m.BASE,'HEAD','--'):'\n'.join(self.diff),('rev-parse','HEAD^{tree}'):'b'*40}
@@ -273,6 +273,31 @@ class SourceIdentity(unittest.TestCase):
  def test_dirty_source_is_rejected(self):
   self.dirty='?? unexpected'
   with self.assertRaisesRegex(m.Rejected,'source-not-clean'):m.source_identity(self.env,self.git,self.root)
+
+class ArchiveRetentionTests(unittest.TestCase):
+ def test_utf8_replacement_and_two_streams_keep_combined_retention_cap(self):
+  row={};stdout=b'X'+b'\xff'*400000+b'Y';stderr=b'Z'+b'\xe4\xb8\xad'*400000+b'W'
+  m.retain_archive_output(row,stdout,stderr,capture_complete=True);meta=row['archive_log']
+  self.assertLessEqual(len(row['stdout'].encode())+len(row['stderr'].encode()),512*1024);self.assertEqual(meta['full_total_bytes'],len(stdout)+len(stderr));self.assertEqual(meta['full_sha256'],hashlib.sha256(stdout+stderr).hexdigest())
+  self.assertTrue(row['stdout'].startswith('X'));self.assertTrue(row['stdout'].endswith('Y'));self.assertTrue(row['stderr'].startswith('Z'));self.assertTrue(row['stderr'].endswith('W'))
+ def test_nonarchive_capture_and_caps_are_unchanged(self):
+  rows=[];seen=[]
+  def runner(argv,**kwargs):seen.append(kwargs);return subprocess.CompletedProcess(argv,0,b'normal',b'error: retained generic stderr')
+  m.command(['generic'],deadline=1000,seconds=5,cap=4096,receipts=rows,clock=Clock(),runner=runner)
+  self.assertEqual(seen[0]['cap'],4096);self.assertNotIn('archive_log',rows[0]);self.assertEqual(rows[0]['stdout'],'normal');self.assertEqual(rows[0]['stderr'],'error: retained generic stderr')
+ def test_archive_override_cannot_apply_to_other_command(self):
+  with self.assertRaisesRegex(m.Rejected,'archive-capture-scope-mismatch'):m.command(['generic'],deadline=1000,seconds=5,cap=m.ARCHIVE_RAW_CAP,receipts=[],clock=Clock(),archive_output=True)
+ def test_report_hard_limit_still_rejects_unrelated_overflow(self):
+  value={'qualified':True,'commands':['x'*(m.MAX_REPORT+1)]};result=json.loads(m.report_bytes(value));self.assertFalse(result['qualified']);self.assertEqual(result['failure']['reason'],'report-byte-limit');self.assertEqual(m.MAX_REPORT,2*1024*1024)
+ def test_source_rebind_preserves_original_product_fixture(self):
+  value=json.loads((ROOT/'scripts/fixtures/vision-archive-inputs.json').read_bytes());self.assertEqual(m.BASE,'2bb663d08469422bb67bac5fa880edc5ca0f7eb8');self.assertEqual(m.BASE_TREE,'7968b5acfa7f42b5dbf657248d873625a51eed2b');self.assertEqual(value['parent'],m.PRODUCT_BASE);self.assertEqual(value['parent_tree'],m.PRODUCT_BASE_TREE);self.assertEqual(m.MODIFIED_PATHS,('scripts/vision_unsigned_archive.py','scripts/test_vision_unsigned_archive.py'))
+
+class RealCaptureLimitTest(unittest.TestCase):
+ def test_real_16mib_overflow_confirms_owned_process_cleanup(self):
+  # Portable synthetic stdout producer only: no Apple tool or product launch.
+  producer=[sys.executable,'-c',"import os; [os.write(1,b'x'*65536) for _ in range(257)]"]
+  with self.assertRaises(m.CaptureStopped) as stopped:m.capture(producer,seconds=10,cap=m.ARCHIVE_RAW_CAP,cleanup_grace=2)
+  self.assertEqual(str(stopped.exception),'byte-limit');self.assertTrue(stopped.exception.cleanup_confirmed);self.assertEqual(len(stopped.exception.stdout_prefix),16*1024*1024);self.assertEqual(stopped.exception.stderr_capture,b'')
 
 class ExecuteAndRetention(unittest.TestCase):
  def setUp(self):
@@ -357,5 +382,39 @@ class ExecuteAndRetention(unittest.TestCase):
   with patch.object(m,'source_identity',return_value=dict(self.identity)),patch.object(m,'icon_inputs',side_effect=[{'before':'same'},{'after':'different'}]):
    r=m.execute(env=self.identity,root=self.root,clock=self.clock,runner=self.runner)
   self.assertFalse(r['qualified']);self.assertEqual(r['failure']['reason'],'generated-icon-input-changed')
+
+ def large_archive(self,*,error_stream=None):
+  original=self.runner;payload=b'head\n'+b'A'*(1024*1024)+b'\n** ARCHIVE SUCCEEDED **\ntail\n'
+  if error_stream:payload=b'head\n'+b'A'*(512*1024)+b'\nerror: hidden-middle-diagnostic\n'+b'B'*(512*1024)+b'\ntail\n'
+  def runner(argv,**kwargs):
+   if argv!=m.ARCHIVE_COMMAND:return original(argv,**kwargs)
+   self.assertEqual(kwargs['cap'],16*1024*1024);self.assertEqual(kwargs['cleanup_grace'],10)
+   self.calls.append(argv);fixture(self.root);self.clock.advance(.1)
+   return subprocess.CompletedProcess(argv,0,b'** ARCHIVE SUCCEEDED **\n' if error_stream=='stderr' else payload,payload if error_stream=='stderr' else b'')
+  with patch.object(self,'runner',side_effect=runner):result=self.execute()
+  return result,payload
+ def test_large_normal_archive_finishes_with_bounded_report(self):
+  result,full=self.large_archive();self.assertTrue(result['qualified'],result.get('failure'));self.assertEqual(self.calls.count(m.ARCHIVE_COMMAND),1)
+  command=next(c for c in result['commands'] if c['command']==m.ARCHIVE_COMMAND);log=command['archive_log']
+  self.assertTrue(command['complete']);self.assertTrue(log['capture_complete']);self.assertTrue(log['truncated']);self.assertFalse(log['error_marker_found'])
+  self.assertEqual(log['full_total_bytes'],len(full));self.assertEqual(log['full_sha256'],hashlib.sha256(full).hexdigest());self.assertLessEqual(log['retained_utf8_bytes'],512*1024)
+  self.assertIn('ARCHIVE LOG TRUNCATED: PREFIX + TAIL',command['stdout']);self.assertTrue(command['stdout'].startswith('head'));self.assertTrue(command['stdout'].endswith('tail\n'))
+  packed=m.report_bytes(result);self.assertLessEqual(len(packed),2*1024*1024);self.assertTrue(json.loads(packed)['qualified'])
+ def assert_hidden_error_rejected(self,stream):
+  result,full=self.large_archive(error_stream=stream);self.assertFalse(result['qualified']);self.assertEqual(result['failure']['reason'],'archive-reported-error');self.assertEqual(self.calls[-1],m.ARCHIVE_COMMAND);self.assertNotIn('proof',result);self.assertNotIn('source_after',result)
+  command=result['commands'][-1];self.assertTrue(command['complete']);self.assertTrue(command['archive_log']['error_scan_complete']);self.assertTrue(command['archive_log']['error_marker_found'])
+  self.assertNotIn('hidden-middle-diagnostic',command['stdout']+command['stderr']);self.assertNotIn('archive_inventory',result)
+ def test_hidden_stdout_middle_error_rejects_even_when_not_retained(self):self.assert_hidden_error_rejected('stdout')
+ def test_hidden_stderr_middle_error_rejects_even_when_not_retained(self):self.assert_hidden_error_rejected('stderr')
+ def test_archive_raw_cap_failure_retains_only_bounded_prefix_tail(self):
+  original=self.runner
+  def runner(argv,**kwargs):
+   if argv!=m.ARCHIVE_COMMAND:return original(argv,**kwargs)
+   self.assertEqual(kwargs['cap'],m.ARCHIVE_RAW_CAP);self.calls.append(argv)
+   error=m.CaptureStopped('byte-limit',True);error.stdout_prefix=b'A'*m.ARCHIVE_RAW_CAP;error.stderr_capture=b'';raise error
+  with patch.object(self,'runner',side_effect=runner):result=self.execute()
+  self.assertFalse(result['qualified']);command=result['commands'][-1];self.assertTrue(command['owned_cleanup_confirmed']);self.assertFalse(command['complete']);self.assertEqual(command['reason'],'byte-limit');self.assertEqual(self.calls[-1],m.ARCHIVE_COMMAND)
+  log=command['archive_log'];self.assertEqual(log['captured_total_bytes'],m.ARCHIVE_RAW_CAP);self.assertIsNone(log['full_total_bytes']);self.assertIsNone(log['full_sha256']);self.assertFalse(log['error_scan_complete']);self.assertLessEqual(log['retained_utf8_bytes'],m.ARCHIVE_RETAIN_CAP)
+  self.assertLessEqual(len(m.report_bytes(result)),m.MAX_REPORT);self.assertNotIn('archive_inventory',result)
 
 if __name__=='__main__':unittest.main()

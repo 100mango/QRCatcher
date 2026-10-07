@@ -23,8 +23,11 @@ from vision_archive_capture import capture, CaptureStopped
 from required_reason_symbols import file_metadata_symbols
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = 'd5a7b3cf13db823d02a9c84b6bbef8311e06ce13'
-BASE_TREE = '1597e75141cd4e146d2291158ef4a99bdbbe5f73'
+BASE = '2bb663d08469422bb67bac5fa880edc5ca0f7eb8'
+BASE_TREE = '7968b5acfa7f42b5dbf657248d873625a51eed2b'
+PRODUCT_BASE = 'd5a7b3cf13db823d02a9c84b6bbef8311e06ce13'
+PRODUCT_BASE_TREE = '1597e75141cd4e146d2291158ef4a99bdbbe5f73'
+MODIFIED_PATHS = ('scripts/vision_unsigned_archive.py','scripts/test_vision_unsigned_archive.py')
 BRANCH = 'refs/heads/codex/vision-unsigned-archive'
 WORKFLOW = '.github/workflows/vision-unsigned-archive.yml'
 NEW_PATHS = (WORKFLOW,'scripts/vision_unsigned_archive.py','scripts/test_vision_unsigned_archive.py',
@@ -37,7 +40,9 @@ EXECUTABLE = APP + '/QRCatcherVision'
 MAX_ENTRIES, MAX_BYTES, SCAN_SECONDS = 2048, 1024 ** 3, 30
 MAX_INVENTORY = 1024 ** 2
 MAX_REPORT = 2 * 1024 ** 2
-ARCHIVE_COMMAND = ['xcodebuild','-quiet','-project','QRCatcher.xcodeproj','-scheme','QRCatcherVision',
+ARCHIVE_RAW_CAP = 16 * 1024 ** 2
+ARCHIVE_RETAIN_CAP = 512 * 1024
+ARCHIVE_COMMAND = ['xcodebuild','-project','QRCatcher.xcodeproj','-scheme','QRCatcherVision',
     '-configuration','Release','-destination','generic/platform=visionOS','-archivePath',str(ARCHIVE),
     '-derivedDataPath','build/VisionArchiveDerived','ARCHS=arm64','ONLY_ACTIVE_ARCH=NO',
     'CODE_SIGNING_ALLOWED=NO','archive']
@@ -61,9 +66,49 @@ def timely(deadline, clock=time.monotonic):
     need(math.isfinite(deadline) and clock() < deadline, 'deadline-exceeded')
 
 
+def retain_archive_output(receipt, stdout, stderr, *, capture_complete):
+    """Scan the full bounded capture before retaining only labelled prefix/tail text.
+
+    A stopped producer has only captured-prefix hashes, never a claimed full log.
+    Full hashes use original bytes. Retention is bounded after UTF-8 replacement.
+    """
+    encoded=[raw.decode('utf-8','replace').encode('utf-8') for raw in (stdout,stderr)]
+    first=min(len(encoded[0]),ARCHIVE_RETAIN_CAP//2)
+    second=min(len(encoded[1]),ARCHIVE_RETAIN_CAP-first)
+    budgets=[min(len(encoded[0]),ARCHIVE_RETAIN_CAP-second),second]
+    marker=b'\n[... ARCHIVE LOG TRUNCATED: PREFIX + TAIL ...]\n'
+    streams={}
+    for name,raw,text,budget in zip(('stdout','stderr'),(stdout,stderr),encoded,budgets):
+        truncated=len(text)>budget
+        if not truncated:retained=text.decode('utf-8');prefix_bytes=len(text);tail_bytes=0
+        elif budget<len(marker):retained='';prefix_bytes=tail_bytes=0
+        else:
+            prefix=(budget-len(marker))//2;tail=budget-len(marker)-prefix
+            start=text[:prefix].decode('utf-8','ignore');end=text[-tail:].decode('utf-8','ignore') if tail else ''
+            retained=start+marker.decode()+end;prefix_bytes=len(start.encode());tail_bytes=len(end.encode())
+        receipt[name]=retained
+        streams[name]={'captured_bytes':len(raw),'full_bytes':len(raw) if capture_complete else None,
+            'full_sha256':hashlib.sha256(raw).hexdigest() if capture_complete else None,
+            'captured_sha256':hashlib.sha256(raw).hexdigest(),'truncated':truncated,
+            'retained_utf8_bytes':len(retained.encode()),'prefix_utf8_bytes':prefix_bytes,'tail_utf8_bytes':tail_bytes}
+    complete=stdout+b'\n'+stderr
+    error_found=re.search(rb'(?im)(?:^|[ :])(?:fatal )?error:',complete) is not None
+    digest=hashlib.sha256();digest.update(stdout);digest.update(stderr)
+    receipt['archive_log']={'capture_complete':capture_complete,'raw_capture_limit_bytes':ARCHIVE_RAW_CAP,
+        'retention_limit_bytes':ARCHIVE_RETAIN_CAP,'captured_total_bytes':len(stdout)+len(stderr),
+        'full_total_bytes':len(stdout)+len(stderr) if capture_complete else None,
+        'full_sha256':digest.hexdigest() if capture_complete else None,'hash_order':'stdout bytes followed by stderr bytes; individual lengths and hashes retained',
+        'retained_utf8_bytes':sum(row['retained_utf8_bytes'] for row in streams.values()),
+        'truncated':any(row['truncated'] for row in streams.values()),'streams':streams,
+        'error_marker_found':error_found,'error_scan_complete':capture_complete,
+        'error_scan_scope':'all captured original stdout and stderr bytes, before retention truncation'}
+    need(receipt['archive_log']['retained_utf8_bytes']<=ARCHIVE_RETAIN_CAP,'archive-retention-byte-limit')
+
+
 def command(argv, *, deadline, seconds, cap, receipts, clock=time.monotonic,
-            runner=capture, cleanup=2):
+            runner=capture, cleanup=2, archive_output=False):
     """One command grant with the existing helper's two cleanup phases reserved."""
+    need(not archive_output or (argv==ARCHIVE_COMMAND and cap==ARCHIVE_RAW_CAP), 'archive-capture-scope-mismatch')
     start = clock()
     grant = min(seconds, deadline - start - 2 * cleanup)
     need(math.isfinite(grant) and grant > 0, 'command-cleanup-admission-expired')
@@ -74,23 +119,22 @@ def command(argv, *, deadline, seconds, cap, receipts, clock=time.monotonic,
         result = runner(argv, seconds=grant, cap=cap, cleanup_grace=cleanup)
     except CaptureStopped as error:
         receipt.update(reason=str(error), owned_cleanup_confirmed=error.cleanup_confirmed,
-                       cancelled_signal=error.cancelled_signal,
-                       stdout=getattr(error, 'stdout_prefix', b'')[:cap].decode('utf-8', 'replace'),
-                       stderr=getattr(error, 'stderr_capture', b'')[:cap].decode('utf-8', 'replace'))
+                       cancelled_signal=error.cancelled_signal)
+        stdout=getattr(error, 'stdout_prefix', b'')[:cap];stderr=getattr(error, 'stderr_capture', b'')[:cap]
+        if archive_output:retain_archive_output(receipt,stdout,stderr,capture_complete=False)
+        else:receipt.update(stdout=stdout.decode('utf-8','replace'),stderr=stderr.decode('utf-8','replace'))
         raise Rejected('capture-stopped') from error
     finally:
         receipt['end'] = clock()
-    receipt.update(returncode=result.returncode, stdout=result.stdout.decode('utf-8', 'replace'),
-                   stderr=result.stderr.decode('utf-8', 'replace'),
-                   owned_host_observation='client-reaped-pipes-closed-group-absent-at-return')
+    receipt.update(returncode=result.returncode, owned_host_observation='client-reaped-pipes-closed-group-absent-at-return')
+    if archive_output:retain_archive_output(receipt,result.stdout,result.stderr,capture_complete=True)
+    else:receipt.update(stdout=result.stdout.decode('utf-8','replace'),stderr=result.stderr.decode('utf-8','replace'))
     need(len(result.stdout) + len(result.stderr) <= cap, 'command-byte-limit')
     need(receipt['end'] < start + grant and receipt['end'] < deadline, 'command-late-return')
     need(result.returncode == 0, 'command-failed')
-    if argv == ARCHIVE_COMMAND:
-        need(re.search(rb'(?im)(?:^|[ :])(?:fatal )?error:', result.stdout + b'\n' + result.stderr) is None, 'archive-reported-error')
+    if archive_output:need(clock()<start+grant and clock()<deadline,'command-late-return')
     receipt['complete'] = True
     return result.stdout
-
 
 def environment(env):
     expected = {'GITHUB_REPOSITORY': '100mango/QRCatcher', 'GITHUB_REF': BRANCH,
@@ -118,11 +162,11 @@ def source_identity(env, run, root=ROOT):
     identity['parents'] = lineage[1:]
     need(git('status', '--porcelain', '--untracked-files=all') == '', 'source-not-clean')
     differences = git('diff', '--name-status', BASE, 'HEAD', '--').splitlines()
-    need(sorted(differences) == sorted('A\t' + p for p in NEW_PATHS), 'source-scope-mismatch')
+    need(sorted(differences) == sorted('M\t' + p for p in MODIFIED_PATHS), 'source-scope-mismatch')
     identity.update(tree=git('rev-parse', 'HEAD^{tree}'), base=BASE, base_tree=BASE_TREE)
     root = root.resolve()
     fixture=json.loads((root/'scripts/fixtures/vision-archive-inputs.json').read_bytes())
-    need(fixture['parent']==BASE and fixture['parent_tree']==BASE_TREE,'input-fixture-base-mismatch')
+    need(fixture['parent']==PRODUCT_BASE and fixture['parent_tree']==PRODUCT_BASE_TREE,'input-fixture-base-mismatch')
     for path,expected in fixture['app_inputs'].items():
         need(hashlib.sha256((root/path).read_bytes()).hexdigest()==expected,'app-input-changed: '+path)
     scheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherVision.xcscheme'
@@ -468,7 +512,9 @@ def execute(*, env=None, root=ROOT, clock=time.monotonic, runner=capture):
         report['generated_vision_icons'] = icon_inputs(root)
         timely(began + PHASE_END['prepare'], clock)
         phase = 'archive'; phase_deadline = min(began + PHASE_END[phase], clock() + 620)
-        run(ARCHIVE_COMMAND, seconds=600, cap=512 * 1024, cleanup=10)
+        output = run(ARCHIVE_COMMAND, seconds=600, cap=ARCHIVE_RAW_CAP, cleanup=10, archive_output=True)
+        report['archive_success_marker_observed'] = b'** ARCHIVE SUCCEEDED **' in output
+        need(not receipts[-1]['archive_log']['error_marker_found'], 'archive-reported-error')
         phase = 'proof'; phase_deadline = min(began + PHASE_END[phase], clock() + 150)
         report['proof'] = verify_archive(root / ARCHIVE, run, phase_deadline, root=root, clock=clock, report=report)
         phase = 'final_source_pack'; phase_deadline = min(began + PHASE_END[phase], clock() + 30)
