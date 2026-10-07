@@ -180,7 +180,7 @@ class ProductTests(PortableTests):
     def setUp(self):
         super().setUp()
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name);self.old=Path.cwd();os.chdir(self.root);self.addCleanup(os.chdir,self.old)
+        self.root=Path(self.temp.name).resolve();self.old=Path.cwd();os.chdir(self.root);self.addCleanup(os.chdir,self.old)
         self.app=self.root/'build/mac-tests/Build/Products/Debug/QRCatcherMac.app'
         (self.app/'Contents/MacOS').mkdir(parents=True)
         self.metadata={'CFBundleIdentifier':'100mango.QRCatcher','CFBundleExecutable':'QRCatcherMac'}
@@ -204,6 +204,18 @@ class ProductTests(PortableTests):
         with self.assertRaises(FileNotFoundError):product_contract.product_identity()
         foreign=self.root/'foreign.dylib';foreign.write_bytes(b'foreign');logic.symlink_to(foreign)
         with self.assertRaisesRegex(ValueError,'linked-product'):product_contract.product_identity()
+
+
+class ProductAliasTests(ProductTests):
+    """Run actual product-binding assertions with a macOS-like temp-name alias."""
+    def setUp(self):
+        outer=tempfile.TemporaryDirectory();self.addCleanup(outer.cleanup)
+        parent=Path(outer.name).resolve();alias=parent/'temporary-root-alias'
+        alias.symlink_to(parent,target_is_directory=True)
+        factory=tempfile.TemporaryDirectory
+        with patch.object(tempfile,'TemporaryDirectory',side_effect=lambda:factory(dir=alias)):
+            super().setUp()
+        self.assertNotEqual(Path(self.temp.name),Path(self.temp.name).resolve())
 
 
 class ReceiptTests(PortableTests):
@@ -279,10 +291,10 @@ class Pipeline(PortableTests):
         self.calls.append(argv);raw=b'';stderr=b'';code=0
         if argv[0]=='git':
             if argv[1:]==['rev-parse','HEAD']:raw=(SHA+'\n').encode()
-            elif argv[1:]==['rev-parse',m.BASE+'^{tree}']:raw=(m.BASE_TREE+'\n').encode()
+            elif argv[1:]==['rev-parse',m.PARENT+'^{tree}']:raw=(m.PARENT_TREE+'\n').encode()
             elif argv[1:]==['rev-parse','HEAD^{tree}']:raw=(TREE+'\n').encode()
-            elif argv[1]=='rev-list':raw=(SHA+' '+m.BASE+'\n').encode()
-            elif argv[1]=='diff':raw=('\n'.join(sorted(['A\t'+x for x in m.NEW_PATHS]+['M\t'+x for x in m.MODIFIED_PATHS]))+'\n').encode()
+            elif argv[1]=='rev-list':raw=(SHA+' '+m.PARENT+'\n').encode()
+            elif argv[1]=='diff':raw=('\n'.join(sorted(['M\t'+x for x in m.SUCCESSOR_PATHS]))+'\n').encode()
             else:self.assertEqual(argv[1],'status')
         elif argv==['sw_vers','-buildVersion']:raw=b'26A428\n'
         elif argv==['uname','-m']:raw=b'arm64\n'

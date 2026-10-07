@@ -19,6 +19,10 @@ from mac_store_contract import CASE, MAX_PACKET, summary_admission, validate_cap
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'bf726e9637fcdd469048ed157b8ea73953ccb4fb'
 BASE_TREE = '37d33f2f3b5b1d9bde222f9481c49e9997ca49fc'
+# Keep the approved source fixture baseline; this repair has one exact parent.
+PARENT = 'd52446fd9a9dbbd9664279837e0fd04d8b2998e7'
+PARENT_TREE = '3fa6af23a3f609d956d702ed045b636b8cc2321c'
+SUCCESSOR_PATHS = ('scripts/mac_store_capture.py','scripts/test_mac_store_capture.py')
 BRANCH = 'refs/heads/codex/mac-store-display'
 WORKFLOW = '.github/workflows/mac-store-display.yml'
 RESULT = Path('build/mac-store-capture/capture.xcresult')
@@ -198,12 +202,12 @@ def source_identity(env, run, root=ROOT):
     identity=environment(env)
     def git(*args): return run(['git',*args],seconds=5,cap=256*1024).decode().strip()
     need(git('rev-parse','HEAD')==identity['GITHUB_SHA'],'head-mismatch')
-    need(git('rev-parse',BASE+'^{tree}')==BASE_TREE,'base-tree-mismatch')
-    need(git('rev-list','--parents','-n','1','HEAD').split()==[identity['GITHUB_SHA'],BASE],'sole-parent-mismatch')
+    need(git('rev-parse',PARENT+'^{tree}')==PARENT_TREE,'parent-tree-mismatch')
+    need(git('rev-list','--parents','-n','1','HEAD').split()==[identity['GITHUB_SHA'],PARENT],'sole-parent-mismatch')
     need(git('status','--porcelain','--untracked-files=all')=='','source-not-clean')
-    expected=['A\t'+x for x in NEW_PATHS]+['M\t'+x for x in MODIFIED_PATHS]
-    need(sorted(git('diff','--name-status',BASE,'HEAD','--').splitlines())==sorted(expected),'capture-source-scope')
-    identity.update(tree=git('rev-parse','HEAD^{tree}'),parents=[BASE],base_tree=BASE_TREE)
+    expected=['M\t'+x for x in SUCCESSOR_PATHS]
+    need(sorted(git('diff','--name-status',PARENT,'HEAD','--').splitlines())==sorted(expected),'capture-source-scope')
+    identity.update(tree=git('rev-parse','HEAD^{tree}'),parents=[PARENT],parent_tree=PARENT_TREE,base_tree=BASE_TREE)
     fixture=strict_json(read_file(root/'scripts/fixtures/mac-store-source-baseline.json',128*1024))
     need(fixture['parent']==BASE and fixture['parent_tree']==BASE_TREE,'capture-fixture-parent')
     for path,value in {**fixture['current_app_inputs'],**fixture['current_support_inputs']}.items():
@@ -307,12 +311,12 @@ def validate_packet(output, *, sha, tree, run_id, source_root=ROOT):
         report['binary_handoff'] is False and report['visual_acceptance']=='pending-human-review','capture-not-qualified')
     source=report['source_before'];environment(source)
     need(source['GITHUB_SHA']==sha and source['tree']==tree and source['GITHUB_RUN_ID']==str(run_id) and source==report['source_after'] and
-        source['parents']==[BASE] and source['base_tree']==BASE_TREE,'retained-source-run-mismatch')
+        source['parents']==[PARENT] and source['parent_tree']==PARENT_TREE and source['base_tree']==BASE_TREE,'retained-source-run-mismatch')
     fixture=strict_json(read_file(source_root/'scripts/fixtures/mac-store-source-baseline.json',128*1024))
     names=set(NEW_PATHS)|set(MODIFIED_PATHS)|set(fixture['current_app_inputs'])|set(fixture['current_support_inputs'])
     need(source['files']=={p:hashlib.sha256(read_file(source_root/p,1_000_000)).hexdigest() for p in names},'retained-source-files-mismatch')
-    prefix=[['git','rev-parse','HEAD'],['git','rev-parse',BASE+'^{tree}'],['git','rev-list','--parents','-n','1','HEAD'],
-        ['git','status','--porcelain','--untracked-files=all'],['git','diff','--name-status',BASE,'HEAD','--'],['git','rev-parse','HEAD^{tree}']]
+    prefix=[['git','rev-parse','HEAD'],['git','rev-parse',PARENT+'^{tree}'],['git','rev-list','--parents','-n','1','HEAD'],
+        ['git','status','--porcelain','--untracked-files=all'],['git','diff','--name-status',PARENT,'HEAD','--'],['git','rev-parse','HEAD^{tree}']]
     commands=report['commands'];need(len(commands)==23,'capture-command-count')
     executable=commands[9]['command'][0]
     middle=[['sw_vers','-buildVersion'],['uname','-m'],['xcodebuild','-version'],
@@ -323,8 +327,8 @@ def validate_packet(output, *, sha, tree, run_id, source_root=ROOT):
         ['xcrun','xcresulttool','get','test-results','summary','--path',str(RESULT)],
         ['xcrun','xcresulttool','export','attachments','--path',str(RESULT),'--output-path',str(EXPORT)]]
     need([x['command'] for x in commands]==prefix+middle+prefix,'capture-command-plan')
-    expected_output=[sha+'\n',BASE_TREE+'\n',sha+' '+BASE+'\n','',
-        '\n'.join(sorted(['A\t'+x for x in NEW_PATHS]+['M\t'+x for x in MODIFIED_PATHS]))+'\n',tree+'\n']
+    expected_output=[sha+'\n',PARENT_TREE+'\n',sha+' '+PARENT+'\n','',
+        '\n'.join(sorted(['M\t'+x for x in SUCCESSOR_PATHS]))+'\n',tree+'\n']
     for offset in (0,17):
         for index,expected in enumerate(expected_output):
             actual=commands[offset+index]['stdout']
