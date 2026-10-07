@@ -195,7 +195,7 @@ class CommandTests(unittest.TestCase):
         identities = {
             'TouchColor': ('100mango/ColorPicker', '3b40b70e9f0980af430a383f5f6edbaed35154dd',
                           'scripts', 'testProductionWatchInboxEmptyAndReturn'),
-            'QRCatcher': ('100mango/QRCatcher', 'a4937df4856862996ea171bc4e0306a0ec91d948',
+            'QRCatcher': ('100mango/QRCatcher', '3636282fbe5ab00b56a96a507f6886b5ec841b0d',
                          'scripts', 'testProductionSceneLaunchWithoutCameraStub'),
             'Celluloid': ('100mango/Celluloid', '2a5cf695c2a6c5ef3c2eaede47ea0353e2da9983',
                          'Scripts', 'testProductionWatchPhotosEmptyAndReturn'),
@@ -205,8 +205,8 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(config['base'], parent)
         paths = [prefix + '/' + name for name in ('ios_watch_phone_smoke.py',
                  'ios_watch_phone_smoke_config.json', 'test_ios_watch_phone_smoke.py')]
-        expected = [('M' if app == 'TouchColor' else 'A') + '\t' + path for path in paths]
-        if app != 'TouchColor':
+        expected = [('M' if app in ('TouchColor', 'QRCatcher') else 'A') + '\t' + path for path in paths]
+        if app not in ('TouchColor', 'QRCatcher'):
             expected += ['A\t.github/workflows/ios-watch-phone-smoke.yml']
         if app == 'Celluloid':
             expected += ['M\tCelluloidUITests/CelluloidUITests.swift']
@@ -670,6 +670,138 @@ class ExecutionTests(unittest.TestCase):
         self.test_output = raw(state='skipped')
         result = self.execute()
         self.assertFalse(result['qualified'])
+
+    def execute_qr_fixture_prepare(self, *, code=0, error=None, elapsed=0):
+        config = json.loads(Path(smoke.__file__).with_name('ios_watch_phone_smoke_config.json').read_bytes())
+        self.assertEqual(config['repository'], '100mango/QRCatcher')
+        scheme = self.root / config['project'] / 'xcshareddata/xcschemes/QRCatcher.xcscheme'
+        scheme.parent.mkdir(parents=True)
+        scheme.write_text('<Scheme><TestAction><Testables><TestableReference><BuildableReference BlueprintName="QRCatcherUITests" /></TestableReference></Testables></TestAction><LaunchAction><BuildableProductRunnable><BuildableReference BlueprintName="QRCatcher" /></BuildableProductRunnable></LaunchAction></Scheme>')
+        env = dict(self.env, GITHUB_REPOSITORY=config['repository'],
+                   GITHUB_WORKFLOW_REF=config['repository'] + '/' + smoke.WORKFLOW + '@' + smoke.BRANCH)
+        self.test_output = raw(config['case'])
+        def fixture_runner(command, **kwargs):
+            result = self.runner(command, **kwargs)
+            if command[:2] == ['git', 'rev-list']:
+                return subprocess.CompletedProcess(command, 0, (SHA + ' ' + config['base'] + '\n').encode(), b'')
+            if command[:2] == ['git', 'diff']:
+                return subprocess.CompletedProcess(command, 0, ('\n'.join(config['expected_changes']) + '\n').encode(), b'')
+            if command == ['python3', 'scripts/materialize_qr_fixtures.py']:
+                self.now += elapsed
+                if error is not None:
+                    raise error
+                return subprocess.CompletedProcess(command, code, b'unicode.png verified-fixture-hash\n',
+                                                   b'' if code == 0 else b'fixture preparation failed\n')
+            return result
+        with contextlib.redirect_stdout(io.StringIO()) as stream:
+            result = smoke.execute(config, env=env, root=self.root, runner=fixture_runner, clock=self.clock)
+        self.stdout = stream.getvalue()
+        return result
+
+    def assert_no_build_device_or_test(self, result):
+        self.assert_no_device_or_test(result)
+        self.assertNotIn('build_for_testing_complete', result)
+        self.assertFalse(any(c[:2] == ['xcodebuild', 'build-for-testing'] for c, _ in self.calls))
+        self.assertEqual(result['failures'][0]['phase'], 'prepare')
+        self.assertEqual(result['source_before'], result['source_after'])
+
+    def test_qr_fixture_prepare_exact_order_bound_capture_and_one_case(self):
+        result = self.execute_qr_fixture_prepare()
+        self.assertTrue(result['qualified'], result)
+        fixture = ['python3', 'scripts/materialize_qr_fixtures.py']
+        commands = [c for c, _ in self.calls]
+        selected = [c[:2] if c[0] == 'xcodebuild' else c for c in commands
+                    if c[0] in ('python3', 'xcodebuild') or c[:3] == ['xcrun', 'simctl', 'create']]
+        self.assertEqual(selected, [['xcodebuild', '-version'], fixture,
+                         ['xcodebuild', 'build-for-testing'],
+                         ['xcrun', 'simctl', 'create', 'Phone smoke 42', smoke.DEVICE_TYPE, smoke.RUNTIME],
+                         ['xcodebuild', 'test-without-building']])
+        options = next(options for c, options in self.calls if c == fixture)
+        self.assertEqual(options, dict(seconds=15, cap=65536, cleanup_grace=2))
+        receipt = next(r for r in result['commands'] if r['command'] == fixture)
+        self.assertEqual(receipt['phase'], 'prepare')
+        self.assertEqual(receipt['cleanup_reserve_seconds'], 4)
+        self.assertTrue(receipt['complete'])
+        self.assertTrue(receipt['owned_cleanup_confirmed'])
+        self.assertEqual(receipt['stdout'], 'unicode.png verified-fixture-hash\n')
+        self.assertEqual(receipt['stderr'], '')
+        self.assertEqual(receipt['returncode'], 0)
+        self.assertEqual([c[2] for c in commands if c[:2] == ['xcrun', 'simctl']], ['create', 'shutdown', 'delete'])
+        case = 'QRCatcherUITests/QRCatcherUITests/testProductionSceneLaunchWithoutCameraStub'
+        for command in commands:
+            if command[:2] in (['xcodebuild', 'build-for-testing'], ['xcodebuild', 'test-without-building']):
+                self.assertEqual([arg for arg in command if arg.startswith('-only-testing:')], ['-only-testing:' + case])
+                self.assertFalse(any('fixture' in arg.lower() for arg in command))
+        self.assertEqual(result['raw_proof']['executions'], 1)
+        self.assertEqual(result['source_before'], result['source_after'])
+        self.assertEqual((self.output / 'test.stdout.log').read_bytes(), raw(case))
+
+    def test_qr_fixture_nonzero_prevents_build_create_and_test(self):
+        result = self.execute_qr_fixture_prepare(code=1)
+        self.assert_no_build_device_or_test(result)
+        self.assertEqual(result['failures'][0]['reason'], 'command-nonzero:1')
+        receipt = next(r for r in result['commands'] if r['command'][0] == 'python3')
+        self.assertFalse(receipt['complete'])
+        self.assertEqual(receipt['returncode'], 1)
+        self.assertEqual(receipt['stderr'], 'fixture preparation failed\n')
+
+    def test_qr_fixture_timeout_prevents_build_create_and_test(self):
+        error = CaptureStopped('duration-limit', True)
+        error.stdout_prefix = b'partial fixture output\n'
+        error.stderr_capture = b'fixture timeout\n'
+        result = self.execute_qr_fixture_prepare(error=error)
+        self.assert_no_build_device_or_test(result)
+        receipt = next(r for r in result['commands'] if r['command'][0] == 'python3')
+        self.assertFalse(receipt['complete'])
+        self.assertTrue(receipt['owned_cleanup_confirmed'])
+        self.assertEqual(receipt['reason'], 'duration-limit')
+        self.assertEqual(receipt['stdout'].encode(), error.stdout_prefix)
+        self.assertEqual(receipt['stderr'].encode(), error.stderr_capture)
+
+    def test_qr_fixture_unconfirmed_cleanup_prevents_build_create_and_test(self):
+        result = self.execute_qr_fixture_prepare(error=CaptureStopped('descendant-exit-unconfirmed', False))
+        self.assert_no_build_device_or_test(result)
+        receipt = next(r for r in result['commands'] if r['command'][0] == 'python3')
+        self.assertFalse(receipt['complete'])
+        self.assertFalse(receipt['owned_cleanup_confirmed'])
+
+    def test_qr_fixture_late_success_prevents_build_create_and_test(self):
+        result = self.execute_qr_fixture_prepare(elapsed=15)
+        self.assert_no_build_device_or_test(result)
+        receipt = next(r for r in result['commands'] if r['command'][0] == 'python3')
+        self.assertFalse(receipt['complete'])
+        self.assertEqual(receipt['returncode'], 0)
+        self.assertEqual(result['failures'][0]['reason'], 'command-late-return')
+
+    def test_qr_fixture_prepare_reserve_expiry_prevents_launch_and_build(self):
+        # Prior preparation can consume the phase without extending its budget.
+        # Advance between the version command's completion and materializer grant.
+        original_clock = self.clock
+        reads = 0
+        def exhausted_clock():
+            nonlocal reads
+            if self.calls and self.calls[-1][0] == ['xcodebuild', '-version']:
+                reads += 1
+                if reads >= 5:
+                    self.now = 277.0
+            return original_clock()
+        with patch.object(self, 'clock', exhausted_clock):
+            result = self.execute_qr_fixture_prepare()
+        self.assert_no_build_device_or_test(result)
+        self.assertFalse(any(c[0] == 'python3' for c, _ in self.calls))
+        self.assertEqual(result['failures'][0]['reason'], 'command-cleanup-reserve-expired')
+
+    def test_qr_fixture_byte_limit_and_cancellation_prevent_build(self):
+        for error in (CaptureStopped('byte-limit', True), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__):
+                self.setUp()
+                result = self.execute_qr_fixture_prepare(error=error)
+                self.assert_no_build_device_or_test(result)
+
+    def test_non_qr_config_does_not_invoke_qr_fixture_materializer(self):
+        result = self.execute()
+        self.assertTrue(result['qualified'])
+        self.assertFalse(any(c[0] == 'python3' for c, _ in self.calls))
 
     def test_report_packing_failure_preserves_separate_logs(self):
         original = smoke.json_bytes

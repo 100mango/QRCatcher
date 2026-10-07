@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """One fresh unpaired phone, one selected existing/approved XCTest, one attempt.
 
-No signing, transfer, Watch simulator, retries, fixtures, product mutation or
-binary upload. All temporary products live outside the clean source checkout.
+No signing, transfer, Watch simulator, retries, runtime fixture seeding, product
+mutation or binary upload. QR build fixtures are materialized into ignored paths;
+all temporary build products live outside the clean source checkout.
 """
 import sys
 sys.dont_write_bytecode = True
@@ -351,6 +352,8 @@ def execute(config, *, env=None, root=ROOT, runner=capture, clock=time.monotonic
         need(env.get('DEVELOPER_DIR') == '/Applications/Xcode_27.app/Contents/Developer', 'developer-directory-mismatch')
         report['toolchain'] = run(['xcodebuild', '-version']).decode().strip()
         need(report['toolchain'].splitlines() == ['Xcode 27.0', 'Build version 27A266a'], 'xcode-build-mismatch')
+        if config['repository'] == '100mango/QRCatcher':
+            run(['python3', 'scripts/materialize_qr_fixtures.py'], seconds=15)
         enter('build')
         run(build_command(config, work), seconds=300, cap=RAW_CAP, native=True)
         report['build_for_testing_complete'] = True

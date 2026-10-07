@@ -1,14 +1,13 @@
 {
   "schema": 1,
   "repository": "100mango/QRCatcher",
-  "base": "a4937df4856862996ea171bc4e0306a0ec91d948",
+  "base": "3636282fbe5ab00b56a96a507f6886b5ec841b0d",
   "project": "QRCatcher-iOS-Watch.xcodeproj",
   "scheme": "QRCatcher",
   "case": "QRCatcherUITests/QRCatcherUITests/testProductionSceneLaunchWithoutCameraStub",
   "expected_changes": [
-    "A\t.github/workflows/ios-watch-phone-smoke.yml",
-    "A\tscripts/ios_watch_phone_smoke.py",
-    "A\tscripts/ios_watch_phone_smoke_config.json",
-    "A\tscripts/test_ios_watch_phone_smoke.py"
+    "M\tscripts/ios_watch_phone_smoke.py",
+    "M\tscripts/ios_watch_phone_smoke_config.json",
+    "M\tscripts/test_ios_watch_phone_smoke.py"
   ]
 }
