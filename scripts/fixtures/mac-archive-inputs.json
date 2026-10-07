@@ -1,0 +1,184 @@
+{
+  "app_inputs": {
+    ".github/workflows/apple-platforms-diagnostic-mac-public-metadata.yml": "d1ebb37e1aa76fbd754c9ce482cedf2f0859e7edfb0b9f872a3c71f8dec39b62",
+    ".github/workflows/apple-platforms.yml": "481b9030b9b80637d35ab408c76d1f8de1e84a8fce5028eb9929a206c645830b",
+    ".gitignore": "659fedf01e54903a09d14038fdbdc26679653f37403dd693105d9c825a64a975",
+    "QRCatcher.xcodeproj/project.pbxproj": "51d86760fbae2933f8989403b45bd0b54f993ebc08e603aca4636c2487a4a0d4",
+    "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme": "84b1f148d9581d1b5766bc0e684360eb3bbf9ba4b9d465491c3d37592ce9544e",
+    "QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4",
+    "QRCatcher/QR.xcdatamodeld/QR.xcdatamodel/contents": "c8e269bc9e85e00da9c1c0467870fe049fd18892054b978b1da8b8d94fba44e4",
+    "QRCatcher/QRHistoryStore.h": "cdb7a20ba49f874b40f0639f32de29151a6ae847e68920450c0d284b47c68c41",
+    "QRCatcher/QRHistoryStore.m": "18b0f9d0927bfb5d9ee48d517027071e7fcd20e3a1ada348d214cff5b95274c1",
+    "QRCatcher/URLEntity.h": "dd715d5a1a707fd49ed1e226311ec9950f827ade8d613a860a60aafa4c23b9e0",
+    "QRCatcher/URLEntity.m": "ffd035a42f2bbf9c374485880047730597ad6d993c6185a4896d40ab8ec204d3",
+    "QRCatcherMac/Assets.xcassets/AppIcon.appiconset/Contents.json": "17c198d952ab3b60e0a7f5df980cd864b25c6a7e2b1a1d166dcb5f73171999a4",
+    "QRCatcherMac/Assets.xcassets/Contents.json": "7b225591af0371e8fea9f152cab6dd13013bf49ed2b277380503c4501698cbb7",
+    "QRCatcherMac/Info.plist": "704414e3dac7841a382c8be0bfe467ed7bb13936522a5d1c0ed47b64bd2109dc",
+    "QRCatcherMac/MacCamera.swift": "73580ddd56426fc1a61f3be3270b9ebfd8572b10c7b18ba1d7b4e36d4875b18a",
+    "QRCatcherMac/MacHistory.swift": "e127ce17fb8bc6ae450c0ad0cf3434640a064a9ea3b3d293f3fd5e8281bb1483",
+    "QRCatcherMac/MacLocalization.swift": "b15c734f2c7ed0d9044457571a6d222822748e652674f100a726e992fc543666",
+    "QRCatcherMac/MacMainView.swift": "032a2f6edc9306b85a9f704ac9345bae224801620e41ce44b37317fff93b2390",
+    "QRCatcherMac/MacPaneAccessibility.swift": "9ac62329df8c407d74b651025298f423aac58d3855b5df02a35daf083a8d2f54",
+    "QRCatcherMac/MacSandboxDiagnostics.swift": "56ca7372caed15532b52d87ba8142a5d3968b5f4b3f1c02a6d30151ad4d4db07",
+    "QRCatcherMac/MacWorkspace.swift": "2b463d44aa016191d20346379441687ae551c8a2ab33b3c788e0f1d28fdad4e5",
+    "QRCatcherMac/QRCatcherMac-Bridging-Header.h": "c8538e33ccdb4244f5d6a5ae777247bc53af11642eaee313f53ec1a32e97fbe1",
+    "QRCatcherMac/QRCatcherMac.entitlements": "7872571b05e1a1f7732046fc9f4cb9d41937da05877b7c34684eefa0a68c739a",
+    "QRCatcherMac/QRCatcherMacApp.swift": "9f34a7460cdde90295598356da6ab094e673df6c479061dde69a09ff461b690b",
+    "QRCatcherMac/zh-Hans.lproj/InfoPlist.strings": "02a31a89691ef3ec6e03e8ac18228d654a807b575e79a4f9e90d39b234f7f207",
+    "QRCatcherMac/zh-Hans.lproj/Localizable.strings": "5f1a43e1b9c268d78e82cc568f2e2e1f52eef05b54d52fe49a2318f9fe698ecb",
+    "Shared/Domain/QRPayload.h": "091add214aa62110058334581623bb3d2bd0a0ef66200f48622faeaa53fae244",
+    "Shared/Domain/QRPayload.m": "c4d6dc8481631fcb8a00eb160f5f86370069483f51c8a1768a41732efffc97cc",
+    "Shared/FileImportResources/PrivacyInfo.xcprivacy": "a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58",
+    "Shared/Image/QRBoundedImageFileReader.h": "f7454065aea882f36f48d8bde281eaf9fe0dcb9ee1b9a599a4f1d03483526b01",
+    "Shared/Image/QRBoundedImageFileReader.m": "c9262c920be320f34708a53e594af4e9555f5f1f1542cde57e77d64392fb6ee2",
+    "Shared/Image/QRImageCodec.h": "042caf2c633574c08d05b2515e24c12a158013a41a4790717f0e9ae6b6d2b4a3",
+    "Shared/Image/QRImageCodec.m": "d7a42240835ea5ee7c83a583b8d696826c39b8bb372a6c2cff374c249f54468f",
+    "Shared/Image/QRImageImportQueue.h": "b8a7a905cbe4d8989cc296876b98c1b7c0a12f7a2a1894c61b52d5ec0f0db000",
+    "Shared/Image/QRImageImportQueue.m": "f1c0f56753218e89a218661369cb8eddb7fe59abaae2048e901183d17224b590",
+    "Shared/Services/QRBoundedPhotoFile.swift": "79f7dc809d22fb388147c7656873d1d0ebad32607ff754c505083fab064ac526",
+    "Shared/Services/QRDecodeWorker.swift": "1be93ed2917ed04a4b637130e55a9fc3ddac5b4dbae10e0f8a8fc95ee828aa45",
+    "Shared/Services/QRHistoryLocations.swift": "437450c79c34bd30ac121eb61cfab64a5c8f5316b55e09e5557b0ce7d897044d",
+    "Shared/Services/QRPrivacyText.swift": "975179af10b8dffc0e167944ee2038c4b863fb377891c8baaea0a90ac23b6c68",
+    "Shared/Services/QRSelectionCoordinator.swift": "1c115abc914e4d78a41d0fec88cfa7ff915aa655c455b7db8c1d22d32fa194e0",
+    "scripts/generate_project.py": "de97759eb097057ec9310ddd080a253b370015526c98a5a91a4476955213f1e1",
+    "scripts/materialize_mac_icons.py": "3db348e592b55328336eb82e87069daf18c062ca7167acfd6fa191e66c3b3f64",
+    "scripts/owned_process_group.py": "eb406d2fe4c928d6438875761d596e3415ab9330593fd1b5a678ae6f99cb535e",
+    "scripts/required_reason_symbols.py": "ac932750382d01fdebf59b43bfdaf368105049c97c1f9eb1ce4059f01017f4e4",
+    "scripts/verify_mac_icon.swift": "3b7b6e9cba4f7af79af27b69fe588355680bef24d72d1901ae208486ff72d456",
+    "scripts/verify_mac_release.py": "4a5d934a1e1040bf5bf68922349e6f0a886ade2b005119d3fe795a5a291189f1"
+  },
+  "collector_sha256": "332753c5f442d645fb554a7a8ac767ae48e5583a5786a633474ee3cff0e6e2a0",
+  "mature_functions": {
+    "mach_info": "a43eaf2ef1f71d68ac9359c39a7e6937098e955614c2077ec39d510281be0185",
+    "require": "9775a8b3969599d5d1f620d9717824195d7ab69490eafb5e7b8d1bacbf14df85",
+    "strings_dictionary": "efe89b17101d8ceecc7bd74646c928df555ce0638655051b7ff6b3138d53c397",
+    "version": "b34b1fab6266f9d83d7f4ef01e562ca560f078d2181bcf6e7de2420b9045a9c1"
+  },
+  "minimum_app_resources": {
+    "CoreData_contract": {
+      "attributes": {
+        "createDate": {
+          "optional": true,
+          "type": "Date"
+        },
+        "url": {
+          "optional": true,
+          "type": "String"
+        }
+      },
+      "entity": "URLEntity",
+      "model_input": "QRCatcher/QR.xcdatamodeld/QR.xcdatamodel/contents",
+      "represented_class": "URLEntity",
+      "runtime_lookup": "QRHistoryStore.model loads QR.momd via NSBundle bundleForClass",
+      "version_contract": "If VersionInfo.plist is emitted, record and inspect its current version/model-version entries (expected model QR); do not fail solely because unobserved optional compiler metadata was not predeclared. The nonempty QR.momd/QR.mom payload must remain readable. Do not accept a standalone QR.mom replacing QR.momd."
+    },
+    "evidence_limits": "AppIcon.icns and Assets.car emitted and installed by actool; privacy and both Chinese strings copied in historical log. momc compiled QR.xcdatamodeld into Resources and shipped code explicitly opens QR.momd. Individual QR.momd child filenames were not enumerated in retained evidence. Require nonempty QR.momd/QR.mom as the single-model compiled payload contract; observe and inventory VersionInfo.plist/QR.omo on the first actual archive without inventing a previously measured inventory.",
+    "icon_contract": {
+      "CFBundleIconFile": "AppIcon or AppIcon.icns",
+      "historical_decoded_sizes": [
+        1024,
+        512,
+        512,
+        256,
+        256,
+        128,
+        64,
+        32,
+        32,
+        16
+      ],
+      "historical_icns_sha256": "88b26956fb0913b5efbfd058e07b6a5d29e33f03dd314a2e82b2a9c500d51287",
+      "minimum_readable_large_representation": 512
+    },
+    "locale_contract": {
+      "Chinese_InfoPlist_expected": {
+        "CFBundleDisplayName": "QRCatcher",
+        "NSCameraUsageDescription": "\u4f7f\u7528\u60a8\u9009\u62e9\u7684\u6444\u50cf\u5934\u8bc6\u522b\u4e8c\u7ef4\u7801\uff0c\u56fe\u50cf\u4ec5\u5728\u672c\u673a\u5904\u7406\u3002"
+      },
+      "development_region": "en",
+      "english_handling": "English keys are source fallbacks; no Mac en.lproj input exists. Do not inherit TouchColor requirement for both en and zh-Hans lproj directories.",
+      "required_locales": [
+        "zh-Hans"
+      ],
+      "strings_validation": "Read compiled plist/string table semantically and compare keys and values to pinned source, not raw source byte hashes; source Localizable.strings remains in app_inputs."
+    },
+    "optional_compiler_output_relative_to_Contents_Resources": [
+      "QR.momd/VersionInfo.plist",
+      "QR.momd/QR.omo"
+    ],
+    "other_required_app_files": [
+      "Contents/Info.plist",
+      "Contents/PkgInfo",
+      "Contents/MacOS/QRCatcherMac"
+    ],
+    "privacy_contract": {
+      "NSPrivacyAccessedAPITypes": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1",
+            "3B52.1"
+          ]
+        }
+      ],
+      "NSPrivacyCollectedDataTypes": [],
+      "NSPrivacyTracking": false,
+      "NSPrivacyTrackingDomains": []
+    },
+    "required_relative_to_Contents_Resources": [
+      "AppIcon.icns",
+      "Assets.car",
+      "PrivacyInfo.xcprivacy",
+      "zh-Hans.lproj/Localizable.strings",
+      "zh-Hans.lproj/InfoPlist.strings",
+      "QR.momd/QR.mom"
+    ],
+    "unexpected_payload_policy": "Catalog every archive path with type,size,hash; reject hidden extra Mach-O, nested apps/extensions/tests, executable scripts, profiles, entitlements/signing additions, symlink escapes and unknown dependency origins. Do not broadly exempt all resources from inventory or claim first archive inventory already observed. Toolchain-generated extra content requires explicit supported output evidence."
+  },
+  "parent": "d2d63d5c6cfe50139f623d81e1848e67b26bf5a3",
+  "parent_tree": "1808d1e0753b4bebe042b5fd9d9448d5e80f63a5",
+  "product_input_count": 38,
+  "project_contract": {
+    "CFBundleName": "QRCatcher",
+    "CFBundleName_source": "QRCatcherMac/Info.plist contains literal QRCatcher; PRODUCT_NAME/EXECUTABLE_NAME remains QRCatcherMac",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "baseline_tree_symlinks": [],
+    "build": "2",
+    "bundle_identifier": "100mango.QRCatcher",
+    "configuration": "Release",
+    "entitlement_note": "Source entitlement intent only. An unsigned archive does not demonstrate signed sandbox entitlements or distribution readiness.",
+    "executable": "QRCatcherMac",
+    "hardened_runtime": "NO",
+    "minimum_os": "13.0",
+    "package_resolved_files": [],
+    "product": "QRCatcherMac.app",
+    "project": "QRCatcher.xcodeproj",
+    "scheme": "QRCatcherMac",
+    "sdkroot": "macosx",
+    "source_entitlements": {
+      "com.apple.security.app-sandbox": true,
+      "com.apple.security.device.camera": true,
+      "com.apple.security.files.user-selected.read-write": true
+    },
+    "submodules": [],
+    "supported_platforms": "macosx",
+    "swift_packages": [],
+    "swift_version": "5.0",
+    "target": "QRCatcherMac",
+    "target_build_phases": [
+      "PBXSourcesBuildPhase",
+      "PBXFrameworksBuildPhase",
+      "PBXResourcesBuildPhase"
+    ],
+    "target_dependencies": [],
+    "target_framework_build_phase_files": [],
+    "target_has_shell_script_or_copy_phase": false,
+    "target_id": "347EAD6348E936507920C15D",
+    "version": "1.1",
+    "xcconfig_files": []
+  },
+  "source_only_support_count": 8
+}
