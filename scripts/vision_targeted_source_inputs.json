@@ -1,6 +1,6 @@
 {
-  "base_commit": "7b1c3b048f46f939e1a861569ed5f80fe27df59f",
-  "base_tree": "81562d42563b159e8a1ace7d3af6d5e2542c5733",
+  "base_commit": "fe50717d8a3783b7b451b161f2541b9207bcf385",
+  "base_tree": "dc749076aecb943e47136888444721a282ac2cdd",
   "unchanged_inputs": [
     {
       "path": ".github/workflows/apple-platforms.yml",
@@ -1293,6 +1293,12 @@
       "mode": "100644"
     },
     {
+      "path": "Tests/Harness/test_vision_capture_collector.py",
+      "sha256": "16f2b891b0b2110f3381d7aa1cb292fd04ffbda6d9a23c0676e20738186a5073",
+      "bytes": 11917,
+      "mode": "100644"
+    },
+    {
       "path": "Tests/Harness/test_vision_command_fence.py",
       "sha256": "5f99bd0580eb5a0b4262d82cc606f927dd2c3961f8212cd59b90ad2e326854bc",
       "bytes": 26866,
@@ -1311,9 +1317,21 @@
       "mode": "100644"
     },
     {
+      "path": "Tests/Harness/test_vision_photos_readiness.py",
+      "sha256": "a94c86cf5ba64b9868fe893874cf78940bfb39652573c23bf83b7c9dfa34926c",
+      "bytes": 3329,
+      "mode": "100644"
+    },
+    {
       "path": "Tests/Harness/test_vision_runner_binding.py",
       "sha256": "e79d0df2e3263f9410c33c8ec6ffab30e4c4f290f86899edd60537a1bc334383",
       "bytes": 14451,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_ui_cases.py",
+      "sha256": "e0550d33d34ed6146c1e6d577746f3145d2f2d2ace4a507e2f45b64b890641e7",
+      "bytes": 6618,
       "mode": "100644"
     },
     {
@@ -2301,6 +2319,12 @@
       "mode": "100644"
     },
     {
+      "path": "scripts/probe_vision_runtime.py",
+      "sha256": "8c88a65f8287703503228601ee7fc8f75c3c4cd16613796399eedfdff1696458",
+      "bytes": 7980,
+      "mode": "100644"
+    },
+    {
       "path": "scripts/required_reason_symbols.py",
       "sha256": "ac932750382d01fdebf59b43bfdaf368105049c97c1f9eb1ce4059f01017f4e4",
       "bytes": 1064,
@@ -2352,6 +2376,18 @@
       "path": "scripts/run_vision_fenced_command.py",
       "sha256": "203e6ea7f9cb7c6fc1ae0482fdf1bd2c89b134dc95570b0af55d81a92f21a57d",
       "bytes": 4264,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_vision_fenced_command.sh",
+      "sha256": "12fdf735b7b1e263f4d748ca2db06f05f88026096053e7d3aa17144be7b3c4e8",
+      "bytes": 2384,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_vision_ui_cases.py",
+      "sha256": "626efb89d32d9e3afa0d55e966dbabea35514e9fb1b3713eee81ac922c5b9129",
+      "bytes": 6312,
       "mode": "100644"
     },
     {
@@ -2436,6 +2472,12 @@
       "path": "scripts/verify_vision_export_pixels.swift",
       "sha256": "b38042e4fc30cbd763fd1076e3a1625badcef126a6f779ce804da9a4df61aaf6",
       "bytes": 1160,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_command_fence.py",
+      "sha256": "a1804ca0e7039b61b7eb9ff8c8a196c7e5342a4cfaf44fdc8a075a04dd5fb8dc",
+      "bytes": 8918,
       "mode": "100644"
     },
     {

@@ -20,7 +20,7 @@ class VisionAsyncContracts(unittest.TestCase):
     def test_every_capture_and_export_call_is_awaited(self):
         calls = [line.strip() for line in UI.splitlines()
                  if re.search(r'\b(?:capture|saveUsingSystemFileExporter)\(', line) and 'func ' not in line]
-        self.assertEqual(len(calls), 12)
+        self.assertEqual(len(calls), 10)
         for line in calls:
             self.assertRegex(line, r'await (?:capture|saveUsingSystemFileExporter)\(')
         for name in ['testRealPhotosImportCopyAndReopen', 'testRealFilesImportAndReopen', 'testChineseEmptyPhotosResultAndOfflinePolicy', 'testChineseOfflinePolicyEndingAndReturn']:

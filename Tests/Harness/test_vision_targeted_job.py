@@ -149,14 +149,23 @@ class JobTests(unittest.TestCase):
         self.assertEqual(job.row['state'],'passed');self.assertEqual(run.call_count,1);self.assertEqual(run.call_args.args[1],150)
 
 class WorkflowTests(unittest.TestCase):
+    def test_published_entry_admits_only_fixed_privacy_job_before_any_phase(self):
+        for job,scope in [('photos','visionos_photos'),('privacy','visionos_files'),('files','visionos_privacy')]:
+            with patch.dict(os.environ,{'GITHUB_JOB':job,'EVIDENCE_SCOPE':scope},clear=True), patch.object(sys,'argv',['vision_targeted_job.py','prepare']), patch.object(adapter,'Job') as controller, self.assertRaises(ValueError):
+                adapter.main()
+            controller.assert_not_called()
+        with patch.dict(os.environ,{'GITHUB_JOB':'privacy','EVIDENCE_SCOPE':'visionos_privacy'},clear=True), patch.object(sys,'argv',['vision_targeted_job.py','prepare']), patch.object(adapter,'Job') as controller:
+            adapter.main()
+        controller.assert_called_once_with('prepare'); controller.return_value.perform.assert_called_once_with()
+
     def test_fixed_serial_fresh_VM_jobs_and_evidence_first_order(self):
         workflow=json.loads((ROOT/adapter.WORKFLOW).read_text())
-        self.assertEqual(list(workflow['jobs']),['photos','privacy'])
+        self.assertEqual(list(workflow['jobs']),['privacy'])
         self.assertEqual(workflow['on'],{'push':{'branches':['codex/vision-targeted-completion']}})
         self.assertEqual(workflow['concurrency'],{'group':'qrcatcher-apple-platforms','cancel-in-progress':False})
         self.assertEqual(workflow['permissions'],{'contents':'read'})
-        self.assertEqual(workflow['jobs']['privacy']['needs'],['photos'])
-        self.assertEqual(workflow['jobs']['privacy']['if'],'${{ always() && !cancelled() }}')
+        self.assertNotIn('needs',workflow['jobs']['privacy'])
+        self.assertNotIn('if',workflow['jobs']['privacy'])
         for name,job in workflow['jobs'].items():
             self.assertEqual(job['runs-on'],'xcode-27');self.assertNotIn('strategy',job)
             self.assertEqual(job['timeout-minutes'],45 if name=='photos' else 25)
@@ -172,11 +181,11 @@ class WorkflowTests(unittest.TestCase):
                     result=subprocess.run(['bash','-n'],input=step['run'],text=True,capture_output=True)
                     self.assertEqual(result.returncode,0,result.stderr)
             text=json.dumps(job)
-            for forbidden in ['visionos_files','visionos_largest','continue-on-error','rerun','download-artifact']:
+            for forbidden in ['visionos_photos','visionos_files','visionos_largest','continue-on-error','rerun','download-artifact']:
                 self.assertNotIn(forbidden,text)
     def test_source_unchanged_input_map_and_no_shipping_paths_in_allowance(self):
         value=json.loads((ROOT/'scripts/vision_targeted_source_inputs.json').read_text())
-        self.assertEqual(value['base_commit'],adapter.PARENT);self.assertEqual(len(value['unchanged_inputs']),409)
+        self.assertEqual(value['base_commit'],adapter.PARENT);self.assertEqual(len(value['unchanged_inputs']),416)
         for row in value['unchanged_inputs']:
             self.assertEqual(hashlib.sha256((ROOT/row['path']).read_bytes()).hexdigest(),row['sha256'])
             self.assertNotIn(row['path'],adapter.ALLOWED_CHANGED)
@@ -185,7 +194,7 @@ class WorkflowTests(unittest.TestCase):
 class OriginExecutionTests(unittest.TestCase):
     def test_actual_embedded_origin_writes_one_real_ENV_line_for_each_job(self):
         workflow=json.loads((ROOT/adapter.WORKFLOW).read_text())
-        for job in ['photos','privacy']:
+        for job in workflow['jobs']:
             with self.subTest(job=job), tempfile.TemporaryDirectory() as folder:
                 folder=Path(folder).resolve(); value,env=ClockTests().data(job)
                 env.update(RUNNER_TEMP=str(folder),GITHUB_WORKSPACE=str(folder),GITHUB_ENV=str(folder/'github-env'),GITHUB_OUTPUT=str(folder/'github-output'))

@@ -17,7 +17,7 @@ runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionU
 runner_id=plistlib.loads(runner.read_bytes())['CFBundleIdentifier']
 binding=RunnerBinding(udid,runner_id,os.environ['GITHUB_SHA'],case)
 failure=FailureDiagnostic(binding,out)
-names=set(case.frames)|{'vision-failure'}
+names=set(case.frames)|({'vision-failure'} if not case.functional_only else set())
 seen=set();report=[];bindings=[];deadline=time.monotonic()+1650
 while time.monotonic()<deadline:
  if blocked():raise SystemExit('Owned command cleanup is unresolved; no further simulator capture command')
@@ -36,6 +36,8 @@ while time.monotonic()<deadline:
    except Exception as error:row={**binding.case_identity,'lease':request_id,'success':False,'error':str(error)[:1600]}
    bindings.append(row);write_json(out/'runner-bindings.json',bindings);print('VISION_RUNNER_BINDING '+json.dumps(row),flush=True)
    continue
+  if case.functional_only:
+   raise SystemExit('Functional-only privacy forbids all screenshot checkpoint requests')
   row={**binding.case_identity,'id':request_id,'source':'public simctl screenshot at held XCTest checkpoint','success':False};ack=None;raw=None;staged=None
   try:
    descriptor,ack=binding.request(request_id,names);name=descriptor['name']
@@ -114,9 +116,12 @@ while time.monotonic()<deadline:
     try:binding.acknowledge(request_id,names,row)
     except Exception as error:row.update(success=False,acknowledgement_error=str(error)[:1600])
    report.append(row);write_json(out/'checkpoint-captures.json',report);print(json.dumps(row),flush=True)
- failure.observe(text)
+ if not case.functional_only:failure.observe(text)
  if (out/'ui-completed.marker').exists():break
  time.sleep(.25)
 if not bindings or any(not row['success'] for row in bindings):raise SystemExit('A pre-UI Vision runner binding failed')
+if case.functional_only:
+ write_json(out/'checkpoint-captures.json',[])
+ raise SystemExit(0)
 if failure.attempted:raise SystemExit('Original XCTest failure retained after diagnostic-only capture')
 if not report or any(not row['success'] for row in report):raise SystemExit('A held Vision screenshot checkpoint was not captured')

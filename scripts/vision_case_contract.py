@@ -23,6 +23,10 @@ class Case:
     release_package: bool
     evidence_bytes: int
 
+    @property
+    def functional_only(self):
+        return self.scope == 'visionos_privacy'
+
 
 _CHINESE = ('vision-chinese-empty', 'vision-chinese-result', 'vision-chinese-policy')
 CASES = (
@@ -43,7 +47,7 @@ SCOPES = frozenset(case.scope for case in CASES)
 # historical results and actual system-size contract remain unchanged.
 TARGETED_CASES = (
     Case('visionos_privacy', 'testChineseOfflinePolicyEndingAndReturn', 'VisionPrivacyUIResults.xcresult',
-         'privacy', 300, 180, 240, ('vision-privacy-end', 'vision-privacy-returned'),
+         'privacy', 300, 180, 240, (),
          False, False, False, False, 550000),
 )
 ALL_CASES = CASES + TARGETED_CASES

@@ -40,7 +40,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         let failures = testRun?.failureCount ?? 0
         tracePhase("VISION_TEARDOWN_AFTER_FAILURE_COUNT \(failures)")
         if let app {
-            if failures > 0, captureLease != nil {
+            if failures > 0, captureLease != nil, captureScope != "visionos_privacy" {
                 tracePhase("VISION_TEARDOWN_BEFORE_FAILURE_CAPTURE")
                 await capture("vision-failure")
                 tracePhase("VISION_TEARDOWN_AFTER_FAILURE_CAPTURE")
@@ -311,7 +311,8 @@ final class QRCatcherVisionUITests: XCTestCase {
 
     func testChineseOfflinePolicyEndingAndReturn() async {
         // Verify the repaired product sheet without making Photos availability
-        // a prerequisite. This case does not replace the real Photos workflow.
+        // a prerequisite. Functional qualification only: no screenshot/audit
+        // checkpoint may delay Done or claim new privacy/Store pixels.
         let privacy = app.buttons["vision.privacy"]
         XCTAssertTrue(privacy.waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["vision.payload"].exists)
@@ -320,15 +321,22 @@ final class QRCatcherVisionUITests: XCTestCase {
         let ending = app.staticTexts["privacy.offlineEnd"]
         XCTAssertTrue(body.waitForExistence(timeout: 10))
         XCTAssertTrue(body.label.contains("100mango@gmail.com"))
+        XCTAssertEqual(body.label, "Celluloid、QRCatcher 和 TouchColor 在设备本地处理照片、相机画面、二维码或颜色数据，开发者不收集或上传这些数据。用户主动分享、打开链接，以及系统 iCloud 同步等行为由相应服务处理。如有隐私问题，请联系 100mango@gmail.com。")
         XCTAssertEqual(ending.label, "本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。")
         revealPolicyEnding()
-        await capture("vision-privacy-end")
-        app.buttons["vision.privacyDone"].tap()
+        tracePhase("VISION_PRIVACY_FUNCTIONAL_COMPLETE_TEXT_AND_END_VIEWPORT")
+        let done = app.buttons["vision.privacyDone"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10))
+        XCTAssertTrue(done.isEnabled); XCTAssertTrue(done.isHittable)
+        done.tap()
         XCTAssertTrue(privacy.waitForExistence(timeout: 10))
+        XCTAssertTrue(privacy.isHittable)
         XCTAssertFalse(ending.exists)
+        XCTAssertFalse(app.scrollViews["vision.privacyScroll"].exists)
         XCTAssertFalse(app.staticTexts["vision.payload"].exists)
         XCTAssertTrue(app.buttons["vision.import"].exists)
-        await capture("vision-privacy-returned")
+        XCTAssertTrue(app.buttons["vision.import"].isHittable)
+        tracePhase("VISION_PRIVACY_FUNCTIONAL_DONE_RETURNED_NO_PIXEL_CLAIM")
     }
 }
 

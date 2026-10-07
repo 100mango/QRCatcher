@@ -95,7 +95,7 @@ def validate_frames(case, expected, bindings, rows, runtime, require_complete=Tr
         raise ValueError('Runner export scope differs from selected case')
     if not isinstance(rows, list):
         raise ValueError('Checkpoint receipt list missing')
-    allowed = set(case.frames) | {'vision-failure'}
+    allowed = set(case.frames) | ({'vision-failure'} if not case.functional_only else set())
     found = set(); retained = []
     for row in rows:
         require_identity(row, expected)
@@ -172,6 +172,8 @@ def export(scope):
                'source_tree': tree, 'run_id': os.environ.get('GITHUB_RUN_ID'), 'qualified': False,
                'scope_limit_bytes': case.evidence_bytes, 'required_frames': list(case.frames),
                'diagnostic_failure_images_are_success_evidence': False, 'errors': [], 'files': []}
+    if case.functional_only:
+        summary.update(qualification='functional-only', new_privacy_pixels=False, store_screenshots=False)
 
     def retain(path, name=None, cap=64 * 1024, tail=False):
         if not path.exists():
@@ -232,6 +234,8 @@ def export(scope):
         if Path('VisionUIResults.xcresult').exists() or (not case.hosted_tests and Path('VisionTestResults.xcresult').exists()):
             raise ValueError('Unexpected combined or duplicate hosted Vision result')
         bindings = bounded_json(runtime / 'runner-bindings.json')
+        if case.functional_only and (list(runtime.glob('*.jpg')) or list(runtime.glob('*.png'))):
+            raise ValueError('Functional-only privacy cannot qualify screenshot output')
         failure_path = runtime / 'host-failure-capture.json'
         if failure_path.exists():
             summary['errors'].append('Selected XCTest failure event was recorded; host pixels are diagnostic only')

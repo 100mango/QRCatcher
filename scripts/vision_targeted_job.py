@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixed two-case adapter. Native execution requires a separately approved workflow."""
+"""Fixed privacy functional workflow adapter with retained legacy helper coverage. Native execution requires a separately approved workflow."""
 import argparse
 import hashlib
 import json
@@ -19,7 +19,7 @@ from validate_evidence_budget import inspect
 from watch_process import execute
 from run_vision_ui_cases import native_operation_unconfirmed
 
-PARENT = '7b1c3b048f46f939e1a861569ed5f80fe27df59f'
+PARENT = 'fe50717d8a3783b7b451b161f2541b9207bcf385'
 BRANCH = 'refs/heads/codex/vision-targeted-completion'
 WORKFLOW = '.github/workflows/vision-targeted-completion.yml'
 JOBS = {'photos': ('visionos_photos', 2700, 450), 'privacy': ('visionos_privacy', 1500, 330)}
@@ -35,15 +35,16 @@ BUSINESS = {
 }
 FINAL = ('collect', 'shutdown', 'source_final', 'validate', 'verdict')
 ALLOWED_CHANGED = {
+    '.github/workflows/vision-targeted-completion.yml',
     'QRCatcherVisionUITests/QRCatcherVisionUITests.swift',
-    'Tests/Harness/test_vision_async_contract.py', 'Tests/Harness/test_vision_photos_readiness.py',
-    'Tests/Harness/test_vision_targeted_privacy.py', 'scripts/export_vision_case_evidence.py',
-    'scripts/probe_vision_runtime.py', 'scripts/run_vision_fenced_command.sh',
-    'scripts/run_vision_ui_cases.py', 'scripts/vision_case_contract.py', 'scripts/vision_command_fence.py',
-    WORKFLOW, 'scripts/vision_targeted_job.py', 'scripts/vision_targeted_source_inputs.json',
+    'Tests/Harness/test_vision_async_contract.py',
     'Tests/Harness/test_vision_targeted_job.py',
-    'scripts/capture_vision_checkpoints.py', 'Tests/Harness/test_vision_capture_collector.py',
-    'Tests/Harness/test_vision_ui_cases.py',
+    'Tests/Harness/test_vision_targeted_privacy.py',
+    'scripts/capture_vision_checkpoints.py',
+    'scripts/export_vision_case_evidence.py',
+    'scripts/vision_case_contract.py',
+    'scripts/vision_targeted_job.py',
+    'scripts/vision_targeted_source_inputs.json',
 }
 NATIVE = {'build', 'probe', 'install', 'hosted', 'seed', 'ui', 'shutdown'}
 
@@ -156,10 +157,10 @@ def source_snapshot(root, runner):
                      'mode': '100755' if path.stat().st_mode & 0o111 else '100644'})
     actual = {r['path']: r for r in rows}
     reference = read_json(root / 'scripts/vision_targeted_source_inputs.json')
-    require(reference.get('base_commit') == PARENT and reference.get('base_tree') == '81562d42563b159e8a1ace7d3af6d5e2542c5733',
+    require(reference.get('base_commit') == PARENT and reference.get('base_tree') == 'dc749076aecb943e47136888444721a282ac2cdd',
             'Wrong published input reference')
     expected = reference.get('unchanged_inputs')
-    require(isinstance(expected, list) and len(expected) == 409, 'Incomplete unchanged-input reference')
+    require(isinstance(expected, list) and len(expected) == 416, 'Incomplete unchanged-input reference')
     require(len({r['path'] for r in expected}) == len(expected), 'Duplicate unchanged input')
     for row in expected:
         require(row['path'] not in ALLOWED_CHANGED and actual.get(row['path']) == row,
@@ -322,9 +323,12 @@ class Job:
                 rows.append({'name': name, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()})
             except (OSError, ValueError) as error:
                 rows.append({'name': name, 'unretained_error': str(error)[:500]})
-        write_json(out / 'manifest.json', {'scope': self.scope, 'source_commit': os.environ['GITHUB_SHA'],
+        manifest = {'scope': self.scope, 'source_commit': os.environ['GITHUB_SHA'],
                    'run_id': os.environ['GITHUB_RUN_ID'], 'qualified': False, 'host_only_retention': True,
-                   'native_followup_started': False, 'reason': reason, 'files': rows}, limit=64 * 1024)
+                   'native_followup_started': False, 'reason': reason, 'files': rows}
+        if self.case.functional_only:
+            manifest.update(qualification='functional-only', new_privacy_pixels=False, store_screenshots=False)
+        write_json(out / 'manifest.json', manifest, limit=64 * 1024)
         self.row['host_only_retention'] = True
 
     def collect(self):
@@ -359,6 +363,8 @@ class Job:
                     'elapsed_seconds': time.monotonic() - self.clock['started_monotonic'],
                     'scope_limit_bytes': self.case.evidence_bytes, 'only_requested_case': self.case.name,
                     'files_rerun': False, 'system_size_modified': False}
+        if self.case.functional_only:
+            terminal.update(qualification='functional-only', new_privacy_pixels=False, store_screenshots=False)
         try:
             require(out.is_dir() and not out.is_symlink(), 'No safe collected evidence directory')
             write_json(out / 'targeted-job.json', terminal, limit=128 * 1024)
@@ -402,6 +408,8 @@ def main():
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('phase', choices=tuple(COMMON) + ('hosted', 'seed', 'ui', 'collect'))
     args = parser.parse_args()
+    require(os.environ.get('GITHUB_JOB') == 'privacy' and os.environ.get('EVIDENCE_SCOPE') == 'visionos_privacy',
+            'This published adapter admits only the fixed functional privacy job')
     Job(args.phase).perform()
 
 
