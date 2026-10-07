@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "scope": "local source/package candidate; no native outcome or execution authority",
+  "base_source_sha": "c23e09e14ab046fc6f61a3951a32d4335608f4f7",
+  "native_execution_authorized": false,
+  "signing_authorized": false,
+  "upload_authorized": false,
+  "current_source_version": {
+    "marketing": "1.1",
+    "build": "2",
+    "upload_eligible": false
+  },
+  "future_version_proposal": {
+    "marketing": "1.2",
+    "build": "3",
+    "status": "proposal only; freeze separately before distribution"
+  },
+  "archive_command": [
+    "xcodebuild",
+    "archive",
+    "-project",
+    "QRCatcher-iOS-Watch.xcodeproj",
+    "-scheme",
+    "QRCatcher",
+    "-configuration",
+    "Release",
+    "-destination",
+    "generic/platform=iOS",
+    "-derivedDataPath",
+    "build/iOS-Watch-Archive",
+    "-archivePath",
+    "build/QRCatcher-iOS-Watch.xcarchive",
+    "-jobs",
+    "2",
+    "ONLY_ACTIVE_ARCH=NO",
+    "CODE_SIGNING_ALLOWED=NO",
+    "CODE_SIGNING_REQUIRED=NO",
+    "CODE_SIGN_IDENTITY=",
+    "DEVELOPMENT_TEAM=",
+    "PROVISIONING_PROFILE=",
+    "PROVISIONING_PROFILE_SPECIFIER=",
+    "OTHER_CODE_SIGN_FLAGS="
+  ],
+  "expected_products": [
+    {
+      "path": "Products/Applications/QRCatcher.app",
+      "bundle_id": "100mango.QRCatcher",
+      "executable": "QRCatcher",
+      "platform": "iphoneos",
+      "device_family": [
+        1,
+        2
+      ],
+      "minimum_os": "15.0",
+      "architectures": [
+        "arm64"
+      ]
+    },
+    {
+      "path": "Products/Applications/QRCatcher.app/Watch/QRCatcherWatch.app",
+      "bundle_id": "100mango.QRCatcher.watchkitapp",
+      "executable": "QRCatcherWatch",
+      "platform": "watchos",
+      "device_family": [
+        4
+      ],
+      "minimum_os": "9.0",
+      "architectures": [
+        "arm64",
+        "arm64_32"
+      ],
+      "architecture_minimum_os": {
+        "arm64": "26.0",
+        "arm64_32": "9.0"
+      },
+      "companion_bundle_id": "100mango.QRCatcher",
+      "independent": true
+    }
+  ],
+  "required_native_proof": [
+    "Exact frozen source/workflow and unchanged before/after source inventory",
+    "Timely clean xcodebuild exit, bounded full capture and failure diagnostics, no repeated native attempt",
+    "Exactly one parent and its one fixed nested Watch product; no XCTest, harness, arbitrary nested app or unknown executable",
+    "Per-product plist, Mach-O platforms, slices, deployment minimums and matching executable/dSYM UUIDs",
+    "Actual nested Watch versus producer inventory; exact match or only already witnessed deterministic Release copy-strip transform",
+    "Compiled parent/Watch icons, privacy manifests, localizations, ZXing notices, no Release diagnostic markers",
+    "Explicitly unsigned products and no provisioning/signature artifacts"
+  ],
+  "not_covered": [
+    "simulator runtime",
+    "Crown interaction",
+    "physical Watch Photos selection",
+    "WatchConnectivity file delivery",
+    "signing",
+    "upload",
+    "review submission"
+  ],
+  "execution_prerequisite": "This source includes one fixed unsigned archive workflow. Publication and a root-reviewed one-run GO are still required; this plan grants no native, signing or upload authority."
+}

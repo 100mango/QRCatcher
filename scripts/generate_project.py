@@ -2,11 +2,14 @@
 """Dependency-free deterministic project definition. Run after adding source files."""
 import argparse,hashlib,json,pathlib
 parser=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
-parser.add_argument('--profile',choices=['all-platforms','ios-only'],default='all-platforms',
-                    help='ios-only writes QRCatcher-iOS-Only.xcodeproj; default preserves all-platform output')
-iosOnly=parser.parse_args().profile=='ios-only'
+parser.add_argument('--profile',choices=['all-platforms','ios-only','ios-watch'],default='all-platforms',
+                    help='isolated iOS profiles write separate projects; default preserves all-platform output')
+profile=parser.parse_args().profile
+iosOnly=profile=='ios-only'
+iosWatch=profile=='ios-watch'
 root=pathlib.Path(__file__).resolve().parent.parent
-projectName='QRCatcher-iOS-Only.xcodeproj' if iosOnly else 'QRCatcher.xcodeproj'
+projectName=('QRCatcher-iOS-Only.xcodeproj' if iosOnly else
+             'QRCatcher-iOS-Watch.xcodeproj' if iosWatch else 'QRCatcher.xcodeproj')
 projectPath=root/projectName
 watchHelpers=['QRCatcher/QRWatchPhoneService.m','QRCatcher/QRWatchSessionGate.m']
 objects={}
@@ -229,10 +232,13 @@ if not iosOnly:
     objects[appID]['dependencies'].append(add('appWatchDependency','PBXTargetDependency',target=watchID,targetProxy=watchProxy))
     watchCopy=add('appWatchBuild','PBXBuildFile',fileRef=uid('watchproduct'),settings={'ATTRIBUTES':['RemoveHeadersOnCopy']})
     objects[appID]['buildPhases'].append(add('appWatchCopy','PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath='$(CONTENTS_FOLDER_PATH)/Watch',dstSubfolderSpec=16,files=[watchCopy],name='Embed Watch Content',runOnlyForDeploymentPostprocessing=0))
-else:
-    targets=[uid(key) for key in ['app','unit','ui']]
-    groups=[uid(key+'group') for key in ['app','unit','ui']]
-    products=[uid(key+'product') for key in ['app','unit','ui']]
+if iosOnly or iosWatch:
+    # Keep only the selected parent and, when requested, its existing Watch
+    # counterpart. Native Mac/TV/Vision targets never enter this project.
+    selected=['app','unit','ui'] + (['watch','watchunit','watchui'] if iosWatch else [])
+    targets=[uid(key) for key in selected]
+    groups=[uid(key+'group') for key in selected]
+    products=[uid(key+'product') for key in selected]
 # A file reference has one navigator owner even when several targets compile it.
 from collections import Counter
 counts=Counter(r for group in groups for r in objects[group]['children'])
@@ -243,8 +249,8 @@ productsID=add('products','PBXGroup',children=products,name='Products',sourceTre
 main=add('main','PBXGroup',children=groups+[productsID],sourceTree='<group>')
 projectSettings={'CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','CLANG_WARN_BOOL_CONVERSION':'YES','CLANG_WARN_CONSTANT_CONVERSION':'YES','CLANG_WARN_ENUM_CONVERSION':'YES','CLANG_WARN_INT_CONVERSION':'YES','CLANG_WARN_OBJC_ROOT_CLASS':'YES_ERROR','GCC_WARN_ABOUT_RETURN_TYPE':'YES_ERROR','GCC_WARN_UNUSED_VARIABLE':'YES','IPHONEOS_DEPLOYMENT_TARGET':'15.0','SDKROOT':'iphoneos','ENABLE_USER_SCRIPT_SANDBOXING':'YES','GCC_C_LANGUAGE_STANDARD':'gnu11','CLANG_CXX_LANGUAGE_STANDARD':'gnu++17','DEBUG_INFORMATION_FORMAT':'dwarf-with-dsym'}
 add('project','PBXProject',attributes={'LastUpgradeCheck':'2700','TargetAttributes':{appID:{'CreatedOnToolsVersion':'27.0'},uid('unit'):{'TestTargetID':appID},uid('ui'):{'TestTargetID':appID}}},buildConfigurationList=configs('project',projectSettings),compatibilityVersion='Xcode 14.0',developmentRegion='en',knownRegions=['en','Base','zh-Hans'],mainGroup=main,productRefGroup=productsID,projectDirPath='',projectRoot='',targets=targets)
-if iosOnly:
-    # Emit the closed iOS graph. Deferred-platform objects are still generated
+if iosOnly or iosWatch:
+    # Emit the closed selected iOS graph. Deferred-platform objects are still generated
     # by the default profile, but must not survive as orphan iOS entries.
     reachable=set()
     def visit(value):
@@ -276,6 +282,11 @@ scheme.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 
 if iosOnly:
     # Never write or remove an existing all-platform project/scheme in this mode.
+    raise SystemExit(0)
+if iosWatch:
+    watchScheme=projectPath/'xcshareddata/xcschemes/QRCatcherWatch.xcscheme'
+    watchScheme.write_text(scheme.read_text().replace(uid('app'),uid('watch')).replace(uid('unit'),uid('watchunit')).replace(uid('ui'),uid('watchui')).replace('QRCatcherTests','QRCatcherWatchTests').replace('QRCatcherUITests','QRCatcherWatchUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherWatch.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherWatch"'))
+    # No original-iOS or all-platform generated file is touched.
     raise SystemExit(0)
 macScheme=(root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme')
 macScheme.write_text(scheme.read_text().replace(uid('app'),uid('mac')).replace(uid('unit'),uid('macunit')).replace(uid('ui'),uid('macui')).replace('QRCatcherTests','QRCatcherMacTests').replace('QRCatcherUITests','QRCatcherMacUITests').replace('BuildableName="QRCatcher.app"','BuildableName="QRCatcherMac.app"').replace('BlueprintName="QRCatcher"','BlueprintName="QRCatcherMac"'))
