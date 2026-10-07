@@ -135,6 +135,90 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(calls.count(archive.ARCHIVE_COMMAND),1)
         self.assertFalse(any(a[:2]==['xcrun','assetutil'] or a[:2]==['xcrun','dwarfdump'] for a in calls))
 
+    def execute_archive_observation(self, *, outcome='error-zero', materialize=True, observation=None):
+        f=self.fixture();calls=[];tick=[0]
+        def run(argv,**kwargs):
+            calls.append(argv)
+            if argv==archive.ARCHIVE_COMMAND:
+                if materialize:shutil.copytree(f.archive,f.root/archive.ARCHIVE)
+                if outcome=='capture-stopped':raise archive.CaptureStopped('duration-limit',False)
+                if outcome=='cancelled':raise archive.CaptureStopped('interrupted-by-signal-15',True,15)
+                if outcome=='late':tick[0]=621
+                text=b'error: the following command failed with exit code 0 but produced no further output\nSwiftCompile normal arm64 TVHistory.swift\n'
+                if outcome=='success':text=b'warning: main actor-isolated byteBudget; this is an error in the Swift 6 language mode\n** ARCHIVE SUCCEEDED **\n'
+                return subprocess.CompletedProcess(argv,1 if outcome=='nonzero' else 0,text,b'')
+            if argv[:3] in (['xcrun','assetutil','--info'],['xcrun','dwarfdump','--uuid']):
+                return subprocess.CompletedProcess(argv,0,f.run(argv),b'')
+            text=b'Xcode 27.0\nBuild version 27A266a\n' if argv==['xcodebuild','-version'] else b'appletvos27.0\n'
+            return subprocess.CompletedProcess(argv,0,text,b'')
+        with patch.object(archive,'source_identity',return_value={'source':'synthetic'}):
+            if observation is None:
+                result=archive.execute(env=environment(),root=f.root,clock=lambda:tick[0],runner=run)
+            else:
+                with patch.object(diag,'collect',side_effect=observation):
+                    result=archive.execute(env=environment(),root=f.root,clock=lambda:tick[0],runner=run)
+        return f,result,calls
+
+    def test_exit_zero_error_observes_existing_archive_without_native_validation_or_retry(self):
+        f,result,calls=self.execute_archive_observation()
+        self.assertEqual(result['failure'],{'phase':'archive','type':'Rejected','reason':'archive-reported-error'})
+        self.assertFalse(result['qualified']);self.assertNotIn('proof',result)
+        value=result['archive_diagnostic'];self.assertTrue(value['inventory']['complete'])
+        self.assertFalse(value['fixed_files']['qualifying'])
+        files=value['fixed_files']['files']
+        self.assertEqual(files[diag.APP+'/Info.plist']['metadata']['CFBundleIdentifier'],'100mango.QRCatcher')
+        self.assertEqual(files[diag.APP+'/QRCatcherTV']['mach_header']['kind'],2)
+        self.assertEqual(files[diag.APP+'/QRCatcherTV']['mach_header']['build'][0]['platform'],3)
+        app_paths={x['path'][len(diag.APP)+1:] for x in value['inventory']['entries'] if x['type']=='file' and x['path'].startswith(diag.APP+'/')}
+        self.assertEqual(app_paths,archive.APP_FILES)
+        self.assertEqual(calls.count(archive.ARCHIVE_COMMAND),1)
+        self.assertFalse(any(c[:2] in (['xcrun','assetutil'],['xcrun','dwarfdump']) for c in calls))
+        self.assertNotIn('-quiet',archive.ARCHIVE_COMMAND)
+
+    def test_exit_zero_error_missing_archive_keeps_original_failure_and_safe_missing_paths(self):
+        _,result,calls=self.execute_archive_observation(materialize=False)
+        self.assertEqual(result['failure']['reason'],'archive-reported-error')
+        observation=result['archive_diagnostic']
+        self.assertFalse(observation['inventory']['complete'])
+        self.assertIn('failure',observation['inventory'])
+        self.assertEqual(observation['fixed_files']['files'][diag.APP+'/Info.plist']['status'],'unavailable')
+        self.assertFalse(result['qualified']);self.assertNotIn('proof',result)
+        self.assertEqual(calls.count(archive.ARCHIVE_COMMAND),1)
+
+    def test_failure_observation_requires_timely_zero_exit_and_confirmed_host_return(self):
+        for outcome in ('nonzero','capture-stopped','cancelled','late'):
+            observer=[]
+            def observe(*args,**kwargs):observer.append(args);return {}
+            _,result,calls=self.execute_archive_observation(outcome=outcome,observation=observe)
+            with self.subTest(outcome=outcome):
+                self.assertFalse(result['qualified']);self.assertNotIn('archive_diagnostic',result)
+                self.assertEqual(observer,[]);self.assertNotIn('proof',result)
+                self.assertEqual(calls.count(archive.ARCHIVE_COMMAND),1)
+
+    def test_failure_file_observation_uses_existing_twenty_second_limit_and_original_clock(self):
+        seen=[]
+        def observe(path,deadline,**kwargs):
+            seen.append(deadline);return {'qualifying':False,'observed':True}
+        _,result,_=self.execute_archive_observation(observation=observe)
+        self.assertEqual(seen,[20])
+        self.assertEqual(result['clock']['phase_end_seconds'],archive.PHASE_END)
+        self.assertEqual(archive.PHASE_END['finalization'],1020)
+        self.assertEqual(result['failure']['reason'],'archive-reported-error')
+        self.assertFalse(result['qualified'])
+        def broken(*args,**kwargs):raise ValueError('synthetic observation failure')
+        _,result,_=self.execute_archive_observation(observation=broken)
+        self.assertEqual(result['failure']['reason'],'archive-reported-error')
+        self.assertEqual(result['archive_diagnostic']['failure']['reason'],'synthetic observation failure')
+        self.assertFalse(result['qualified'])
+
+    def test_normal_archive_without_error_still_uses_full_original_qualification(self):
+        _,result,calls=self.execute_archive_observation(outcome='success')
+        self.assertTrue(result['qualified']);self.assertIn('proof',result)
+        self.assertNotIn('failure',result)
+        self.assertEqual(calls.count(archive.ARCHIVE_COMMAND),1)
+        self.assertEqual(sum(c[:2]==['xcrun','assetutil'] for c in calls),1)
+        self.assertEqual(sum(c[:2]==['xcrun','dwarfdump'] for c in calls),1)
+
     def test_root_symlink_and_unlisted_reads_reject_without_traversal(self):
         f=self.fixture();link=f.root/'alias';link.symlink_to(f.archive,target_is_directory=True)
         result=diag.inventory(link,100,clock=lambda:0)

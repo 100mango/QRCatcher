@@ -26,7 +26,7 @@ from tv_archive_capture import capture, CaptureStopped
 ROOT = Path(__file__).resolve().parents[1]
 BASE = '7b1c3b048f46f939e1a861569ed5f80fe27df59f'
 BASE_TREE = '81562d42563b159e8a1ace7d3af6d5e2542c5733'
-PARENT = BASE
+PARENT = '5b22ceeb92b08fa732a47670afb4f57e616fdc2f'
 BRANCH = 'refs/heads/codex/tv-release-archive'
 WORKFLOW = '.github/workflows/tv-release-archive.yml'
 CATALOG = 'QRCatcherTV/Assets.xcassets/AppIcon.brandassets/'
@@ -48,7 +48,7 @@ MAX_ENTRIES, MAX_BYTES, SCAN_SECONDS = 8192, 1024 ** 3, 30
 MAX_REPORT = 2 * 1024 ** 2
 PRODUCT_ICON = 'Assets/ProductIcon.png'
 MAX_PRODUCT_ICON_BYTES = 1024 * 1024
-ARCHIVE_COMMAND = ['xcodebuild', '-quiet', '-project', 'QRCatcher.xcodeproj',
+ARCHIVE_COMMAND = ['xcodebuild', '-project', 'QRCatcher.xcodeproj',
     '-scheme', 'QRCatcherTV', '-configuration', 'Release', '-destination',
     'generic/platform=tvOS', '-archivePath', str(ARCHIVE), '-derivedDataPath',
     'build/ArchiveDerived', 'CODE_SIGNING_ALLOWED=NO', 'archive']
@@ -435,9 +435,36 @@ def execute(*, env=None, root=ROOT, clock=time.monotonic, runner=capture):
         timely(phase_deadline, clock)
         report['qualified'] = True
     except (Exception, KeyboardInterrupt) as error:
-        report['clock']['report_ready_deadline'] = min(report['clock']['report_ready_deadline'], clock() + 30)
         report['failure'] = {'phase': phase, 'type': type(error).__name__,
                              'reason': str(error)[:4096]}
+        # A timely, fully reaped exit-zero client can still print a compiler
+        # error. Preserve that failed gate and observe only files already left
+        # by this one archive command; never run native validators or retry it.
+        receipt = receipts[-1] if receipts else {}
+        returned = (phase == 'archive' and type(error) is Rejected
+            and error.reason == 'archive-reported-error'
+            and receipt.get('command') == ARCHIVE_COMMAND
+            and receipt.get('returncode') == 0 and receipt.get('complete') is False
+            and receipt.get('owned_host_observation') == 'client-reaped-pipes-closed-group-absent-at-return'
+            and receipt.get('end', float('inf')) < phase_deadline
+            and receipt.get('end', float('inf')) < receipt.get('start', 0) + receipt.get('grant_seconds', 0))
+        if returned:
+            observed_at = clock()
+            deadline = min(began + PHASE_END['proof'],
+                           began + PHASE_END['final_source_pack'] - 30,
+                           observed_at + diagnostics.MAX_SECONDS)
+            if observed_at < deadline:
+                try:
+                    report['archive_diagnostic'] = diagnostics.collect(root / ARCHIVE, deadline, clock=clock)
+                except (Exception, KeyboardInterrupt) as observation_error:
+                    report['archive_diagnostic'] = {'qualifying': False,
+                        'failure': {'type': type(observation_error).__name__,
+                                    'reason': str(observation_error)[:1024]}}
+                report['archive_diagnostic']['trigger'] = 'timely-exit-zero-with-error-output; original failure retained'
+            else:
+                report['archive_diagnostic'] = {'qualifying': False,
+                    'stopped': 'original-diagnostic-clock-exhausted'}
+        report['clock']['report_ready_deadline'] = min(report['clock']['report_ready_deadline'], clock() + 30)
         if hasattr(error, 'offending_entry'):
             report['failure']['offending_entry'] = error.offending_entry
         if hasattr(error, 'icon_observation'):
