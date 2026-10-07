@@ -169,7 +169,8 @@ class MacPublicMetadataTests(unittest.TestCase):
             signature='    func '+name+'() throws {'
             case=signature+source.split(signature,1)[1].split('\n    func test',1)[0]
             self.assertEqual(hashlib.sha256(case.encode()).hexdigest(),digest)
-        self.assertEqual(source.count('\n    func test'),7)
+        self.assertEqual(source.count('\n    func test'),8)
+        self.assertEqual(source.count('\n    func testStoreNormalResultAndHistoryScreenshots() throws {'),1)
         self.assertEqual(source.count('collectPublicMetadataIfSelected(name)'),1)
         audit='    private func screenshot(_ name: String) throws {'+source.split('    private func screenshot(_ name: String) throws {',1)[1].split('\n    func test',1)[0]
         audit=audit.replace('        #if DEBUG\n        collectPublicMetadataIfSelected(name)\n        #endif\n','')

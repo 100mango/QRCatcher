@@ -123,7 +123,8 @@ class MacSupportingTextTests(unittest.TestCase):
         self.assertIn('image_limit=16',export)
         self.assertIn('Duplicate supporting text checkpoint',export)
         self.assertIn('Duplicate or excessive payload transition receipts',export)
-        self.assertEqual(ui.count('\n    func test'),7)
+        self.assertEqual(ui.count('\n    func test'),8)
+        self.assertEqual(ui.count('\n    func testStoreNormalResultAndHistoryScreenshots() throws {'),1)
         self.assertIn('try capturePixels("mac-minimum-long-text-" + locale)',ui)
 
 
@@ -257,7 +258,8 @@ class MacResizeBaselineTests(unittest.TestCase):
         case=case.replace('        try establishReadabilityResizeBaseline()\n','')
         self.assertEqual(hashlib.sha256(case.encode()).hexdigest(),'dc46dabdddfb526a53b6151797629c19fbce1c98c7b43c096c5251b620174677')
         self.assertIn('.frame(minWidth: 760, minHeight: 520)',(ROOT/'QRCatcherMac/QRCatcherMacApp.swift').read_text())
-        self.assertEqual(source.count('\n    func test'),7)
+        self.assertEqual(source.count('\n    func test'),8)
+        self.assertEqual(source.count('\n    func testStoreNormalResultAndHistoryScreenshots() throws {'),1)
 
 
 if __name__=='__main__':unittest.main()

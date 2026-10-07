@@ -6,6 +6,11 @@ struct QRCatcherMacApp: App {
     @StateObject private var workspace: MacWorkspace
 
     init() {
+        #if DEBUG
+        // BEGIN QR_MAC_STORE_CAPTURE_INIT
+        MacStoreCapture.startIfEnabled()
+        // END QR_MAC_STORE_CAPTURE_INIT
+        #endif
         _workspace = StateObject(wrappedValue: MacWorkspace(history: MacHistory.applicationHistory()))
     }
 
@@ -67,6 +72,11 @@ private struct MacWindowContentAccessibility: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in self?.labelContent() }
         }
         func labelContent() {
+            #if DEBUG
+            // BEGIN QR_MAC_STORE_CAPTURE_WINDOW
+            MacStoreCapture.shared?.configureExistingWindow(window)
+            // END QR_MAC_STORE_CAPTURE_WINDOW
+            #endif
             window?.contentView?.setAccessibilityLabel(QRL("QRCatcher workspace"))
             window?.contentView?.setAccessibilityIdentifier("mac.windowContent")
             #if DEBUG
@@ -92,6 +102,55 @@ private struct MacWindowContentAccessibility: NSViewRepresentable {
     }
 }
 
+#if DEBUG
+// BEGIN QR_MAC_STORE_CAPTURE_HELPER
+/// Controlled Store captures only; no-token and Release do not resize a window.
+/// Adapted from the verified TouchColor Mac Store capture window seam.
+@MainActor private final class MacStoreCapture {
+    static var shared: MacStoreCapture?
+    private var applied = false
+    private init() {}
+    static func startIfEnabled() {
+        let info = ProcessInfo.processInfo
+        guard shared == nil,
+              let token = info.environment["QRCATCHER_MAC_STORE_CAPTURE"], UUID(uuidString: token)?.uuidString == token,
+              let path = info.environment["QRCATCHER_TEST_STORE"],
+              info.arguments.contains("--ui-test-store-capture"),
+              info.environment["QRCATCHER_TEST_STORE_NAME"] == nil,
+              info.environment["QRCATCHER_SANDBOX_PROOF"] == nil,
+              info.environment["QRCATCHER_SANDBOX_FIXTURE"] == nil,
+              info.environment["QRCATCHER_MAC_PUBLIC_METADATA_TOKEN"] == nil else { return }
+        let store = URL(fileURLWithPath: path).standardizedFileURL
+        let folder = store.deletingLastPathComponent()
+        let prefix = "QRCatcherUITest-"
+        guard store.lastPathComponent == "coredata.sqlite",
+              folder.lastPathComponent.hasPrefix(prefix),
+              UUID(uuidString: String(folder.lastPathComponent.dropFirst(prefix.count))) != nil,
+              folder.deletingLastPathComponent().resolvingSymlinksInPath() ==
+                  FileManager.default.temporaryDirectory.resolvingSymlinksInPath(),
+              FileManager.default.fileExists(atPath: folder.path) else { return }
+        shared = MacStoreCapture()
+    }
+    func configureExistingWindow(_ window: NSWindow?) {
+        guard !applied, let window else { return }
+        applied = true
+        var frame = window.frame
+        frame.size = NSSize(width: 1280, height: 800)
+        if let screen = window.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            let scale = screen.backingScaleFactor
+            if visible.width >= frame.width, visible.height >= frame.height, scale > 0 {
+                let x = ((visible.midX - frame.width / 2) * scale).rounded() / scale
+                let y = ((visible.midY - frame.height / 2) * scale).rounded() / scale
+                frame.origin = NSPoint(x: min(max(x, visible.minX), visible.maxX - frame.width),
+                                       y: min(max(y, visible.minY), visible.maxY - frame.height))
+            }
+        }
+        window.setFrame(frame, display: true)
+    }
+}
+// END QR_MAC_STORE_CAPTURE_HELPER
+#endif
 #if DEBUG
 import CryptoKit
 
