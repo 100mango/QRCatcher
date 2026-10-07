@@ -20,10 +20,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = 'bf726e9637fcdd469048ed157b8ea73953ccb4fb'
 BASE_TREE = '37d33f2f3b5b1d9bde222f9481c49e9997ca49fc'
 # Keep the approved source fixture baseline; this repair has one exact parent.
-PARENT = '41955e3277c381aed7270ec3f117e926048486f9'
-PARENT_TREE = '216753d7d15504257595fa112e6f3ce650e5cb13'
-SUCCESSOR_PATHS = ('scripts/mac_store_capture.py','scripts/mac_store_product.py',
-    'scripts/test_mac_store_capture.py','scripts/fixtures/mac-store-source-baseline.json')
+PARENT = 'ebd6cc9cce3eb2339ee102bbc727e1c5d24a7697'
+PARENT_TREE = '75ea66124a6f5183f8b337318438d6e5ae477621'
+SUCCESSOR_PATHS = ('scripts/mac_store_capture.py','scripts/test_mac_store_capture.py',
+    'scripts/test_mac_store_source_helpers.py','QRCatcherMacUITests/QRCatcherMacUITests.swift')
 BRANCH = 'refs/heads/codex/mac-store-display'
 WORKFLOW = '.github/workflows/mac-store-display.yml'
 RESULT = Path('build/mac-store-capture/capture.xcresult')

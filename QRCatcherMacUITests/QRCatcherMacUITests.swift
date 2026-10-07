@@ -1197,7 +1197,7 @@ final class QRCatcherMacUITests: XCTestCase {
         let selectedText = (labels.firstMatch.value as? String) ?? labels.firstMatch.label
         let selectedPayload = String(selectedText.prefix(payload.count))
         XCTAssertEqual(selectedPayload, payload)
-        XCTAssertTrue(row.isHittable)
+        // OutlineRow reports selection identity; the text child is clicked below.
         XCTAssertTrue(app.windows["main"].frame.contains(row.frame))
         return (payload, rows.count, selectedPayload)
     }

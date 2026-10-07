@@ -99,6 +99,20 @@ class PortableTests(unittest.TestCase):
 
 
 class SourceTests(PortableTests):
+    def test_history_identity_uses_selection_and_actual_click_uses_the_text_child(self):
+        observation=STORE_METHODS.split('private func storeHistoryObservation(',1)[1].split('private func pasteStoreFixture(',1)[0]
+        selection=STORE_METHODS.split('private func selectStoreHistory(',1)[1].split('func testStoreNormalResultAndHistoryScreenshots(',1)[0]
+        self.assertNotIn('row.isHittable',observation)
+        for required in ['rows.filter { $0.isSelected }','XCTAssertEqual(selected.count, 1)',
+                'XCTAssertEqual(rows.count, expectedCount)','XCTAssertEqual(selectedPayload, payload)',
+                'XCTAssertTrue(app.windows["main"].frame.contains(row.frame))']:
+            self.assertIn(required,observation)
+        self.assertIn('XCTAssertTrue(labels.firstMatch.isHittable)',selection)
+        self.assertLess(selection.index('XCTAssertTrue(labels.firstMatch.isHittable)'),selection.index('labels.firstMatch.click()'))
+        self.assertLess(selection.index('labels.firstMatch.click()'),selection.index('XCTWaiter.wait(for: [restored]'))
+        self.assertIn('((result.value as? String) ?? result.label) == payload',selection)
+        self.assertIn('((status.value as? String) ?? status.label) == "Saved on this Mac"',selection)
+        self.assertIn('storeHistoryObservation(expectedPayload: payload, expectedCount: 2)',selection)
     def test_capture_scheme_preserves_the_app_and_omits_only_hosted_tests(self):
         command=m.base_command()
         self.assertNotIn('-quiet',command)
