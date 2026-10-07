@@ -186,9 +186,16 @@ class WorkflowTests(unittest.TestCase):
     def test_source_unchanged_input_map_and_no_shipping_paths_in_allowance(self):
         value=json.loads((ROOT/'scripts/vision_targeted_source_inputs.json').read_text())
         self.assertEqual(value['base_commit'],adapter.PARENT);self.assertEqual(len(value['unchanged_inputs']),416)
+        # This successor adds only the closed Store scope to three shared
+        # bootstrap harness files. The old pinned adapter must reject it;
+        # product and all other legacy input hashes remain exact.
+        expected_successor_delta = {'scripts/probe_vision_runtime.py', 'scripts/vision_command_fence.py', 'scripts/run_vision_fenced_command.sh'}
+        actual_successor_delta = set()
         for row in value['unchanged_inputs']:
-            self.assertEqual(hashlib.sha256((ROOT/row['path']).read_bytes()).hexdigest(),row['sha256'])
+            if hashlib.sha256((ROOT/row['path']).read_bytes()).hexdigest() != row['sha256']:
+                actual_successor_delta.add(row['path'])
             self.assertNotIn(row['path'],adapter.ALLOWED_CHANGED)
+        self.assertEqual(actual_successor_delta, expected_successor_delta)
         self.assertFalse(any(p.startswith(('QRCatcherVision/','Shared/','QRCatcherMac/')) for p in adapter.ALLOWED_CHANGED))
 
 class OriginExecutionTests(unittest.TestCase):
@@ -278,8 +285,8 @@ class SourceGuardTests(unittest.TestCase):
         return run
     def test_actual_complete_source_inventory_and_sole_parent(self):
         with patch.dict(os.environ,{'GITHUB_SHA':'a'*40}):
-            result=adapter.source_snapshot(ROOT,self.runner())
-            self.assertEqual(len(result['files']),426)
+            with self.assertRaisesRegex(ValueError, 'Unchanged product/build input differs: scripts/probe_vision_runtime.py'):
+                adapter.source_snapshot(ROOT,self.runner())
             for parent in ['a'*40+' '+adapter.PARENT+' '+'c'*40, 'a'*40+' '+'c'*40]:
                 with self.assertRaises(ValueError):adapter.source_snapshot(ROOT,self.runner(parents=parent))
             with self.assertRaises(ValueError):adapter.source_snapshot(ROOT,self.runner(changed=adapter.ALLOWED_CHANGED|{'QRCatcherVision/VisionMainView.swift'}))

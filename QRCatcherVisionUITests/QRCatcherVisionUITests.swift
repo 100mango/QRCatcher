@@ -40,14 +40,20 @@ final class QRCatcherVisionUITests: XCTestCase {
         let failures = testRun?.failureCount ?? 0
         tracePhase("VISION_TEARDOWN_AFTER_FAILURE_COUNT \(failures)")
         if let app {
-            if failures > 0, captureLease != nil, captureScope != "visionos_privacy" {
+            if failures > 0, captureLease != nil, captureScope != "visionos_privacy", captureScope != "visionos_store" {
                 tracePhase("VISION_TEARDOWN_BEFORE_FAILURE_CAPTURE")
                 await capture("vision-failure")
                 tracePhase("VISION_TEARDOWN_AFTER_FAILURE_CAPTURE")
             }
-            tracePhase("VISION_TEARDOWN_BEFORE_APP_TERMINATE")
-            app.terminate()
-            tracePhase("VISION_TEARDOWN_AFTER_APP_TERMINATE")
+            if captureScope == "visionos_store", failures > 0 {
+                // A failed host capture may be completion-uncertain. Leave the
+                // disposable VM to its owner; do not issue another app action.
+                tracePhase("VISION_STORE_FAILURE_NO_FURTHER_APP_ACTION")
+            } else {
+                tracePhase("VISION_TEARDOWN_BEFORE_APP_TERMINATE")
+                app.terminate()
+                tracePhase("VISION_TEARDOWN_AFTER_APP_TERMINATE")
+            }
         }
         if let captureLease {
             let request = FileManager.default.temporaryDirectory.appendingPathComponent("QRCatcher-runner-" + captureLease + ".json")
@@ -63,7 +69,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         let id = UUID().uuidString
         let runner = try XCTUnwrap(Bundle.main.bundleIdentifier)
         let pid = Int(ProcessInfo.processInfo.processIdentifier)
-        let methods = ["testRealPhotosImportCopyAndReopen", "testRealFilesImportAndReopen", "testChineseEmptyPhotosResultAndOfflinePolicy", "testChineseOfflinePolicyEndingAndReturn"]
+        let methods = ["testRealPhotosImportCopyAndReopen", "testRealFilesImportAndReopen", "testChineseEmptyPhotosResultAndOfflinePolicy", "testChineseOfflinePolicyEndingAndReturn", "testStoreScreenshotUnicodeResult"]
         // Bind the actual XCTest identity, rather than inferring a case from
         // an arbitrary substring or silently selecting a default workflow.
         let actualMethod = try XCTUnwrap(methods.first { method in
@@ -96,7 +102,8 @@ final class QRCatcherVisionUITests: XCTestCase {
             "visionos_files": ["testRealFilesImportAndReopen", "VisionFilesUIResults.xcresult"],
             "visionos_chinese": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionChineseUIResults.xcresult"],
             "visionos_largest": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionLargestUIResults.xcresult"],
-            "visionos_privacy": ["testChineseOfflinePolicyEndingAndReturn", "VisionPrivacyUIResults.xcresult"]
+            "visionos_privacy": ["testChineseOfflinePolicyEndingAndReturn", "VisionPrivacyUIResults.xcresult"],
+            "visionos_store": ["testStoreScreenshotUnicodeResult", "VisionStoreUIResults.xcresult"]
         ]
         guard result?["success"] as? Bool == true, result?["lease"] as? String == id,
               result?["runner"] as? String == runner, result?["pid"] as? Int == pid,
@@ -122,7 +129,7 @@ final class QRCatcherVisionUITests: XCTestCase {
             else { XCTFail("No current runner binding; no success checkpoint requested") }
             return
         }
-        if name != "vision-failure" {
+        if name != "vision-failure", captureScope != "visionos_store" {
             do { try app.performAccessibilityAudit(for: .all) { issue in print("VISION_ACCESSIBILITY_ISSUE", issue.compactDescription, issue.detailedDescription, issue.element?.debugDescription ?? "no issue element"); return false } }
             catch { XCTFail("VISION accessibility audit failed: \(error)") }
         }
@@ -249,6 +256,22 @@ final class QRCatcherVisionUITests: XCTestCase {
         // second completion assertion before that system exporter actually ends.
         app.buttons["vision.copy"].tap()
         await saveUsingSystemFileExporter("vision.exportHistory", name: "QRCatcher Synthetic History", checkpoint: "vision-exported-history")
+    }
+
+    func testStoreScreenshotUnicodeResult() async {
+        // Store-only capture of the unchanged real product UI. The image goes
+        // through the same native Photos picker and decoder as the proven case.
+        // No export, relaunch, privacy audit, mock result, or screenshot-only UI.
+        XCTAssertTrue(app.buttons["vision.photos"].waitForExistence(timeout: 20))
+        app.buttons["vision.photos"].tap()
+        guard let asset = await readyNativePhotoAsset() else { return }
+        asset.tap()
+        XCTAssertTrue(app.staticTexts["vision.payload"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+        XCTAssertFalse(app.buttons["vision.openWebsite"].exists)
+        app.buttons["vision.copy"].tap()
+        XCTAssertEqual(app.staticTexts["vision.status"].label, "Result copied")
+        await capture("vision-store-result")
     }
 
     private func visibleFileItem(_ name: String) -> XCUIElement? {

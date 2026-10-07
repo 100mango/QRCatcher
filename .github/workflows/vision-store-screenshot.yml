@@ -1,0 +1,130 @@
+{
+  "name": "QR Vision single Store screenshot",
+  "on": {
+    "push": {
+      "branches": [
+        "codex/vision-store-screenshot"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "qrcatcher-apple-platforms",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "store": {
+      "name": "visionos_store \u00b7 one real full-resolution screenshot",
+      "runs-on": "xcode-27",
+      "timeout-minutes": 45,
+      "env": {
+        "DEVELOPER_DIR": "/Applications/Xcode_27.app/Contents/Developer",
+        "QRCATCHER_OWNED_PROCESS_BARRIER": "${{ github.workspace }}/build/owned-process-cleanup.json",
+        "EVIDENCE_SCOPE": "visionos_store"
+      },
+      "steps": [
+        {
+          "name": "Record original job clock before checkout",
+          "id": "origin",
+          "timeout-minutes": 1,
+          "run": "python3 - <<'PY_CLOCK'\nimport time\nstarted=time.monotonic()\nimport json,os,re\nfrom pathlib import Path\ndef require(value):\n    if not value: raise ValueError('Invalid original Store Vision clock binding')\njob=os.environ['GITHUB_JOB']\nscopes={'store':('visionos_store',2700,360)}\nrequire(job in scopes)\nscope,ceiling,reserve=scopes[job]\nrequire(os.environ['GITHUB_REPOSITORY']=='100mango/QRCatcher')\nrequire(os.environ['GITHUB_REF']=='refs/heads/codex/vision-store-screenshot')\nrequire(os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA'])\nrequire(re.fullmatch('[0-9a-f]{40}',os.environ['GITHUB_SHA']))\nrequire(all(re.fullmatch('[1-9][0-9]{0,19}',os.environ[k]) for k in ['GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT']))\nrequire(os.environ['EVIDENCE_SCOPE']==scope)\nrequire(os.environ['GITHUB_RUN_ATTEMPT']=='1' and os.environ['GITHUB_EVENT_NAME']=='push')\nrequire(os.environ['GITHUB_WORKFLOW_REF']=='100mango/QRCatcher/.github/workflows/vision-store-screenshot.yml@refs/heads/codex/vision-store-screenshot')\nfolder=Path(os.environ['RUNNER_TEMP']);require(folder.is_absolute() and folder.resolve(strict=True)==folder)\npath=folder/('qr-vision-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'-'+job+'.json')\nvalue={'schema':1,'repository':os.environ['GITHUB_REPOSITORY'],'ref':os.environ['GITHUB_REF'],'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'job':job,'scope':scope,'ceiling_seconds':ceiling,'reserve_seconds':reserve,'started_monotonic':started}\nfd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\nwith os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())\nwith open(os.environ['GITHUB_ENV'],'a') as out: out.write('QRCATCHER_VISION_STORE_CLOCK='+str(path)+'\\n')\nrequire(time.monotonic()-started<25)\nPY_CLOCK"
+        },
+        {
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "timeout-minutes": 1,
+          "with": {
+            "ref": "${{ github.sha }}",
+            "fetch-depth": 2,
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Store prepare",
+          "id": "prepare",
+          "timeout-minutes": 4,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py prepare"
+        },
+        {
+          "name": "Store build",
+          "id": "build",
+          "timeout-minutes": 8,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py build | tee vision-test-build.log"
+        },
+        {
+          "name": "Store probe",
+          "id": "probe",
+          "timeout-minutes": 12,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py probe"
+        },
+        {
+          "name": "Store install",
+          "id": "install",
+          "timeout-minutes": 3,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py install"
+        },
+        {
+          "name": "Seed sole nonpersonal QR image",
+          "id": "seed",
+          "timeout-minutes": 3,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py seed"
+        },
+        {
+          "name": "Store ui",
+          "id": "ui",
+          "timeout-minutes": 10,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_store_job.py ui | tee vision-ui-test.log"
+        },
+        {
+          "name": "Store collect",
+          "id": "collect",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 3,
+          "run": "python3 -u scripts/vision_store_job.py collect"
+        },
+        {
+          "name": "Store shutdown",
+          "id": "shutdown",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 2,
+          "run": "python3 -u scripts/vision_store_job.py shutdown"
+        },
+        {
+          "name": "Store source_final",
+          "id": "source_final",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_store_job.py source_final"
+        },
+        {
+          "name": "Store validate",
+          "id": "validate",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_store_job.py validate"
+        },
+        {
+          "name": "Retain validated case evidence before final verdict",
+          "id": "upload",
+          "if": "${{ always() && steps.validate.outputs.eligible == 'true' }}",
+          "timeout-minutes": 1,
+          "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          "with": {
+            "name": "qrcatcher-vision-store-screenshot-evidence",
+            "path": "${{ steps.validate.outputs.artifact_path }}",
+            "retention-days": 1,
+            "compression-level": 9,
+            "if-no-files-found": "error"
+          }
+        },
+        {
+          "name": "Require capture and unchanged product source qualification",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_store_job.py verdict"
+        }
+      ]
+    }
+  }
+}

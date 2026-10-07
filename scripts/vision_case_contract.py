@@ -50,7 +50,14 @@ TARGETED_CASES = (
          'privacy', 300, 180, 240, (),
          False, False, False, False, 550000),
 )
-ALL_CASES = CASES + TARGETED_CASES
+# One independent Store screenshot case; the canonical matrix and legacy
+# targeted/privacy cases and their qualification remain unchanged.
+STORE_CASES = (
+    Case('visionos_store', 'testStoreScreenshotUnicodeResult', 'VisionStoreUIResults.xcresult',
+         'store', 420, 300, 360, ('vision-store-result',),
+         False, True, False, False, 6 * 1024 * 1024),
+)
+ALL_CASES = CASES + TARGETED_CASES + STORE_CASES
 ALL_SCOPES = frozenset(case.scope for case in ALL_CASES)
 
 

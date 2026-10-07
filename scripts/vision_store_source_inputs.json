@@ -1,0 +1,2556 @@
+{
+  "base_commit": "6675f0051fbb597ed7212819cd34fb0b1e42c7b5",
+  "base_tree": "f7cefb13a5ddf20b9564b67df094b52f2a37dce8",
+  "unchanged_inputs": [
+    {
+      "path": ".github/workflows/apple-platforms.yml",
+      "sha256": "481b9030b9b80637d35ab408c76d1f8de1e84a8fce5028eb9929a206c645830b",
+      "bytes": 29312,
+      "mode": "100644"
+    },
+    {
+      "path": ".github/workflows/ios.yml",
+      "sha256": "ea383213e62f22f5fcc5d89506b9fa6d1ca831d54a89ac41b9b5f0458d233be7",
+      "bytes": 9608,
+      "mode": "100644"
+    },
+    {
+      "path": ".github/workflows/vision-targeted-completion.yml",
+      "sha256": "2a3c951b8dadcb95b816fcf178b16f1d2d1432bd3e25d755f8c2d2a7254507a8",
+      "bytes": 5877,
+      "mode": "100644"
+    },
+    {
+      "path": ".github/workflows/vision-unsigned-archive.yml",
+      "sha256": "df2720bc25fe5e67b7447b2f093ddf239f0db755f4704ddef73a757dbdd3633a",
+      "bytes": 1958,
+      "mode": "100644"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "659fedf01e54903a09d14038fdbdc26679653f37403dd693105d9c825a64a975",
+      "bytes": 877,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/project.pbxproj",
+      "sha256": "51d86760fbae2933f8989403b45bd0b54f993ebc08e603aca4636c2487a4a0d4",
+      "bytes": 114333,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
+      "sha256": "93b069d114bdf36230448d47bc0b9e389eb2d3ff4c0d3c776cf2414b7d84f61c",
+      "bytes": 154,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcher.xcscheme",
+      "sha256": "f6b948861890a2e24b07a0c6b084413ea634f075d9d42209fdbe171de4b23c98",
+      "bytes": 2607,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme",
+      "sha256": "84b1f148d9581d1b5766bc0e684360eb3bbf9ba4b9d465491c3d37592ce9544e",
+      "bytes": 2637,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMacSandbox.xcscheme",
+      "sha256": "0742284b07729e93fb68923d642a5a4d4f6b82be9b1dab226536a564657ee008",
+      "bytes": 2360,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherTV.xcscheme",
+      "sha256": "af5ba7c0872055ab6a1775efa63e60175394182bd3b3d2980722f36bb6a4a3ec",
+      "bytes": 2627,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherVision.xcscheme",
+      "sha256": "8ed2793f9f09c3de5d61f512d3ee283753d2cc0d6c0c216ff7a8a9dd387dd42e",
+      "bytes": 2667,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherWatch.xcscheme",
+      "sha256": "df9df2e65d8ae6768ce17a4b24013303bce9cacf21d44643796980863f6b6527",
+      "bytes": 2657,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher.xcworkspace/contents.xcworkspacedata",
+      "sha256": "a4b059686f51f3f4372a4cc7a52b46997c9f645341ca79db6a76a8d2b310bfa3",
+      "bytes": 123,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/AppDelegate.h",
+      "sha256": "f88ab08003451c5f41ba02158024e23ab29f857527d9f9bf0f88aa0d3b703131",
+      "bytes": 348,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/AppDelegate.m",
+      "sha256": "32efa3826d9b86d5d9e96e84fb69adb447ef9bfc6dcfcd00b662de367fe26d7b",
+      "bytes": 1815,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Base.lproj/LaunchScreen.xib",
+      "sha256": "09a509727f3efafd09179fe3e08362787eb917801c92dfdb724699b4646e69c9",
+      "bytes": 1979,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Base.lproj/Main.storyboard",
+      "sha256": "679dec7e4b33c942a11789db969dca6a9e2e24f626e03389ef3776bd583852d4",
+      "bytes": 18275,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Debug-Info.plist",
+      "sha256": "b8f66f525ad71b1c70a38fd39ac1206830c5e9e07ede64ea3c84c042d7383867",
+      "bytes": 2144,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/Contents.json",
+      "sha256": "798b88cf22bcc397c6169776d4854b41388fa5e7f8d6a138d3d6b747281cec89",
+      "bytes": 1975,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/icon2X.png",
+      "sha256": "ea2cff23e8c0793bbe15ddd1cdbe97e6b4cc00dd62c3be1f5f2b770e8b336735",
+      "bytes": 17656,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/icon3X.png",
+      "sha256": "8eeac42f8a658dc9c4c2d05500639c578c506a3e516828611efcee0323142598",
+      "bytes": 28546,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png",
+      "sha256": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4",
+      "bytes": 323530,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/settings2x.png",
+      "sha256": "a7602fc6f1d2ddf62951802d03cd00c6fc4672f14b1a3244f3ce31bb64662c62",
+      "bytes": 6808,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/settings3x.png",
+      "sha256": "67558a1a632198637c6478364bea2bd47b7bc6faf5f0f9b4fce6fdbb1e52968a",
+      "bytes": 11434,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/spotlight2x.png",
+      "sha256": "3d848004bb561bc17ff51502846a0fab777b2774dd9ed101a3e92f95a16b87b5",
+      "bytes": 10362,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/AppIcon.appiconset/spotlight3x.png",
+      "sha256": "8201e1d3295d337697379a366ae71cb015641fd04e11c798557358cba386df8b",
+      "bytes": 17681,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/LaunchBackground.colorset/Contents.json",
+      "sha256": "7fd6fc1ffb23a079fc9101da451933ee09be59b7fad6ce320396525f3c8c3676",
+      "bytes": 180,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/Contents.json",
+      "sha256": "8f00a97226918a219ee02cb6c9c29769726e10387cdfa23c4550c5296c13607f",
+      "bytes": 379,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/catcher6_0000_scanning2x (1).png",
+      "sha256": "637f2db1488dc01dc0aeecac0fb163449a68799fb4f2d8a395edbe13fdb71730",
+      "bytes": 46251,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0000_scanning2x.imageset/catcher6pls_0000_scanning3x.png",
+      "sha256": "afda118a2180951f8d784c7d3964d1e02131112acf2620fece595fabcdbe7a3d",
+      "bytes": 78408,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/Contents.json",
+      "sha256": "d771567da6687a1065a5f00536aea3018ba7048412eea715c2a5114f31b6a172",
+      "bytes": 372,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/catcher6_0001_history_white_2x.png",
+      "sha256": "75646b4f8cef51095e2b9afc51ee97396a0beb9566e6ee9de83e82f0caeb1531",
+      "bytes": 1351,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0001_history_white_2x.imageset/catcher_history_@3.png",
+      "sha256": "b220bf6bfd1749e95adf70bbc18d46c47923e8587d06c7fa6fcac05dd96499f1",
+      "bytes": 1693,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/Contents.json",
+      "sha256": "0a235df59f86700c43660986829fe7f9b05bf7582872b415f9d08f59b69bc734",
+      "bytes": 368,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/catcher6_0002_history_blue_2x.png",
+      "sha256": "2a092e425fa61bba03ed436a29b18aabfcf39ddf7a7a379fa835f959291328a5",
+      "bytes": 1382,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0002_history_blue_2x.imageset/history_blue_@3.png",
+      "sha256": "21d46f699fde96d9698226675b7c51dea33c694619d095298fdc98ac3b24fa2f",
+      "bytes": 1698,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/Contents.json",
+      "sha256": "98a4423609f209c23a9dfbbfeccec0a345ce3776e05f772bab9487d6d554e379",
+      "bytes": 367,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/catcher6_0003_scan_white_2x.png",
+      "sha256": "20a536547dfcee11b8b3f2e0d990a8e9f9b9d9e8df9082eed4acb0f247f0222e",
+      "bytes": 1514,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0003_scan_white_2x.imageset/catcher_white_@3.png",
+      "sha256": "2cf2fd893ff3137bed932e65d9873f123e3994c9c397bf57f07d6dd623355af3",
+      "bytes": 2056,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/Contents.json",
+      "sha256": "f98400196bcad7a5e40ceaccadef97ac85c62fa590b3c1d301261a38fc9cf1b2",
+      "bytes": 365,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/catcher6_0004_scan_blue_2x.png",
+      "sha256": "d4078d71a294e41f4ff13104fb7fcb7cae8073ebf32fc838fed77b2275f475d5",
+      "bytes": 1664,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/catcher6_0004_scan_blue_2x.imageset/catcher_blue_@3.png",
+      "sha256": "70f50c42a12ab48ae77cc85bbf3392fd740d80f4e8f2b7c718d85a2095d8814f",
+      "bytes": 2133,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/Contents.json",
+      "sha256": "e83f3a3cd11febbb13e5b70da983c1145329d4cc40de667a2c07ecb0d142aedf",
+      "bytes": 336,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/text2x.png",
+      "sha256": "12de18f1bc3d936cdc24d6371a2197df6442d1b283a0f76cd384369d90f1a1c5",
+      "bytes": 1249,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/text2x.imageset/text3x.png",
+      "sha256": "aba586b4a82d78d35c4fc633e77d5ec6e5c84fb5c2ee33e43ddc567752f59330",
+      "bytes": 1368,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/Contents.json",
+      "sha256": "3272b293df41594e47a078a834713109104b80d0c9101c3c5faca7e97a3509a2",
+      "bytes": 342,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/website2x.png",
+      "sha256": "79e44b55fc81f86ba5040cda45869feb1880f2e0968fbb649c1d818fa7f22650",
+      "bytes": 3037,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Images.xcassets/website2x.imageset/website3x.png",
+      "sha256": "924938cce91206f6239de08ef369a7467ab4fb8803f8af6feeef5528ae86838e",
+      "bytes": 4159,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/Info.plist",
+      "sha256": "5a734a2d89a266bc4e6c193762592ded3eafa4ea0f449579baec8311b6095dff",
+      "bytes": 2047,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/NSObject+Macro.h",
+      "sha256": "5c33acc60425cf00664acded47fb7c0d39750d2310b171c97d4f43fb577c75d0",
+      "bytes": 916,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/NSObject+Macro.m",
+      "sha256": "d3adedde2da654aa9cca6e3533f32ac6b879b7eafff6ffe3243006ec64771545",
+      "bytes": 200,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/NSString+Tools.h",
+      "sha256": "cbdd3e56c973bfe94a4a6482963f0a67da1e49636fd4ca68d8b24522c6a15982",
+      "bytes": 479,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/NSString+Tools.m",
+      "sha256": "c9672b170a188ccf46c80444e977a9d531798c026a95e920d051221db8e37c08",
+      "bytes": 2414,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/PrivacyInfo.xcprivacy",
+      "sha256": "a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58",
+      "bytes": 627,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QR.xcdatamodeld/QR.xcdatamodel/contents",
+      "sha256": "c8e269bc9e85e00da9c1c0467870fe049fd18892054b978b1da8b8d94fba44e4",
+      "bytes": 700,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRActionButton.h",
+      "sha256": "c5f9857bef214955ad00c64af5a5f6f7baf2c35f19e9834ac392d521497af050",
+      "bytes": 149,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRActionButton.m",
+      "sha256": "8c3456a5c73cff4d3f6dc985c7dab620eb84ee2afd904707ca52927b66ed0407",
+      "bytes": 2461,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRCatchViewController.h",
+      "sha256": "654a697a3deb2b56f28a247ac12ce0f50b1c306d854f4d14a12e283aa46a037c",
+      "bytes": 391,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRCatchViewController.m",
+      "sha256": "ff58854f537e30fbb8407b23d9b81bed9a189087ceb8e7b66b23322d0010a6dc",
+      "bytes": 30205,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRCodeCodec.h",
+      "sha256": "0823bfcc937a148acc244aecbcad1c0352f860caa6725db7eef7d964b110837b",
+      "bytes": 227,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRCodeCodec.m",
+      "sha256": "7f17ac2ac34c4daff264c80d2dd59aa7b1d95b606c01b198b4795714193ef37d",
+      "bytes": 630,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRHistoryStore.h",
+      "sha256": "cdb7a20ba49f874b40f0639f32de29151a6ae847e68920450c0d284b47c68c41",
+      "bytes": 654,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRHistoryStore.m",
+      "sha256": "18b0f9d0927bfb5d9ee48d517027071e7fcd20e3a1ada348d214cff5b95274c1",
+      "bytes": 2376,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRPadSplitViewController.h",
+      "sha256": "9fa10eb1b8b7f3b116d140760fe1d13a3f9cbe986a1ffba1444061affd194ba9",
+      "bytes": 121,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRPadSplitViewController.m",
+      "sha256": "2db259f59806d277d6b1c361b442702fb15c16fc41dfce53a4417a0508839a72",
+      "bytes": 786,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRPrivacyViewController.h",
+      "sha256": "37d967751ebeecd14876bdff9bd32d0f14841fb82770fdfb2ea75d98c2e73ce6",
+      "bytes": 233,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRPrivacyViewController.m",
+      "sha256": "f6c83be6a78e099aec3369f4ebeccb03c2fe4953b1e92521a4814a2cbb8730d5",
+      "bytes": 8973,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRTabBar.h",
+      "sha256": "fc93e3e7cfd2a9206fd5e4b1457e6266d5b04f808f045c5dd5d00ac647777706",
+      "bytes": 188,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRTabBar.m",
+      "sha256": "f790e62117a6e6dcdc45feaa400b34039600e17d1530a4794de5e36e492a3c0f",
+      "bytes": 356,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRURLTableViewCell.h",
+      "sha256": "3e171d955313ae9287f52a343677c832172a26f2674f79bf9248538dc675408e",
+      "bytes": 214,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRURLTableViewCell.m",
+      "sha256": "9a1a18974e56fd32cc6ff94d98b21fc578c25cab19faeb9c7a068d57418bc87c",
+      "bytes": 426,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRURLViewController.h",
+      "sha256": "c01b9d1674d3d431364d49fe00fa9f8b57d75e8e43d5e62633436e731df6134d",
+      "bytes": 306,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRURLViewController.m",
+      "sha256": "7861a4fd9541afe81c3eb31877d600f954f6554863750447806cb5e7a3036e07",
+      "bytes": 6405,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRWatchPhoneService.h",
+      "sha256": "bf8e9b154cfa2d57f459965e6911bcbe078a7396e5b88fda136d48464716a9f3",
+      "bytes": 471,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRWatchPhoneService.m",
+      "sha256": "562bd1992fc7882eb3f4ca1c9766b2a143d1018f8f26e3abd43561d0eab3f978",
+      "bytes": 11336,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRWatchSessionGate.h",
+      "sha256": "22dce065f9e2f7c6e9f3581a37c3525246f82ab6a0c6440a3c3f2fcc2037afd5",
+      "bytes": 363,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/QRWatchSessionGate.m",
+      "sha256": "a3a79c315905f13a631e08461bb6ca88b2902436473ca4b6c94848ba5d5f82e6",
+      "bytes": 942,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/SceneDelegate.h",
+      "sha256": "ad126411a23ea667c2aed792556163a561871dbbe746202ae8ad7e232b43e3f1",
+      "bytes": 140,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/SceneDelegate.m",
+      "sha256": "81fd539ae9321454a913ec74d4f3b932dd55e223ded5275acc7d311e5d1b4b2a",
+      "bytes": 4083,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/URLEntity.h",
+      "sha256": "dd715d5a1a707fd49ed1e226311ec9950f827ade8d613a860a60aafa4c23b9e0",
+      "bytes": 335,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/URLEntity.m",
+      "sha256": "ffd035a42f2bbf9c374485880047730597ad6d993c6185a4896d40ab8ec204d3",
+      "bytes": 218,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/main.m",
+      "sha256": "4ddc4fc5925f3575aa4d2ce6be5636636ee834129a11b946b08f22ae53a93c39",
+      "bytes": 328,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/zh-Hans.lproj/InfoPlist.strings",
+      "sha256": "e7742e0adb2a9143f182ddf153fab68c9698bdf644ab6b9ff824b7788e3d52fa",
+      "bytes": 118,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcher/zh-Hans.lproj/Localizable.strings",
+      "sha256": "22e0666cdb7da404b364d857b04c2713e95f29875487d3cca4f6053bd4d16373",
+      "bytes": 2531,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "sha256": "17c198d952ab3b60e0a7f5df980cd864b25c6a7e2b1a1d166dcb5f73171999a4",
+      "bytes": 1272,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/Assets.xcassets/Contents.json",
+      "sha256": "7b225591af0371e8fea9f152cab6dd13013bf49ed2b277380503c4501698cbb7",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/Info.plist",
+      "sha256": "704414e3dac7841a382c8be0bfe467ed7bb13936522a5d1c0ed47b64bd2109dc",
+      "bytes": 1013,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacCamera.swift",
+      "sha256": "73580ddd56426fc1a61f3be3270b9ebfd8572b10c7b18ba1d7b4e36d4875b18a",
+      "bytes": 9644,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacHistory.swift",
+      "sha256": "e127ce17fb8bc6ae450c0ad0cf3434640a064a9ea3b3d293f3fd5e8281bb1483",
+      "bytes": 6919,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacLocalization.swift",
+      "sha256": "b15c734f2c7ed0d9044457571a6d222822748e652674f100a726e992fc543666",
+      "bytes": 231,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacMainView.swift",
+      "sha256": "032a2f6edc9306b85a9f704ac9345bae224801620e41ce44b37317fff93b2390",
+      "bytes": 9899,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacPaneAccessibility.swift",
+      "sha256": "9ac62329df8c407d74b651025298f423aac58d3855b5df02a35daf083a8d2f54",
+      "bytes": 3845,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacSandboxDiagnostics.swift",
+      "sha256": "56ca7372caed15532b52d87ba8142a5d3968b5f4b3f1c02a6d30151ad4d4db07",
+      "bytes": 4992,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/MacWorkspace.swift",
+      "sha256": "2b463d44aa016191d20346379441687ae551c8a2ab33b3c788e0f1d28fdad4e5",
+      "bytes": 8554,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMac-Bridging-Header.h",
+      "sha256": "c8538e33ccdb4244f5d6a5ae777247bc53af11642eaee313f53ec1a32e97fbe1",
+      "bytes": 133,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMac.entitlements",
+      "sha256": "7872571b05e1a1f7732046fc9f4cb9d41937da05877b7c34684eefa0a68c739a",
+      "bytes": 360,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/QRCatcherMacApp.swift",
+      "sha256": "c209b25a867fa21b47eebf55fd3746cd4c6fd816791a37bc33e696eae46a016d",
+      "bytes": 3887,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/zh-Hans.lproj/InfoPlist.strings",
+      "sha256": "02a31a89691ef3ec6e03e8ac18228d654a807b575e79a4f9e90d39b234f7f207",
+      "bytes": 142,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMac/zh-Hans.lproj/Localizable.strings",
+      "sha256": "5f1a43e1b9c268d78e82cc568f2e2e1f52eef05b54d52fe49a2318f9fe698ecb",
+      "bytes": 11559,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMacTests/PortableQRTests.swift",
+      "sha256": "a1d401c378f45c45a8f9b6057d033228fbe06e029a5742f97c8d8fe896e77f14",
+      "bytes": 3414,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMacTests/QRCatcherMacTests-Bridging-Header.h",
+      "sha256": "eee0ff8f9e376b5c34e4d24fdd9945705ff07061b5f9decafe95778d2ec3b6e4",
+      "bytes": 30,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMacTests/QRCatcherMacTests.swift",
+      "sha256": "4812c43c523ab07235f815c1eeb8459f974737ad61f01928d5d4e6baf8cb344a",
+      "bytes": 25659,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherMacUITests/QRCatcherMacUITests.swift",
+      "sha256": "05ca4b9526a80ca592a8999578933ec7a367a23760f5ef7240fec1b94474fb07",
+      "bytes": 47245,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Contents.json",
+      "sha256": "88a6a39da9844fc472df86e69e03d6bcef09d7251340a4e177c7de102b341bdd",
+      "bytes": 610,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Content.imageset/Contents.json",
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134",
+      "bytes": 165,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Contents.json",
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189",
+      "bytes": 187,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Content.imageset/Contents.json",
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134",
+      "bytes": 165,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Content.imageset/Contents.json",
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7",
+      "bytes": 252,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Contents.json",
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189",
+      "bytes": 187,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Content.imageset/Contents.json",
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7",
+      "bytes": 252,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelf.imageset/Contents.json",
+      "sha256": "e62bc7df46ca2d902e2bdede6af20db66b1108a077e389c05ff0004d91231bb1",
+      "bytes": 162,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelfWide.imageset/Contents.json",
+      "sha256": "e62bc7df46ca2d902e2bdede6af20db66b1108a077e389c05ff0004d91231bb1",
+      "bytes": 162,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Assets.xcassets/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/Info.plist",
+      "sha256": "eb208b45de12d2f2524bff75558a8a912d73894296e6bfdf96722a8d0cf95bb8",
+      "bytes": 1103,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/PrivacyInfo.xcprivacy",
+      "sha256": "3e4a93cbe86acef7dd7e063a28c849992f556e7f52cadc5f37c1e8b0e1b54686",
+      "bytes": 598,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/QRCatcherTV-Bridging-Header.h",
+      "sha256": "cfdc5511f3527d0c01090069bfce1a6c8c11af100a413c52a2d1498808879c0a",
+      "bytes": 47,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/QRCatcherTVApp.swift",
+      "sha256": "c6ce797c2351f33f9561c55ac542d9e10ca870023a9b79215d8397a1275aa333",
+      "bytes": 520,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/TVHistory.swift",
+      "sha256": "5b35d94ce9ea6b8caf9be0fd6d8f69bb8848a792c949c44d4925afc42f5a107b",
+      "bytes": 4284,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/TVMainView.swift",
+      "sha256": "4fb5835f6c1cae83b9dba753d620ab62876519b87485c10f8f287d20f9f75f47",
+      "bytes": 11146,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/TVPhotoLibrary.swift",
+      "sha256": "a0b079bdd6d62be941866e29ee588743c801abd5feeb337c23a839ee4fc95f73",
+      "bytes": 8124,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTV/TVReadSession.swift",
+      "sha256": "b1b6b933ed66ecb780e4b313b5f6ba308fb903abe94071e888f2701fa64b88af",
+      "bytes": 3805,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTVTests/QRCatcherTVTests.swift",
+      "sha256": "14d534ea6c520c049442f4380a3eb920928d2e4d0fb090d05e14107b04a86b4f",
+      "bytes": 3954,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTVUITests/QRCatcherTVUITests.swift",
+      "sha256": "dbdb363ebe8bf04e33f8f6f3c0148b0875873f6c1a5653a40db1722051648673",
+      "bytes": 43291,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTests/Info.plist",
+      "sha256": "2dc79074180f6f746eec8a4cd7b30552b1474fc2ac8a0f05ea923020b8ca59b3",
+      "bytes": 742,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTests/QRBoundedImageImportTests.m",
+      "sha256": "8d103b5fcdd05f2abe69a05a0c3ed54799933825f7a9825412be11a89de06dbe",
+      "bytes": 9690,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTests/QRCatcherTests.m",
+      "sha256": "b28ee936ac6d49eb323564282621f4d8c7ac3d162c894bf486d12a5f545c57e3",
+      "bytes": 19480,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherTests/QRWatchPhoneServiceTests.m",
+      "sha256": "010ce18be9d3991a142dbe1dca3fd167aaf10f371ad0417987895a71982c8c5f",
+      "bytes": 3925,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherImageImportUITests.m",
+      "sha256": "929c8927fe3f6a341eb7c7dcad10d97b6959fad748a2038575ed2a833882f9f3",
+      "bytes": 14134,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherPadUITests.m",
+      "sha256": "523179d3281ff84185e547c3182f082b57acfde4ce6df16bd2e927dce4d5b446",
+      "bytes": 16516,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherUITests/QRCatcherUITests.m",
+      "sha256": "cd3e09f98e7d7afa4fb55b4d6f4c68bf400f049c220181e15192c986e61e2aa2",
+      "bytes": 23788,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherUITests/QRFilesPickerSnapshot.h",
+      "sha256": "e528124da18e90f8b86c1c2d49fc8dfc0f58c17349f8b011074aecb4273d18dd",
+      "bytes": 3151,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherUITests/QRUIInterruptionSafety.h",
+      "sha256": "1d527d7237b398aedc109cb4913104605ff45fa57bcfe2451e7cb4264de990bc",
+      "bytes": 2105,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Back.solidimagestacklayer/Content.imageset/Contents.json",
+      "sha256": "e798918e51266046f0a196a890b68d7fb19d2b164aca557b08c143946f4a17ce",
+      "bytes": 169,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Back.solidimagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Contents.json",
+      "sha256": "90b27d2286998fff331dd81cf6c0d444f8698efab26436aab0512f5a5406012b",
+      "bytes": 197,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Front.solidimagestacklayer/Content.imageset/Contents.json",
+      "sha256": "e798918e51266046f0a196a890b68d7fb19d2b164aca557b08c143946f4a17ce",
+      "bytes": 169,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Front.solidimagestacklayer/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Assets.xcassets/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/Info.plist",
+      "sha256": "5a25cb698122c7ed6af65be3b1288b5307386cd9009a6fe1e09d33a3513fcf80",
+      "bytes": 922,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/QRCatcherVision-Bridging-Header.h",
+      "sha256": "c8538e33ccdb4244f5d6a5ae777247bc53af11642eaee313f53ec1a32e97fbe1",
+      "bytes": 133,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/QRCatcherVisionApp.swift",
+      "sha256": "0b2706f8c1c36e3a41b1366b12038673731c6d00b6b96b61baa6ef8a66cee320",
+      "bytes": 405,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/QRExportDocument.swift",
+      "sha256": "b3a7846609994efc80509e784bef79ac4b23a01dec92a4ddb6cbc6fd96d27d1a",
+      "bytes": 641,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/VisionExportTestReceipt.swift",
+      "sha256": "1be1c0e77d665e884a45f8470ee2e6bde2b7831ad93e165041800ba56047182b",
+      "bytes": 2387,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/VisionMainView.swift",
+      "sha256": "25cd3b6f3c7a6a14c55b23bf91b58f724e83e07af86fe6d714d85a0e07105e18",
+      "bytes": 9832,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVision/VisionReadSession.swift",
+      "sha256": "8800d4727a2c4074122cf68b9906f6b27e5a97d63ec72d218310578b615ee9c4",
+      "bytes": 5328,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherVisionTests/QRCatcherVisionTests.swift",
+      "sha256": "bc70b67ee95d1d35cb3ad873803c42e3d29a9478a9f56faa7cd24f8459d6825a",
+      "bytes": 7935,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "sha256": "1b5863633f2718ee2d6e13ecfa061651e602bbed493761da215c985ec2a98a60",
+      "bytes": 209,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/Assets.xcassets/Contents.json",
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f",
+      "bytes": 60,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/Info.plist",
+      "sha256": "de96778b1546a9687d6999a214612aefa34a74f5dacffb261e9438a8b7046add",
+      "bytes": 844,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/QRCatcherWatch-Bridging-Header.h",
+      "sha256": "eee0ff8f9e376b5c34e4d24fdd9945705ff07061b5f9decafe95778d2ec3b6e4",
+      "bytes": 30,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/QRCatcherWatchApp.swift",
+      "sha256": "01cc4448fb5e4544e8ecc32e70f0dc8265a637a70464179b3a42259e5433c72e",
+      "bytes": 10504,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/WatchHistory.swift",
+      "sha256": "6c31d783928385694f3ebb0fc5551ab84d13af72f30c64049963084f808ac29c",
+      "bytes": 4935,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/WatchPhoneTransport.swift",
+      "sha256": "a96241e51a666e24ebabf7ff4564b006f8b19a876d279616c3895a188d689f83",
+      "bytes": 10323,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/WatchPhotoCodec.swift",
+      "sha256": "cb172d1e74fa43c7f448bc6e7cf0c0d3d9fa4e59a1d9227b5d2ace9ff32eafd8",
+      "bytes": 4893,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/WatchReplyJournal.swift",
+      "sha256": "bece516eabbfa2e82e6d8a0856e86be375531438b889beab731dbf5d2aec08fd",
+      "bytes": 5139,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatch/zh-Hans.lproj/Localizable.strings",
+      "sha256": "bf4a27d09d670821e33e86ba65cb0517ee3c273a34326bd0c5cb69f8244b4a81",
+      "bytes": 3164,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatchTests/QRCatcherWatchTests.swift",
+      "sha256": "f3f7b822f69442e05cb24b72d402794180b525c8a69da9fbdfbecf0652aa6c2a",
+      "bytes": 22099,
+      "mode": "100644"
+    },
+    {
+      "path": "QRCatcherWatchUITests/QRCatcherWatchUITests.swift",
+      "sha256": "de585795d6931dbab1ba4caf06e6a8df926f90be027df5f0c2c75a92f12d6675",
+      "bytes": 40892,
+      "mode": "100644"
+    },
+    {
+      "path": "README.md",
+      "sha256": "5c35e657b4dfaa8fca918b3ff05d59eb08cbba67ec0c583d16551d5530c91b93",
+      "bytes": 1324,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Domain/QRPayload.h",
+      "sha256": "091add214aa62110058334581623bb3d2bd0a0ef66200f48622faeaa53fae244",
+      "bytes": 780,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Domain/QRPayload.m",
+      "sha256": "c4d6dc8481631fcb8a00eb160f5f86370069483f51c8a1768a41732efffc97cc",
+      "bytes": 1470,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/FileImportResources/PrivacyInfo.xcprivacy",
+      "sha256": "a82d1b5d9285a2b75f67ff6756ebc9f6a5565d3d4400cfd4fa8747a0b380ae58",
+      "bytes": 627,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRBoundedImageFileReader.h",
+      "sha256": "f7454065aea882f36f48d8bde281eaf9fe0dcb9ee1b9a599a4f1d03483526b01",
+      "bytes": 422,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRBoundedImageFileReader.m",
+      "sha256": "c9262c920be320f34708a53e594af4e9555f5f1f1542cde57e77d64392fb6ee2",
+      "bytes": 3570,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRImageCodec.h",
+      "sha256": "042caf2c633574c08d05b2515e24c12a158013a41a4790717f0e9ae6b6d2b4a3",
+      "bytes": 715,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRImageCodec.m",
+      "sha256": "d7a42240835ea5ee7c83a583b8d696826c39b8bb372a6c2cff374c249f54468f",
+      "bytes": 4832,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRImageImportQueue.h",
+      "sha256": "b8a7a905cbe4d8989cc296876b98c1b7c0a12f7a2a1894c61b52d5ec0f0db000",
+      "bytes": 390,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Image/QRImageImportQueue.m",
+      "sha256": "f1c0f56753218e89a218661369cb8eddb7fe59abaae2048e901183d17224b590",
+      "bytes": 1275,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableDecoder.cpp",
+      "sha256": "b6a059c87753fa0217376988db9724342ff5d482434c43db33dcc9f8c78f5192",
+      "bytes": 1330,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableDecoder.h",
+      "sha256": "0fa8af912a43cc6a40f165302ba540922180de260bffef67fb6ea2aa599dd098",
+      "bytes": 672,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/PortableQR/QRPortableImageDecoder.swift",
+      "sha256": "707039b2bd4914f3aad837ccc6424313c84151d02f050d6c5074c91aed11bc49",
+      "bytes": 2458,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Resources/PrivacyInfo.xcprivacy",
+      "sha256": "74b0cd72fc23c1ef302f22ee2753f61817cdc5af0ff7a7f2d0632b524fb8acea",
+      "bytes": 373,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Services/QRBoundedPhotoFile.swift",
+      "sha256": "79f7dc809d22fb388147c7656873d1d0ebad32607ff754c505083fab064ac526",
+      "bytes": 1523,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Services/QRDecodeWorker.swift",
+      "sha256": "1be93ed2917ed04a4b637130e55a9fc3ddac5b4dbae10e0f8a8fc95ee828aa45",
+      "bytes": 976,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Services/QRHistoryLocations.swift",
+      "sha256": "437450c79c34bd30ac121eb61cfab64a5c8f5316b55e09e5557b0ce7d897044d",
+      "bytes": 6735,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Services/QRPrivacyText.swift",
+      "sha256": "975179af10b8dffc0e167944ee2038c4b863fb377891c8baaea0a90ac23b6c68",
+      "bytes": 1246,
+      "mode": "100644"
+    },
+    {
+      "path": "Shared/Services/QRSelectionCoordinator.swift",
+      "sha256": "1c115abc914e4d78a41d0fec88cfa7ff915aa655c455b7db8c1d22d32fa194e0",
+      "bytes": 692,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/ascii.png.base64",
+      "sha256": "082da4cee2edcd0705f112f15c753eac178f9e16217031ccd50946ba0472e115",
+      "bytes": 1933,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/eci-latin1.png.base64",
+      "sha256": "399e710f2b6477a4779184c488b4b9411fffd37ee9a4d3c20bbcbbd55ea0cd76",
+      "bytes": 861,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/eci-mixed.png.base64",
+      "sha256": "630b36c333da2e53179042526aa74d1c0f3a5cb75e936b42aa9cb8266216a997",
+      "bytes": 853,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/eci-shiftjis.png.base64",
+      "sha256": "23065a7a60fca62f058513f9bef3d1b863c05e198de586909f6e26c860f6485e",
+      "bytes": 849,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/eci-utf8.png.base64",
+      "sha256": "de5447c8b05d9037936bfd34c23e18a298c005f65d8f103a4bd3927f3d391d96",
+      "bytes": 841,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/invalid.png.base64",
+      "sha256": "63a59fa56a004e8b433a96e9c1c5c243ef246e6f301708afc294d37920eb2f77",
+      "bytes": 1013,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/manifest.json",
+      "sha256": "a8f42e81869445fa805b25db6d8fb73db5f1e8fb6394d0905764953692b9f78d",
+      "bytes": 2314,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/multiple.png.base64",
+      "sha256": "e0131583a6a13156f603d259c79c579f1b911e168e251010bda8ee80170a2b9d",
+      "bytes": 3325,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/oversized-area.png.base64",
+      "sha256": "debd0f4193388d1b3baf9a705472d77cbeb7415ab965a81862ec12ead40bd1c0",
+      "bytes": 19545,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/oversized-edge.png.base64",
+      "sha256": "4514253278a63c6da380855968bcbb20085cacecdffd1453ab4cff95caf35ef8",
+      "bytes": 125,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/rotated.png.base64",
+      "sha256": "023b282a77e548eb197e96c8e4977eb9259dc2ce53431719841c065e734e23b4",
+      "bytes": 1605,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Fixtures/unicode.png.base64",
+      "sha256": "d6bbb3cd75fe888a01b0ecb639d7ed37435b8c0a85683e792f4f551dbcb27bea",
+      "bytes": 1597,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_alert_evidence.py",
+      "sha256": "6e88c3ebdf385bc169e74a3aefe620f2cbb33df8edcd754fa2b8f9312bf4258a",
+      "bytes": 2858,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_atomic_json.py",
+      "sha256": "73ab0b1124c82b2468f00b82910f7ebc766165b5934bd2054734658c3a867da8",
+      "bytes": 2650,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_camera_resume_contract.py",
+      "sha256": "79c2ac10f48d3355fa66528b0bb684bdccbce9880266a2249e471f475e394f1f",
+      "bytes": 6526,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_embedded_watch_gate.py",
+      "sha256": "4fe52594567a599d9e8427be41e0629ecf0ccc6f98752595cff891eb1f5568af",
+      "bytes": 6193,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_fixture_timeout_guard.py",
+      "sha256": "576eb666f0e3e612afc1fd40cb53d0f2360242cb3aa279dd5edc250fb842b0bf",
+      "bytes": 7505,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_import_audit_pair.py",
+      "sha256": "7964138ea6a614253fe63398bff0d13ecac69c7211828e2db01026fa31d9499f",
+      "bytes": 3769,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_ios_import_continuation.py",
+      "sha256": "704195bc50680060978cdd62d23a3f42dd7c961e5ef668cf263d4205e51f4180",
+      "bytes": 15306,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_ios_launcher.py",
+      "sha256": "750444aada4d10a22f758df26184c7e4f99480713c49032772e1ff293be137c9",
+      "bytes": 9068,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_ipad_share_readiness.py",
+      "sha256": "ca018fe2a32cb8f8ef1df2b0585efed96a2b464e432fd1373534a924f66de665",
+      "bytes": 16399,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_mac_evidence_export.py",
+      "sha256": "0837e96769ead76cdfb14ceaf743cc15704be4c46a2e8248e99a43ac5716c67d",
+      "bytes": 10696,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_mac_supporting_typography.py",
+      "sha256": "9cad6449121542e67c716b5777c0e93c471f301e7adb1a99c4fc23664fae286a",
+      "bytes": 8850,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_native_size_case.py",
+      "sha256": "9d607bbe0a0c57d464c2d0474811b40d4bfea08394e548afa2fdaa6150d6b909",
+      "bytes": 6500,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_owned_process_barrier.py",
+      "sha256": "fb4ca0f88989cbf7b39fd0cbbc9527aacc8235b3ccb0643d4b70b76985de6002",
+      "bytes": 9982,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_phone_files_readiness.py",
+      "sha256": "e1d39d00c4d0a930ef2afbc464363c2e289a14e8dcee69d18f3959a1d5024db5",
+      "bytes": 5481,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_platform_preflight.py",
+      "sha256": "612f0792006635cd8640a9fbfa88d152ffad509ae3580a993a980fed72d40cd3",
+      "bytes": 5496,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_required_reason_symbols.py",
+      "sha256": "30f619caf051479683b51b585662eb877c174741bd2ceff9201c9ffee895c6ce",
+      "bytes": 719,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_settings_discovery.py",
+      "sha256": "db4fc5c5f629f3bdada87bec0caeb66ddeec42c6a0eba23c0f3015c48d9cdd01",
+      "bytes": 10739,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_settings_discovery_fence.py",
+      "sha256": "7573c6457e86e5eb5d2f8b3eff995d6b81bf255412453e61b49a05675e8f1240",
+      "bytes": 19105,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_settings_integration.py",
+      "sha256": "9a51a894446244ed16f1d51c14659e399f47e9a79d48f4f8430e136f32dd1ad1",
+      "bytes": 19501,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_settings_navigation.py",
+      "sha256": "ff127caadeb61cdcb9434a6c8a5de5b28b0bb6c18275f1f59894937f5d14ec6e",
+      "bytes": 11446,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_simulator_content_size.py",
+      "sha256": "4eee53d979efae8ca7f7949fb285a847ede7d761af2c4e0d33e88ad704366940",
+      "bytes": 11067,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_tv_focus_contract.py",
+      "sha256": "c2270d11a5f72e2f999639ff38f5e8a317dd6916b7b788a0a37e8c325699c51d",
+      "bytes": 6208,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_bootstrap_fence.py",
+      "sha256": "6436794cad96b0b18b356473f1570fe8f742678ac1fd1086bed85873ab03fb01",
+      "bytes": 12645,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_capture_collector.py",
+      "sha256": "16f2b891b0b2110f3381d7aa1cb292fd04ffbda6d9a23c0676e20738186a5073",
+      "bytes": 11917,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_command_fence.py",
+      "sha256": "5f99bd0580eb5a0b4262d82cc606f927dd2c3961f8212cd59b90ad2e326854bc",
+      "bytes": 26866,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_failure_diagnostic.py",
+      "sha256": "9367931b25b583aa7ca11d12cfb004cc694c6ce53535d80c9475221b610aafbc",
+      "bytes": 11050,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_fresh_vm_contract.py",
+      "sha256": "f0c8ed8b1e293abfea609dfa212922fc82daf8921ff4d2cb96da8aec85a1093e",
+      "bytes": 20723,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_photos_readiness.py",
+      "sha256": "a94c86cf5ba64b9868fe893874cf78940bfb39652573c23bf83b7c9dfa34926c",
+      "bytes": 3329,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_runner_binding.py",
+      "sha256": "e79d0df2e3263f9410c33c8ec6ffab30e4c4f290f86899edd60537a1bc334383",
+      "bytes": 14451,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_targeted_privacy.py",
+      "sha256": "8a9b581b2fdcd9105202d6217bd15164f04ffe07d80add3f8b90f6508d8881e9",
+      "bytes": 11565,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_vision_ui_cases.py",
+      "sha256": "e0550d33d34ed6146c1e6d577746f3145d2f2d2ace4a507e2f45b64b890641e7",
+      "bytes": 6618,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_watch_process.py",
+      "sha256": "c24935fab8cc151c0cb0cd327e9f6df8b3f4decf6fe1d554396fdaa931197633",
+      "bytes": 5114,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Harness/test_watch_settings_scroll.py",
+      "sha256": "6b0256054c308539fe43d5bd109be800f0fe1a00f573ecfa59a6dbe3f15a2a69",
+      "bytes": 6261,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/PortableQR/evaluation-2026-10-03.json",
+      "sha256": "a466418cf7e4fdba27f340bb86d3992117f357ddb5f641740b0f1f57dfd9f851",
+      "bytes": 1786,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/PortableQR/generate_corpus.py",
+      "sha256": "1d19783dcbbba24e4971bcf7d950bf156017f5e8ed7ef4e5802888181a296445",
+      "bytes": 3188,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/PortableQR/harness.cpp",
+      "sha256": "65217d8ae60478e1d36099a0966cdde9c4099e5802b0d341cc7c180f1949ccb6",
+      "bytes": 1080,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/PortableQR/run_sanitizers.py",
+      "sha256": "eee1138a52fbb8230e24133b976f41552f3cf6e71aff39ad15e32b5d1cc92639",
+      "bytes": 3068,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Support/QRBoundedImportReadTests.swift",
+      "sha256": "7ef31f56f96df61baec24b09fcd024496bfbd4898c1ae37e8d70efdb098f5a25",
+      "bytes": 2543,
+      "mode": "100644"
+    },
+    {
+      "path": "Tests/Support/QRManagedStoreTestCase.swift",
+      "sha256": "c8fb97a7b03b71854e8118f2505d480c41726763a3936de70393e99e94a03790",
+      "bytes": 1658,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/Config/Version.h",
+      "sha256": "0b9398c5dadaa5fc04dc5f53e4cc4e345053e42bc3c6aaeba95e809cf5402414",
+      "bytes": 598,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/LICENSE",
+      "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
+      "bytes": 11358,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/README.md",
+      "sha256": "b62ce8e5e998f3a88290b466f16e6125ba5658c37fdd7608ceaf5d310b7fc2d9",
+      "bytes": 1180,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/ThirdPartyNotices.txt",
+      "sha256": "8ebb3cc247bf2677c38cd455b1141bd43ec50915c75e22757c752ee8187ea0b7",
+      "bytes": 14672,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/source-manifest.json",
+      "sha256": "59d9d69bbd18c2f897b36c3f2e72ad7f7f033e212e4a44873b66c314d6c25b69",
+      "bytes": 27635,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Barcode.cpp",
+      "sha256": "5889d8d5144f2036774a8e6a1c8c9f9b37c461ccf0e1bc1af6246e315af0e6d4",
+      "bytes": 6672,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Barcode.h",
+      "sha256": "8916a74f1aa8af164162080c770843b022d51f577af2744e309d9f358db8e103",
+      "bytes": 7513,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeData.h",
+      "sha256": "cf699d2efddc168be67cbc9eff0c149c2d0b485622b805902bae1f71ef40248d",
+      "bytes": 3132,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeFormat.cpp",
+      "sha256": "eb063fe97ffb46995b61613c864ff2cdb515ebfbbc40aad2c528fc59010c26eb",
+      "bytes": 7744,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BarcodeFormat.h",
+      "sha256": "24885f95c22b5828e948e99e97a9cee604cf69b5f73d3bf48630762c539ef647",
+      "bytes": 12165,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BinaryBitmap.cpp",
+      "sha256": "e767145caced3aa67ed2911dc69b3142e69b79a88d239eb56ad6ef0bae09ea43",
+      "bytes": 2975,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BinaryBitmap.h",
+      "sha256": "f5c47f0e7c2fe2e8d2256f4fc38d80e92c3ef017f9695f2192f0be6c71e4bb8d",
+      "bytes": 1446,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitArray.cpp",
+      "sha256": "0a850051db3b4a82d9db7a258cf3959675ff390779bdc6ea0b00f8cdc447951e",
+      "bytes": 888,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitArray.h",
+      "sha256": "20b139ddf6c5a19eb668042f50e719245294a1c3b51359fb50710915c0e0f6f7",
+      "bytes": 4594,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrix.cpp",
+      "sha256": "d009bac5522e5b82d36e54af5f6dc6fb2deb1845d0d6232740e20ceb824a707f",
+      "bytes": 4324,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrix.h",
+      "sha256": "efb519f41f3f045e39836887067f0a9bbe31a608ce40cb1efb00b0bee0dcf4c4",
+      "bytes": 5583,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixCursor.h",
+      "sha256": "c437866f1986eb631af8bf0b6349c2b1044f7b11bcdae5a8079045548682bfdc",
+      "bytes": 6541,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixIO.cpp",
+      "sha256": "1e4ad4333f4843386680958d345529391557cf8e02cf6f11f6c0f7fcb0ad27aa",
+      "bytes": 2713,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitMatrixIO.h",
+      "sha256": "bc6af4e9dd29f1da356c85da80351f26ef688b896f22bc8f7a1f67989dc80541",
+      "bytes": 623,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitSource.cpp",
+      "sha256": "4119652bdc7c33fb1d644f55663753ab83f33c0d0c7d66faa574414f7a97f797",
+      "bytes": 1753,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/BitSource.h",
+      "sha256": "966a8b8bc9d6d057ce151b72489fd493a0342fd803fa9d762ccab6a6c9b8622e",
+      "bytes": 1876,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ByteArray.h",
+      "sha256": "defb8570859b5059d6deb95bdb0f01ff406442d0b03d8a20784f2d6c727f3e51",
+      "bytes": 1075,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CharacterSet.cpp",
+      "sha256": "faf3682702be01cdcce8a881c7c1850a2fe1d670ffb843ac85be267919b0cba3",
+      "bytes": 2422,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CharacterSet.h",
+      "sha256": "bae98d565f072aed5ea3683e01473f400f056f2ec904d5dbff921008a5c04985",
+      "bytes": 685,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ConcentricFinder.cpp",
+      "sha256": "9fa1bd889ddb8c62171f1c60037b1dbf89fcbf008e79b03928b07ee97cc3e5c5",
+      "bytes": 11089,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ConcentricFinder.h",
+      "sha256": "8fe845c10f7d3975a883fef7a551247596beaf849e47fe79de594ca61557f642",
+      "bytes": 4618,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Content.cpp",
+      "sha256": "d4acd0734b7f9cb156ebe241542a2082dd8c9a9742ed4f284fb93fd16c62b8d8",
+      "bytes": 12975,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Content.h",
+      "sha256": "c57a1c91fa4411281737f85f97ca64250d0853c16046719b63f698de759e1bd1",
+      "bytes": 2145,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ContentType.h",
+      "sha256": "3810d441db8cafe44454a6f710553fbb43078c7a861aae3845b0f1154ca4653d",
+      "bytes": 373,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CreateBarcode.cpp",
+      "sha256": "bf05467eb6d58d69774875d36d813297f9b38af998b36a247575c191cc6dc5c6",
+      "bytes": 16317,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/CreateBarcode.h",
+      "sha256": "ba686c710324b2b03f042d340b46633cdd7bd37a0f52eb6ae811a7993c7cddd7",
+      "bytes": 3971,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/DecoderResult.h",
+      "sha256": "114abf6ebca9dd08977228f5226e0c8c8ed24d1739e4357aba79c58a73f2fc41",
+      "bytes": 3009,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/DetectorResult.h",
+      "sha256": "596243d0174cc0dd883b1165b60c58ca95dcb719f3f4698aceb4258111c9f3d6",
+      "bytes": 1168,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ECI.cpp",
+      "sha256": "c14487e66504a17874753e05371e8ff5f5241be4fdc96c20558bb669d81f9b00",
+      "bytes": 2406,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ECI.h",
+      "sha256": "9d3ef62a6d1ffb252802191253e117ba81f4b1e84a36215f7b271bae3c50e9aa",
+      "bytes": 1404,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Error.cpp",
+      "sha256": "8446e0b0544162d779758dc942566d0acfd7ed5b717066aa4b79c919a11395a4",
+      "bytes": 621,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Error.h",
+      "sha256": "946dd7acb4d71b632e9577337c2cdb1f656fe063640097ab743beff891bd064d",
+      "bytes": 3033,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Flags.h",
+      "sha256": "a6a6c3521a4d9cdeebc46ef9c8cd4a622a353439720473a1528abd0d8ca9a95b",
+      "bytes": 5262,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GTIN.cpp",
+      "sha256": "bacc84fc2eceadaa7d20205646b1cbffd79882450d38090944b7f1f53daac67e",
+      "bytes": 7815,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GTIN.h",
+      "sha256": "f5508d046247ced2a4fce30ffd00eb699ca1792ce3b59132c5e3b7ebd2b322ef",
+      "bytes": 1507,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GlobalHistogramBinarizer.cpp",
+      "sha256": "f92ec3aef8bc0970172b6ed620dad67e1ae660385e2bc7c03c4baedce8e1a46b",
+      "bytes": 6349,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GlobalHistogramBinarizer.h",
+      "sha256": "2bd8becc4349d458a609cc8b5ffe6cf89b3def4fa2ad430b3eedae04453c0cc3",
+      "bytes": 966,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GridSampler.cpp",
+      "sha256": "184d09ed1eb591479a723c5a07ad6f0fd9086bbade298218b546b78c38997dda",
+      "bytes": 4188,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/GridSampler.h",
+      "sha256": "9de93e81ba9ca81fee1bc9611fbbcb1e1f3cff00a75df9d08eca1fa78c62f053",
+      "bytes": 1793,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HRI.cpp",
+      "sha256": "cd9a8647c0f10bfee609d84bad0b5314c1d5d8528f148bd158f73cea96766a10",
+      "bytes": 6565,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HRI.h",
+      "sha256": "ebcf247d44cb7606f826fc1d84119e8c1017e88dca756e4b17c89825a4925ddc",
+      "bytes": 278,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HybridBinarizer.cpp",
+      "sha256": "fc626a1b201e6b6438fcd6e6d436098dfac32c8317345eee0b95dc64b65ef228",
+      "bytes": 10665,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/HybridBinarizer.h",
+      "sha256": "3c96c7f700b4298487e5ac62953b0b0f3d3c3a20feb43bd47df7cdf05b252e27",
+      "bytes": 1486,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ImageView.h",
+      "sha256": "b5c63ad64174bb5175283bccd31eea691fadf3cd3ebe76e414a28555236b875c",
+      "bytes": 6039,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/JSON.cpp",
+      "sha256": "658cdf0c2c7bc66239ebf559b8b3c0cecd6d11b3f13fb4375c221e82a06f7abf",
+      "bytes": 4138,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/JSON.h",
+      "sha256": "41b6d77465eccc85f109eb676e1cb641854d9ad22bf51aa47fa86c50e8578871",
+      "bytes": 2181,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LocalGrid.cpp",
+      "sha256": "88ccba00ee5d11873e015497ccb9bc76d720473507951e8d2d9799f0f8b5ab77",
+      "bytes": 8198,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LocalGrid.h",
+      "sha256": "32167127e7ca21baa8ca8bb3f83fa390820ce1c5f60081c6cf790c9ce292417d",
+      "bytes": 3577,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/LogMatrix.h",
+      "sha256": "478a23dcde69077755e074202bcbef63badc11bb12621c46fdf3edb080cbd6a6",
+      "bytes": 2269,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Matrix.h",
+      "sha256": "41dd7ef04072476fefecc2e1c9a855190254e4f53adbd19c26daa14c52909933",
+      "bytes": 2370,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatReader.cpp",
+      "sha256": "207b7287dcfaecd47ff13fd657e728e633a22c3942b171f6843caadaa027e879",
+      "bytes": 2691,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatReader.h",
+      "sha256": "a0496ff7583dabdc6297739f52e87ce328f444a0330eeac2be392043a6acd4dc",
+      "bytes": 603,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/MultiFormatWriter.h",
+      "sha256": "3654ca27a75a9246f1852e06c5b191f14ede5d670b348c34e86df40f4e2b392f",
+      "bytes": 1358,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Pattern.h",
+      "sha256": "3fcdec686ff17123cbbb45237415f60922329807ba94ebfb681e1dc90fa14764",
+      "bytes": 13625,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/PerspectiveTransform.cpp",
+      "sha256": "9118262c97b28acd038643b58e457c98ec297c3f29e7dec7bca88b780f87f098",
+      "bytes": 2305,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/PerspectiveTransform.h",
+      "sha256": "2246fbbc55e505e580c75518ec40b89e76efb68e5101f3b87a49b998ffc02f12",
+      "bytes": 1434,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Point.h",
+      "sha256": "2c943cade7cde38d9a74505657f92deda4fe04d4cb43eb29daacad9576c49ab2",
+      "bytes": 3654,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Quadrilateral.h",
+      "sha256": "6b91915c958a12adb5a53722ebd3efd45556a011198a98672d6c407e6d6a8fc5",
+      "bytes": 6636,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Range.h",
+      "sha256": "736b2b85c608ce76e8c11ade6cbc543d0feeceb50be98789f292ad1a7430a409",
+      "bytes": 3682,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReadBarcode.cpp",
+      "sha256": "3ebcb0d930512323dd9558653346d267c869c2acd255d922384529e6b9b852b6",
+      "bytes": 11710,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReadBarcode.h",
+      "sha256": "6462e3bf5bd5925ec0d8f12b0273330f1507dfa6fb0b92c505663f0e33039cd9",
+      "bytes": 906,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Reader.h",
+      "sha256": "802958bd4cf16896e11927ecb0b2961f6bb9a0de28c74c2489d6fc1808ca0980",
+      "bytes": 638,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReaderOptions.h",
+      "sha256": "b02f422ace401fcde9ffaabf4aefdc9532b7b61a846cc92705e55a89431d609e",
+      "bytes": 9141,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReedSolomon.cpp",
+      "sha256": "0b2272203b71da553ea0c41d665c90f475fae01f9a9d642e893d345d4d27f05e",
+      "bytes": 3004,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ReedSolomon.h",
+      "sha256": "7e928326110c484bb932ee2e807f0d3857ce13559f270cb49edc9f2a2177dc1e",
+      "bytes": 2042,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/RegressionLine.h",
+      "sha256": "83831678f2147a9fdbb98047aec668cb4db58c100645178dce16824f0f5cf399",
+      "bytes": 4607,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ResultPoint.cpp",
+      "sha256": "e5438cf75727f5668044daefae5af9752de647c6de88858a6691a3a7dae31a26",
+      "bytes": 364,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ResultPoint.h",
+      "sha256": "c9b2aa66d849fe3aadc275eee8c0d76b3b7a0d20cf8e34b8a7b7dc544262cb67",
+      "bytes": 841,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdGenerator.h",
+      "sha256": "34c8d5d71ff9ff48916b7a633a567141b453227e5ef2d0779bd093182c9deb2d",
+      "bytes": 2240,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdPrint.h",
+      "sha256": "f7bfc4ffbe0d59c2679fc4aad512ecf8142aaa8f0acc60a8cdd4a791ac456003",
+      "bytes": 675,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StdScope.h",
+      "sha256": "7529fc93b4d3881ade4b86921bbe8d1495ddd327072bee10e68664b33d5832bd",
+      "bytes": 1273,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/StructuredAppend.h",
+      "sha256": "01eb512c3eeca00f7538455fc51e27c0c60794fc071e155b395d27d4195bbc2f",
+      "bytes": 230,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/SymbologyIdentifier.h",
+      "sha256": "15b8a924ae3e5daa8d1302582f84c93ca2c6669c36874d3c3f384d792c0edc76",
+      "bytes": 618,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextDecoder.cpp",
+      "sha256": "b4b001cb334ce93d4cc18b063002d32cfe3aba9be22ca6f3943c89949aea6547",
+      "bytes": 1376,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextDecoder.h",
+      "sha256": "cfd64c09e600dda8ba345e21b9593723e719a66461425051234f5d5c507ac7fa",
+      "bytes": 367,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TextEncoder.h",
+      "sha256": "774cef2fead5bd07e9738910bf008884974767462ee2cec632ba0fc53c9b5ccb",
+      "bytes": 660,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ThresholdBinarizer.h",
+      "sha256": "253e0e3c04e1110a61cc9115b022ce75b8f9d50e8431be7846f4ba464d773d94",
+      "bytes": 1357,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/TritMatrix.h",
+      "sha256": "147dae578b479c1e3da563d3f37af501b2579843121c5e774320ecce943ac41e",
+      "bytes": 528,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Utf.cpp",
+      "sha256": "4fec257e836269803c38a2dffc5dc81b1f00e82d6edec51b4f00d089a4cf1941",
+      "bytes": 7681,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/Utf.h",
+      "sha256": "90c83f8ae0f93ccd6289808f77e081140e2923ff9868e239f8e5933781594306",
+      "bytes": 515,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WhiteRectDetector.cpp",
+      "sha256": "598b57de7dff4598948330878c074bcefdace3b4c71fdaab5c99a0de5a0909f3",
+      "bytes": 6798,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WhiteRectDetector.h",
+      "sha256": "aa65ad3939e03074d3bc0c0ef6d98bfb1af093248010c292534768178075d820",
+      "bytes": 1264,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WriteBarcode.cpp",
+      "sha256": "1e820cbdd08306ad1892ff49b1d0dfc8b926638157be288f0bd50b007bbeabb6",
+      "bytes": 6401,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/WriteBarcode.h",
+      "sha256": "8e6716da9d72a342f84c386dfd560d696c8a807bf6b8dc2ea358561e0ee640ab",
+      "bytes": 1869,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXAlgorithms.h",
+      "sha256": "b87f474b65d9e2008ca05a8d5c15fbbf6bf2a31337161df565493407652f41a9",
+      "bytes": 9613,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXConfig.h",
+      "sha256": "bac5941a128fc4fb0d5d656860019cae2f20bf279de232a380bf8889e56e3539",
+      "bytes": 1011,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXTestSupport.h",
+      "sha256": "94490d6d447733bc05a07ec58e75cc5624dccf85845d528ba83caf98455178ba",
+      "bytes": 184,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXVersion.h",
+      "sha256": "3fe35610e086da8c85d7bc4271e9d3eca3999e29f7f0cb849c11905aafab2f49",
+      "bytes": 323,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingC.h",
+      "sha256": "921c43e4df2d20a43dbf055a82fcb06ff24b0e8df59a0e04b22967c2c880b0cd",
+      "bytes": 11401,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingCpp.cpp",
+      "sha256": "d76c6373b73f81a4fa031d308a8b64c0ea6950f396df350b580afcaabbe64529",
+      "bytes": 259,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingCpp.h",
+      "sha256": "2904fca89efda71d4e67f3ba6b60162f236cb8a2ed33453957b3272a0114e6b9",
+      "bytes": 2117,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/ZXingQt.h",
+      "sha256": "6fdf0cf1dda0a0782dda3c791a16e02fe46b97d6b810088824c73dd40433109b",
+      "bytes": 18994,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/decode.h",
+      "sha256": "fe31fbb1d5acef3e38096f4cc5b11450f7e097ededc8e93a6579437ec2112552",
+      "bytes": 9030,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/encode.h",
+      "sha256": "d12183522c02d24e5bf15f889d0f6a6c01241eb8b2108720919a25e2df858e55",
+      "bytes": 4381,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/field.h",
+      "sha256": "c54b47efb4b1a1d382489aa671db51187dc2af6d1d59d79fa49152a1e02988f7",
+      "bytes": 5050,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/librscpp/poly.h",
+      "sha256": "2a06bb4da7ef5183232322d3f5d4db91c7287661f54e8087c4a11a8c67cde6b2",
+      "bytes": 5371,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci.c",
+      "sha256": "55871f5d8f1fedf2422912515f01223b404833bcd9c7cbaedfd890fc05aedd12",
+      "bytes": 56583,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci.h",
+      "sha256": "1239d7c775caf1b2ad707633d7908fcfdb5b4ddeb2ad83e48ebed27154733cfd",
+      "bytes": 7758,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_big5.h",
+      "sha256": "08d2a1473479a5984427b22b64008167c9444433e7b07d0a709088fad1c221ac",
+      "bytes": 261105,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_common.h",
+      "sha256": "9c386b54cef02a9e8ab22c464ec75f0b9e9c453ac1c5184a8f2de1afb8c24924",
+      "bytes": 1037,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gb18030.h",
+      "sha256": "aefe7ea3579280e86917e6cd739de4928d5f0f20df87b91739620417f0be6795",
+      "bytes": 16519,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gb2312.h",
+      "sha256": "552d8c7233a9c07d364ff26605ab83ae368ffa944316ff21d7ff544bf13c261d",
+      "bytes": 158530,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_gbk.h",
+      "sha256": "287ec92bc9ee140ea373c33147a179dd95cc8f51def276ba02b74e68a1aa564e",
+      "bytes": 271655,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_ksx1001.h",
+      "sha256": "459a61917026b003d08506a56a5f04213c79932991a8d4fb3db6c551e7e53c76",
+      "bytes": 195926,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_sb.h",
+      "sha256": "44c9a6dfaf49acf37386d05b372f238d682771b1bc9579f1bce0611ac3e79cde",
+      "bytes": 57278,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/libzueci/zueci_sjis.h",
+      "sha256": "2fe418441588c051b51f04accce7d88188c7376bbaaadea92493741dfd2ff6e7",
+      "bytes": 152478,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRBitMatrixParser.cpp",
+      "sha256": "468e8cce0b15d07b8cc2c65b256f1baee48051e5c603693093d8a18318bf0132",
+      "bytes": 10072,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRBitMatrixParser.h",
+      "sha256": "222e74a44490b5c9dc6408ded0a94a8b3725edc6d68fd6bf3b66204300ab37ab",
+      "bytes": 1174,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRCodecMode.cpp",
+      "sha256": "408d36a267e47acc6a118b4531ee65aac769c5bc9fb186473d30f1da18785124",
+      "bytes": 3197,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRCodecMode.h",
+      "sha256": "b3c27148ff4391f092b16d2e6754e980bdbeda9a328b24340005efeab0c2363d",
+      "bytes": 1652,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataBlock.cpp",
+      "sha256": "08842f9055653fcfbacd8dab4a9e23fef00389d3721ac357b83522824d9a9ca8",
+      "bytes": 3251,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataBlock.h",
+      "sha256": "9fbaa644ae7d43af2dd17a2b640c0998615eff32bc12e0974eeeb83c5abdb42b",
+      "bytes": 1434,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDataMask.h",
+      "sha256": "c21108e571113373894a64fa82b77871c9d7c65fd552f44204ac4f6cd35a23db",
+      "bytes": 1392,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDecoder.cpp",
+      "sha256": "cfad57b89f75bcfa7ccfcd3a1712a63575c9f5d949964dde9de8401862633960",
+      "bytes": 11996,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDecoder.h",
+      "sha256": "041d2fcad9f07e1b27e90c8d1f6f35112cbdaa940c874ddddf8ba0172d482b42",
+      "bytes": 268,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDetector.cpp",
+      "sha256": "9c88563c8cf831cdef8006e86eaa71c098b051f1e9ce30961c8e517812f3813e",
+      "bytes": 33618,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRDetector.h",
+      "sha256": "bfef855fb2aee3cbdfbc7b4e2adef1dff2719017892cb5469035a95ebea4286d",
+      "bytes": 1142,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRECB.h",
+      "sha256": "82d1ce15c3f9b54640b2136c9a0954cdd14097acd9455a28270a312ba6e7cf52",
+      "bytes": 1361,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRErrorCorrectionLevel.cpp",
+      "sha256": "4b41ba643e3b341f020273242d57946c3138a54c5a7f18f84905dde9f264d207",
+      "bytes": 1550,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRErrorCorrectionLevel.h",
+      "sha256": "25e76c47e9894f37ea76a2a68303d6479534b83253b1d1c5505e6ca13c447ff3",
+      "bytes": 823,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRFormatInformation.cpp",
+      "sha256": "ec2f2047b1356a6585607d63a97c9031bbf2a02640ac20c193f852f59f3b345e",
+      "bytes": 6665,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRFormatInformation.h",
+      "sha256": "0684b3f2fcce8f4e3046f104460f7b66b292e64d1f368ef4e02af10e182d794e",
+      "bytes": 1801,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRReader.cpp",
+      "sha256": "fd546ef3f46d218e8010846d755b914f6ff47fd8cb6bb3285b870581f3930045",
+      "bytes": 4512,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRReader.h",
+      "sha256": "e269f370978ca123bc75fb1138efc5ec653292c2dd0367f4a3595303f85529a8",
+      "bytes": 357,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRVersion.cpp",
+      "sha256": "91db28908925a96ea3286d9cb2d5b7f722cc4efc34604ca35f92f9fef0cc20aa",
+      "bytes": 17345,
+      "mode": "100644"
+    },
+    {
+      "path": "ThirdParty/ZXingCpp/src/qrcode/QRVersion.h",
+      "sha256": "db72389749ddfb43caa089595831e19718d61c12990e0399e76dcb1a17fb83ae",
+      "bytes": 4009,
+      "mode": "100644"
+    },
+    {
+      "path": "docs/NATIVE_APPLE_PLATFORMS.md",
+      "sha256": "485201a2cc3b8c6d90841d7d477934d400a44505b534fd7380a2b08cc569e752",
+      "bytes": 37595,
+      "mode": "100644"
+    },
+    {
+      "path": "docs/RELEASE_READINESS.md",
+      "sha256": "0a17f29c889468b86cbd24d6a706ae27c7a0b45f6d3f725585c6a527ec50d4f3",
+      "bytes": 13519,
+      "mode": "100644"
+    },
+    {
+      "path": "docs/VISION_FRESH_VM_CASES.md",
+      "sha256": "340aae9b5fb2f741494e242ef36a6aa642b7db2216eb75469bfdcfed51f67918",
+      "bytes": 4023,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/atomic_json.py",
+      "sha256": "748f5cb832ef41a6a0027be8c797b6d2484e4b80a7759df104307cbe06f7e0fb",
+      "bytes": 826,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/capture_vision_checkpoints.py",
+      "sha256": "e8a8de939a12d9790373419f74efb86389f83d434ad2294f01fc043bb51c59c3",
+      "bytes": 8361,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/collect_watch_startup_diagnostics.py",
+      "sha256": "112ab084aad74bacf31a873c8e197a6fffdb8f1ed9136edc84f6b531d7e9be46",
+      "bytes": 3052,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/compile_platform_preflight.py",
+      "sha256": "4e8f71e1c1ec2833d1cb022d2c051782d388d0b3ff5ac1873ca6ca5411aead46",
+      "bytes": 2873,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/discover_native_settings.py",
+      "sha256": "26724498a53b5ebd4c18b2699fc2cda13bca8f707dd5bc7faaaa0051511ffe7f",
+      "bytes": 21789,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/evidence-allocation.json",
+      "sha256": "208e38ed01bfecb0d0ee56bc1ec75ebebd8b03bca318491be8481587ebcb999a",
+      "bytes": 421,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/export_ios_platform_screenshots.py",
+      "sha256": "610522a9b773cb099b255e837891b59599870b52c176df4f9e3d68f1cf4fc6e0",
+      "bytes": 21105,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/export_mac_screenshots.py",
+      "sha256": "a50212ad6e43cf931e8410bf707c455d90e5a754016e4f889365ea883879c737",
+      "bytes": 14103,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/export_settings_discovery.py",
+      "sha256": "26a24cbe29fae93d730cd0e20fa57385b206e6cb34f31cc013f7013b84e5f3f6",
+      "bytes": 7007,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/export_test_screenshots.py",
+      "sha256": "d70741afd08785e360dd484341bae7cb815bb3bfd89a65e289efc003ddb9625b",
+      "bytes": 2370,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/export_vision_case_evidence.py",
+      "sha256": "ebc529b19e4795aac65059fae6865c97d8e5c638e72ca828068df9d741a3005a",
+      "bytes": 18712,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/fixture_query_guard.py",
+      "sha256": "a574f59ca465d2a231cf0cf52f4e7207e5440fd8fba5d2fbd7804fbd0a882dfc",
+      "bytes": 3159,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/fixtures/vision-archive-inputs.json",
+      "sha256": "e72f2307636b5431bb989eab1f4c07c227c74dbc48908b39840636de299c38c9",
+      "bytes": 7986,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/generate_project.py",
+      "sha256": "de97759eb097057ec9310ddd080a253b370015526c98a5a91a4476955213f1e1",
+      "bytes": 29816,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/generate_qr_fixtures.py",
+      "sha256": "279d1f8d32870ad5c350dd9f60dfe888f4b567fa57d804cb54ea65d1dd80b36d",
+      "bytes": 1552,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/inspect_watch_cpp_compat.py",
+      "sha256": "7e76a96a2ecddeea67957a1b27b07b86b3ef217a0900a371a97025d7ff7d7b6b",
+      "bytes": 2725,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/ios_import_continuation.py",
+      "sha256": "4cf8b4ef22ab574cf735995f16b87099b2cd4626de4633ffdfe037488b617c5c",
+      "bytes": 10636,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/launch_optional_simulator.py",
+      "sha256": "c4074cd39b88ebabad56da471f5ca17592fbe3b3a79b96baca713a9c68fe5f10",
+      "bytes": 2241,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/materialize_ipad_icons.py",
+      "sha256": "dbc111bd7b150a3ae9716c00b3eaf7be807d6b0e99857c51d5194f03e117cdd2",
+      "bytes": 796,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/materialize_mac_icons.py",
+      "sha256": "3db348e592b55328336eb82e87069daf18c062ca7167acfd6fa191e66c3b3f64",
+      "bytes": 1102,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/materialize_native_icons.swift",
+      "sha256": "431fc1225f49fdb37ef63f9f510475d460d29dbcd115414b7164c6b5c8446872",
+      "bytes": 2824,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/materialize_qr_fixtures.py",
+      "sha256": "da154b7bd83186849c08d5932af45d2b066fb4212a27ae62e0cbc1171fc09d51",
+      "bytes": 399,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/owned_process_barrier.py",
+      "sha256": "d423843b21a4721005609e0ab12a3272807cfd9d400b01c3cc01d34551768d98",
+      "bytes": 3269,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/owned_process_group.py",
+      "sha256": "eb406d2fe4c928d6438875761d596e3415ab9330593fd1b5a678ae6f99cb535e",
+      "bytes": 1099,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/prepare_sandbox_boundary.swift",
+      "sha256": "b502e8c231352b5fa5e96f25818369d623c09359b6093129aadaaf4b9849e0fc",
+      "bytes": 1459,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/required_reason_symbols.py",
+      "sha256": "ac932750382d01fdebf59b43bfdaf368105049c97c1f9eb1ce4059f01017f4e4",
+      "bytes": 1064,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_bounded.py",
+      "sha256": "6f766ede451cda68e369386ce35c8e3b1ee0adc2c2b7063bcf0b196d2b1fd8c8",
+      "bytes": 715,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_ios_platform_ui.sh",
+      "sha256": "c39047fa5a26a101422f11ec954b2a30073e40937cf2c37018175890cf5df7e6",
+      "bytes": 6337,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_mac_sandbox.sh",
+      "sha256": "79468a33261c598b17f147c4812c32e7664852bd13cb720385632814356d412e",
+      "bytes": 3310,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_native_size_case.py",
+      "sha256": "4a29a153e4e2612d5c3cf0facd4a2d9f5defcd1c4a3080e22cb64587d16b64c8",
+      "bytes": 5624,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_settings_discovery_fenced.py",
+      "sha256": "b7d77a39049ae78375d95b4aa60688a32b71f5bdd4703cedb2442638b81fe32f",
+      "bytes": 1091,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_settings_discovery_fenced.sh",
+      "sha256": "92ef4352de87ed50c3404498fb6ee10d1056fa408cbe042a8175438faab6877c",
+      "bytes": 2400,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_tv_platform_tests.sh",
+      "sha256": "f3203857ddbeb08b716217871a332dce693c0721f5577342a7ed7f71301d5063",
+      "bytes": 4959,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_vision_fenced_command.py",
+      "sha256": "203e6ea7f9cb7c6fc1ae0482fdf1bd2c89b134dc95570b0af55d81a92f21a57d",
+      "bytes": 4264,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_vision_ui_cases.py",
+      "sha256": "626efb89d32d9e3afa0d55e966dbabea35514e9fb1b3713eee81ac922c5b9129",
+      "bytes": 6312,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/run_watch_platform_tests.py",
+      "sha256": "8536bb8025d79fab31c95c057c0fa2f31a78191c60b382fc94f0627e5ca218b8",
+      "bytes": 7551,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/select_ios_platform_matrix.py",
+      "sha256": "950f7f4d3171a980fcdb2de4e6229c530088c0ed0b86a40aaf3ef4e3ec777dd2",
+      "bytes": 1436,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/settings_build_provenance.py",
+      "sha256": "1c6d4c0eabe566c5d9d83cc8197e12bb5fe330da2cb901bd1a3a8a6a1645950d",
+      "bytes": 8421,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/settings_discovery_fence.py",
+      "sha256": "97b4683242e3da525fa54f7d3e45c3f1ce9ff4b89fe0b14d1772ffb6f453f73a",
+      "bytes": 14422,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/simulator_content_size.py",
+      "sha256": "8c475c2e96b13d548bb660e8a1ed0f4b4c71fc11054c81e46819cb707aebda1d",
+      "bytes": 11524,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/stage_owned_import_fixture.py",
+      "sha256": "44d6f5b937b367b7490b1b7a0cec5befd96d3bf6f6b868f5fa5134784fa02564",
+      "bytes": 1903,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/summarize_vision_runtime_crash.py",
+      "sha256": "288505405e117d3fc34033a536b5d303c6304fd71a506b099f6ab628e9c6654f",
+      "bytes": 1691,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/test_vision_unsigned_archive.py",
+      "sha256": "2865b2e258ff219abff88a6d3a17d6a7994f3d4b22c8b5c84ffd8064e4732b79",
+      "bytes": 36577,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/validate_evidence_budget.py",
+      "sha256": "2cc09c7cb570ac4501bc3694a33c9b302c70b17075f6b1c74b2fc3fa61c0b898",
+      "bytes": 3838,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_embedded_watch.py",
+      "sha256": "88197cbd7dff8ed1c765bdae512cbe21314502b08125a4e8b9f4803c9cc548ee",
+      "bytes": 5817,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_mac_icon.swift",
+      "sha256": "3b7b6e9cba4f7af79af27b69fe588355680bef24d72d1901ae208486ff72d456",
+      "bytes": 1775,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_mac_release.py",
+      "sha256": "b11c3127cc676034c6aed56e222065ca8b075ff70b9ff93e5c5727eabd0c378e",
+      "bytes": 1906,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_native_release.py",
+      "sha256": "b8d2f057810b3f04922648699e421f4fc921054716cdcd786d8f00513eb864a7",
+      "bytes": 5624,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_portable_source.py",
+      "sha256": "ea924f64eb312907d368823313f3107915d57e37695e07b262702b5c3b544e84",
+      "bytes": 1379,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/verify_vision_export_pixels.swift",
+      "sha256": "b38042e4fc30cbd763fd1076e3a1625badcef126a6f779ce804da9a4df61aaf6",
+      "bytes": 1160,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_archive_capture.py",
+      "sha256": "332753c5f442d645fb554a7a8ac767ae48e5583a5786a633474ee3cff0e6e2a0",
+      "bytes": 5290,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_archive_macho.py",
+      "sha256": "39dd800ee992c4c5f91732005671b51962aa613b97d365039fa365e132cdb2e3",
+      "bytes": 4892,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_failure_diagnostic.py",
+      "sha256": "4e137246525d890de93428ef3a3f360823e7cde4741ea2ca4e1be714597d0729",
+      "bytes": 10915,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_runner_binding.py",
+      "sha256": "d5d4bc53faa82a486bd169acb3c00ed0767914d023aa1c83ecab368507a273fe",
+      "bytes": 10429,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_targeted_job.py",
+      "sha256": "0789c8d4b74de42a0619bd3f9c00da4e12614601751954a70ee06190817947b3",
+      "bytes": 24342,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_targeted_source_inputs.json",
+      "sha256": "27f21045d3ec67b962f82b2c207d7876ea14e58731ff529f68f7f7198841e717",
+      "bytes": 83821,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/vision_unsigned_archive.py",
+      "sha256": "cd199feebefe23b684089dc1632d50358ae3ce4b207143f7564f0bbb2b00d548",
+      "bytes": 42338,
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/watch_process.py",
+      "sha256": "607cabe0a86031e1e895422ae16c85c59efd4cee14171feef2a11509844f79a3",
+      "bytes": 2538,
+      "mode": "100644"
+    }
+  ]
+}

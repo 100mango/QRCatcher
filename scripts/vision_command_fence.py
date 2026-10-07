@@ -43,7 +43,7 @@ class VisionCommandFence:
             raise ValueError('Unexpected repository')
         source, scope = (os.environ[key] for key in ['GITHUB_SHA', 'EVIDENCE_SCOPE'])
         device = None if action == 'inventory' else os.environ['VISION_SIMULATOR_ID']
-        if not re.fullmatch('[0-9a-f]{40}', source) or (action != 'inventory' and str(uuid.UUID(device)).upper() != device) or scope not in {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest', 'visionos_privacy'}:
+        if not re.fullmatch('[0-9a-f]{40}', source) or (action != 'inventory' and str(uuid.UUID(device)).upper() != device) or scope not in {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest', 'visionos_privacy', 'visionos_store'}:
             raise ValueError('Unexpected source/device/scope')
         self.expected = {'version': 1, 'source': source, 'device': device, 'scope': scope,
                          'action': action, 'owner_pid': os.getppid(), 'nonce': nonce}
