@@ -5,7 +5,7 @@ set -euo pipefail
 ACTION="${1:-}"
 printf 'VISION_FENCE_SHELL_ENTRY action=%s shell_elapsed_seconds=%s\n' "$ACTION" "$SECONDS"
 case "$ACTION" in install|shutdown) ;; *) exit 2 ;; esac
-case "${EVIDENCE_SCOPE:-}" in visionos_photos|visionos_files|visionos_chinese|visionos_largest) ;; *) exit 2 ;; esac
+case "${EVIDENCE_SCOPE:-}" in visionos_photos|visionos_files|visionos_chinese|visionos_largest|visionos_privacy) ;; *) exit 2 ;; esac
 [[ "${GITHUB_REPOSITORY:-}" == '100mango/QRCatcher' ]]
 [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]]
 [[ "${VISION_SIMULATOR_ID:-}" =~ ^[A-F0-9-]{36}$ ]]

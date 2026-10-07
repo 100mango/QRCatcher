@@ -11,7 +11,7 @@ from owned_process_barrier import blocked, mark_unconfirmed
 from vision_command_fence import VisionCommandFence, NAME
 from watch_process import execute
 
-SCOPES = {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest'}
+SCOPES = {'visionos_photos', 'visionos_files', 'visionos_chinese', 'visionos_largest', 'visionos_privacy'}
 ALREADY_BOOTED = ('An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):\n'
                   'Unable to boot device in current state: Booted')
 

@@ -6,10 +6,11 @@ simctl get_app_container; no accessibility/TCC/database mutation is involved.
 import hashlib,json,os,plistlib,re,subprocess,sys,time,uuid
 from pathlib import Path
 from atomic_json import write_json
-from owned_process_barrier import blocked
+from owned_process_barrier import blocked, mark_unconfirmed
 from vision_runner_binding import RunnerBinding, exact_uuid
 from vision_case_contract import select_case
 from vision_failure_diagnostic import FailureDiagnostic
+
 udid,log,scope=sys.argv[1:];log=Path(log);out=Path('build/vision-runtime');out.mkdir(parents=True,exist_ok=True)
 case=select_case(scope)
 runner=Path('build/VisionTests/Build/Products/Debug-xrsimulator/QRCatcherVisionUITests-Runner.app/Info.plist')
@@ -61,8 +62,12 @@ while time.monotonic()<deadline:
      # reopen a potentially replaced path in the simulator container.
      staged=out/(request_id+'.export.png')
      with staged.open('xb') as stream:stream.write(saved_bytes)
-     if blocked():raise RuntimeError('Owned cleanup barrier forbids export verification command')
-     subprocess.run(['xcrun','swift','scripts/verify_vision_export_pixels.swift',str(staged)],check=True,timeout=30)
+     try:
+      if blocked():raise RuntimeError('Owned cleanup barrier forbids export verification command')
+      subprocess.run(['xcrun','swift','scripts/verify_vision_export_pixels.swift',str(staged)],check=True,timeout=30)
+     except subprocess.TimeoutExpired:
+      mark_unconfirmed({'state':'vision_export_verifier_uncertain','exit':124,'cleanup_confirmed':False})
+      raise
     else:
      history=json.loads(saved_bytes)
      if not isinstance(history,dict) or history.get('format')!='QRCatcher.history' or type(history.get('version')) is not int or history['version']!=1:
@@ -83,11 +88,20 @@ while time.monotonic()<deadline:
     if blocked():raise RuntimeError('Owned cleanup barrier forbids screenshot command')
     result=subprocess.run(['xcrun','simctl','io',udid,'screenshot',str(raw)],capture_output=True,text=True,timeout=20)
     row['screenshot_exit']=result.returncode;row['message']=(result.stdout+result.stderr)[-1600:]
+    if result.returncode in (124,125,126):
+     mark_unconfirmed({'state':'vision_capture_command_uncertain','exit':result.returncode,'cleanup_confirmed':False})
+    if result.returncode!=0:raise RuntimeError('Public simulator screenshot failed before conversion')
    except subprocess.TimeoutExpired:
     row['screenshot_exit']=124;row['error']='Public simctl screenshot timed out after 20 seconds'
+    mark_unconfirmed({'state':'vision_capture_command_uncertain','exit':124,'cleanup_confirmed':False})
+    raise
    assert raw.exists() and not raw.is_symlink() and 0<raw.stat().st_size<=32*1024*1024,'No bounded screenshot file was produced'
-   if blocked():raise RuntimeError('Owned cleanup barrier forbids image conversion command')
-   subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','50','-Z','1440',str(raw),'--out',str(jpeg)],check=True,capture_output=True,timeout=12)
+   try:
+    if blocked():raise RuntimeError('Owned cleanup barrier forbids image conversion command')
+    subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','50','-Z','1440',str(raw),'--out',str(jpeg)],check=True,capture_output=True,timeout=12)
+   except subprocess.TimeoutExpired:
+    mark_unconfirmed({'state':'vision_capture_conversion_uncertain','exit':124,'cleanup_confirmed':False})
+    raise
    data=jpeg.read_bytes()
    if len(data)>800*1024:jpeg.unlink();raise ValueError('Checkpoint image exceeded per-file evidence cap')
    row.update(success=row['screenshot_exit']==0,pixels_retained=True,file=jpeg.name,bytes=len(data),sha256=hashlib.sha256(data).hexdigest())

@@ -28,7 +28,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         // failed prerequisite throws and cannot enter an unbound workflow.
         try await bindCaptureRunner()
         app = XCUIApplication()
-        let chinese = name.contains("testChineseEmptyPhotosResultAndOfflinePolicy")
+        let chinese = name.contains("testChineseEmptyPhotosResultAndOfflinePolicy") || name.contains("testChineseOfflinePolicyEndingAndReturn")
         app.launchArguments = chinese ? ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"] : ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         captureStoreName = UUID().uuidString
         app.launchEnvironment["QRCATCHER_TEST_STORE_NAME"] = captureStoreName
@@ -63,7 +63,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         let id = UUID().uuidString
         let runner = try XCTUnwrap(Bundle.main.bundleIdentifier)
         let pid = Int(ProcessInfo.processInfo.processIdentifier)
-        let methods = ["testRealPhotosImportCopyAndReopen", "testRealFilesImportAndReopen", "testChineseEmptyPhotosResultAndOfflinePolicy"]
+        let methods = ["testRealPhotosImportCopyAndReopen", "testRealFilesImportAndReopen", "testChineseEmptyPhotosResultAndOfflinePolicy", "testChineseOfflinePolicyEndingAndReturn"]
         // Bind the actual XCTest identity, rather than inferring a case from
         // an arbitrary substring or silently selecting a default workflow.
         let actualMethod = try XCTUnwrap(methods.first { method in
@@ -95,7 +95,8 @@ final class QRCatcherVisionUITests: XCTestCase {
             "visionos_photos": ["testRealPhotosImportCopyAndReopen", "VisionPhotosUIResults.xcresult"],
             "visionos_files": ["testRealFilesImportAndReopen", "VisionFilesUIResults.xcresult"],
             "visionos_chinese": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionChineseUIResults.xcresult"],
-            "visionos_largest": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionLargestUIResults.xcresult"]
+            "visionos_largest": ["testChineseEmptyPhotosResultAndOfflinePolicy", "VisionLargestUIResults.xcresult"],
+            "visionos_privacy": ["testChineseOfflinePolicyEndingAndReturn", "VisionPrivacyUIResults.xcresult"]
         ]
         guard result?["success"] as? Bool == true, result?["lease"] as? String == id,
               result?["runner"] as? String == runner, result?["pid"] as? Int == pid,
@@ -127,7 +128,7 @@ final class QRCatcherVisionUITests: XCTestCase {
         }
         // Audits can scroll the sheet. Re-establish the actual visible policy
         // ending before the held pixel capture, rather than trusting its AX label.
-        if name == "vision-chinese-policy" { revealPolicyEnding() }
+        if name == "vision-chinese-policy" || name == "vision-privacy-end" { revealPolicyEnding() }
         // Native Vision XCTest explicitly reports manual screenshots unsupported.
         // The cloud script takes actual public simctl pixels at this checkpoint.
         if name != "vision-failure" {
@@ -204,24 +205,25 @@ final class QRCatcherVisionUITests: XCTestCase {
         await capture(checkpoint) // Host independently verifies bytes read from the saved URL.
     }
     private func readyNativePhotoAsset() async -> XCUIElement? {
-        // These stable identifiers were observed in the actual SDK 27 picker.
-        // Do not depend on its localized Photos navigation title or match an
-        // unrelated image elsewhere in the app. Polling performs no UI action.
-        let grids = app.scrollViews.matching(identifier: "photosView_content_scroll_view")
-        let grid = grids.firstMatch
-        let asset = grid.images["PXGGridLayout-Info"].firstMatch
-        let ready = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == true AND hittable == true"), object: asset)
-        let readinessStarted = ProcessInfo.processInfo.systemUptime
-        tracePhase("VISION_PHOTOS_READINESS_BEGIN configured_seconds=20")
-        let outcome = await XCTWaiter.fulfillment(of: [ready], timeout: 20)
-        tracePhase("VISION_PHOTOS_READINESS_END outcome=\(outcome.rawValue) elapsed=\(ProcessInfo.processInfo.systemUptime - readinessStarted) configured_seconds=20")
-        guard outcome == .completed else {
-            XCTFail("Native Photos asset was not present and hittable in its observed viewport within 20 seconds")
+        // Reuse the successful native selection boundary: establish the owned
+        // picker and scroll independently, then query the typed Image globally.
+        // The system AX tree does not promise that the Image is a scroll child.
+        // Both exact titles are allowed for the retained English/Chinese cases;
+        // an ambiguous picker or image always stops before input.
+        let pickers = app.navigationBars.matching(NSPredicate(format: "identifier == %@ OR identifier == %@", "Photos", "照片"))
+        guard pickers.firstMatch.waitForExistence(timeout: 30), pickers.count == 1 else {
+            XCTFail("Expected one native Photos picker before image selection")
             return nil
         }
-        guard grids.count == 1, grid.exists, asset.exists, asset.isHittable else {
-            XCTFail("Native Photos viewport became ambiguous or its asset lost readiness before selection")
+        let grids = app.scrollViews.matching(identifier: "photosView_content_scroll_view")
+        guard grids.firstMatch.waitForExistence(timeout: 30), grids.count == 1 else {
+            XCTFail("Expected one native Photos content scroll before image selection")
+            return nil
+        }
+        let images = app.images.matching(identifier: "PXGGridLayout-Info")
+        let asset = images.firstMatch
+        guard asset.waitForExistence(timeout: 45), images.count == 1 else {
+            XCTFail("Expected exactly one seeded native Photos grid image")
             return nil
         }
         return asset
@@ -305,6 +307,28 @@ final class QRCatcherVisionUITests: XCTestCase {
         app.buttons["vision.privacyDone"].tap()
         XCTAssertTrue(app.buttons["vision.copy"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["vision.payload"].label, "QRCatcher 你好 🌈 123")
+    }
+
+    func testChineseOfflinePolicyEndingAndReturn() async {
+        // Verify the repaired product sheet without making Photos availability
+        // a prerequisite. This case does not replace the real Photos workflow.
+        let privacy = app.buttons["vision.privacy"]
+        XCTAssertTrue(privacy.waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["vision.payload"].exists)
+        privacy.tap()
+        let body = app.staticTexts["privacy.offlineBody"]
+        let ending = app.staticTexts["privacy.offlineEnd"]
+        XCTAssertTrue(body.waitForExistence(timeout: 10))
+        XCTAssertTrue(body.label.contains("100mango@gmail.com"))
+        XCTAssertEqual(ending.label, "本地数据可通过相应应用或系统删除，权限可在系统设置中撤回。")
+        revealPolicyEnding()
+        await capture("vision-privacy-end")
+        app.buttons["vision.privacyDone"].tap()
+        XCTAssertTrue(privacy.waitForExistence(timeout: 10))
+        XCTAssertFalse(ending.exists)
+        XCTAssertFalse(app.staticTexts["vision.payload"].exists)
+        XCTAssertTrue(app.buttons["vision.import"].exists)
+        await capture("vision-privacy-returned")
     }
 }
 

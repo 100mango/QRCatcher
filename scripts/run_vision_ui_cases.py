@@ -10,6 +10,13 @@ from owned_process_group import stop_group
 from vision_case_contract import select_case, case_identity
 
 
+def native_operation_unconfirmed(code, operation):
+    """Known completed nonzero exits keep their original app-not-running meaning."""
+    return (type(code) is not int or code < 0 or code in (124, 125, 126)
+            or not isinstance(operation, dict) or operation.get('cleanup_confirmed') is not True
+            or operation.get('state') != 'completed' or operation.get('exit') != code)
+
+
 def main():
     if blocked(): raise SystemExit(126)
     if len(sys.argv) != 3:
@@ -25,7 +32,7 @@ def main():
         raise ValueError('A Vision case already ran on this VM; automatic retry forbidden')
     if any(Path(item).exists() for item in ['VisionUIResults.xcresult', 'VisionPhotosUIResults.xcresult',
                                           'VisionFilesUIResults.xcresult', 'VisionChineseUIResults.xcresult',
-                                          'VisionLargestUIResults.xcresult']):
+                                          'VisionLargestUIResults.xcresult', 'VisionPrivacyUIResults.xcresult']):
         raise ValueError('Unexpected pre-existing Vision UI result on fresh VM')
     report = dict(identity, cases=[])
     row = dict(identity, state='starting')
@@ -44,7 +51,7 @@ def main():
         try:
             cleanup, _, cleanup_info = execute(['xcrun', 'simctl', 'terminate', udid, '100mango.QRCatcher'], 30)
             row['pre_case_app_termination'] = cleanup_info
-            if cleanup == 126 or cleanup_info.get('cleanup_confirmed') is not True:
+            if native_operation_unconfirmed(cleanup, cleanup_info):
                 row['state'] = 'blocked_owned_process_cleanup_unconfirmed'
                 report['cleanup_unconfirmed'] = True
                 mark_unconfirmed(cleanup_info); failed = True
@@ -63,7 +70,7 @@ def main():
                         '-resultBundlePath', case.result], case.seconds)
                     (out / (case.label + '-ui-tail.log')).write_text(tail[-16 * 1024:])
                     row.update(state='finished', exit=code, operation=operation)
-                    if code == 126 or operation.get('cleanup_confirmed') is not True:
+                    if native_operation_unconfirmed(code, operation):
                         report['cleanup_unconfirmed'] = True; mark_unconfirmed(operation)
                 failed = code != 0 or bool(report.get('cleanup_unconfirmed'))
                 print('VISION_CASE_END ' + json.dumps(row), flush=True)
@@ -72,6 +79,14 @@ def main():
             marker.touch()
             try: capture_exit = capture.wait(timeout=30)
             except subprocess.TimeoutExpired: capture_exit = 124
+            # Lock before attempting any further drain/cleanup. Confirming the
+            # capture helper's host process group cannot confirm its simulator
+            # operation. File-only receipts remain permitted after this latch.
+            capture_unknown = type(capture_exit) is not int or capture_exit < 0 or capture_exit in (124, 125, 126)
+            if capture_unknown:
+                report['cleanup_unconfirmed'] = True
+                report['simulator_operation_unconfirmed'] = True
+                mark_unconfirmed({'state': 'capture_completion_unconfirmed', 'exit': 126, 'original_exit': capture_exit, 'cleanup_confirmed': False})
             capture_clean = stop_group(capture)
             report['capture_cleanup_confirmed'] = capture_clean
             if not capture_clean:
@@ -80,7 +95,7 @@ def main():
                 failed = True
             report['capture_process_exit'] = capture_exit
             write_json(out / 'ui-cases.json', report)
-            failed |= capture_exit != 0
+            failed |= capture_exit != 0 or capture_unknown
     if failed:
         raise SystemExit('Selected Vision UI/capture gate failed; no case is retried on this VM')
 

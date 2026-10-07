@@ -13,7 +13,7 @@ import subprocess
 import sys
 import uuid
 
-from vision_case_contract import CASES, case_identity, require_identity, select_case
+from vision_case_contract import ALL_CASES, case_identity, require_identity, select_case
 from validate_evidence_budget import inspect
 
 ICON = Path('QRCatcherVision/Assets.xcassets/AppIcon.solidimagestack/Back.solidimagestacklayer/Content.imageset/Icon.png')
@@ -226,7 +226,7 @@ def export(scope):
     try:
         expected = case_identity(case, commit, os.environ['VISION_SIMULATOR_ID'])
         summary.update(expected)
-        for other in CASES:
+        for other in ALL_CASES:
             if other != case and Path(other.result).exists():
                 raise ValueError('Unexpected other-case Vision result on this VM')
         if Path('VisionUIResults.xcresult').exists() or (not case.hosted_tests and Path('VisionTestResults.xcresult').exists()):

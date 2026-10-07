@@ -1,0 +1,245 @@
+{
+  "name": "QR Vision targeted completion",
+  "on": {
+    "push": {
+      "branches": [
+        "codex/vision-targeted-completion"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "qrcatcher-apple-platforms",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "photos": {
+      "name": "visionos_photos · one fresh standard VM",
+      "runs-on": "xcode-27",
+      "timeout-minutes": 45,
+      "env": {
+        "DEVELOPER_DIR": "/Applications/Xcode_27.app/Contents/Developer",
+        "QRCATCHER_OWNED_PROCESS_BARRIER": "${{ github.workspace }}/build/owned-process-cleanup.json",
+        "EVIDENCE_SCOPE": "visionos_photos"
+      },
+      "steps": [
+        {
+          "name": "Record original job clock before checkout",
+          "id": "origin",
+          "timeout-minutes": 1,
+          "run": "python3 - <<'PY_CLOCK'\nimport time\nstarted=time.monotonic()\nimport json,os,re\nfrom pathlib import Path\ndef require(value):\n    if not value: raise ValueError('Invalid original targeted Vision clock binding')\njob=os.environ['GITHUB_JOB']\nscopes={'photos':('visionos_photos',2700,450),'privacy':('visionos_privacy',1500,330)}\nrequire(job in scopes)\nscope,ceiling,reserve=scopes[job]\nrequire(os.environ['GITHUB_REPOSITORY']=='100mango/QRCatcher')\nrequire(os.environ['GITHUB_REF']=='refs/heads/codex/vision-targeted-completion')\nrequire(os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA'])\nrequire(re.fullmatch('[0-9a-f]{40}',os.environ['GITHUB_SHA']))\nrequire(all(re.fullmatch('[1-9][0-9]{0,19}',os.environ[k]) for k in ['GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT']))\nrequire(os.environ['EVIDENCE_SCOPE']==scope)\nfolder=Path(os.environ['RUNNER_TEMP']);require(folder.is_absolute() and folder.resolve(strict=True)==folder)\npath=folder/('qr-vision-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'-'+job+'.json')\nvalue={'schema':1,'repository':os.environ['GITHUB_REPOSITORY'],'ref':os.environ['GITHUB_REF'],'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'job':job,'scope':scope,'ceiling_seconds':ceiling,'reserve_seconds':reserve,'started_monotonic':started}\nfd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\nwith os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())\nwith open(os.environ['GITHUB_ENV'],'a') as out: out.write('QRCATCHER_VISION_TARGETED_CLOCK='+str(path)+'\\n')\nrequire(time.monotonic()-started<25)\nPY_CLOCK"
+        },
+        {
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "timeout-minutes": 1,
+          "with": {
+            "ref": "${{ github.sha }}",
+            "fetch-depth": 2,
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Targeted prepare",
+          "id": "prepare",
+          "timeout-minutes": 4,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py prepare"
+        },
+        {
+          "name": "Targeted build",
+          "id": "build",
+          "timeout-minutes": 8,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py build | tee vision-test-build.log"
+        },
+        {
+          "name": "Targeted probe",
+          "id": "probe",
+          "timeout-minutes": 12,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py probe"
+        },
+        {
+          "name": "Targeted install",
+          "id": "install",
+          "timeout-minutes": 3,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py install"
+        },
+        {
+          "name": "Targeted hosted",
+          "id": "hosted",
+          "timeout-minutes": 10,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py hosted | tee vision-test.log"
+        },
+        {
+          "name": "Targeted seed",
+          "id": "seed",
+          "timeout-minutes": 3,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py seed"
+        },
+        {
+          "name": "Targeted ui",
+          "id": "ui",
+          "timeout-minutes": 12,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py ui | tee vision-ui-test.log"
+        },
+        {
+          "name": "Targeted collect",
+          "id": "collect",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 4,
+          "run": "python3 -u scripts/vision_targeted_job.py collect"
+        },
+        {
+          "name": "Targeted shutdown",
+          "id": "shutdown",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 2,
+          "run": "python3 -u scripts/vision_targeted_job.py shutdown"
+        },
+        {
+          "name": "Targeted source_final",
+          "id": "source_final",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py source_final"
+        },
+        {
+          "name": "Targeted validate",
+          "id": "validate",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py validate"
+        },
+        {
+          "name": "Retain validated case evidence before final verdict",
+          "id": "upload",
+          "if": "${{ always() && steps.validate.outputs.eligible == 'true' }}",
+          "timeout-minutes": 1,
+          "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          "with": {
+            "name": "qrcatcher-visionos_photos-targeted-evidence",
+            "path": "${{ steps.validate.outputs.artifact_path }}",
+            "retention-days": 1,
+            "compression-level": 9,
+            "if-no-files-found": "error"
+          }
+        },
+        {
+          "name": "Require complete case and source qualification",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py verdict"
+        }
+      ]
+    },
+    "privacy": {
+      "needs": [
+        "photos"
+      ],
+      "if": "${{ always() && !cancelled() }}",
+      "name": "visionos_privacy · one fresh standard VM",
+      "runs-on": "xcode-27",
+      "timeout-minutes": 25,
+      "env": {
+        "DEVELOPER_DIR": "/Applications/Xcode_27.app/Contents/Developer",
+        "QRCATCHER_OWNED_PROCESS_BARRIER": "${{ github.workspace }}/build/owned-process-cleanup.json",
+        "EVIDENCE_SCOPE": "visionos_privacy"
+      },
+      "steps": [
+        {
+          "name": "Record original job clock before checkout",
+          "id": "origin",
+          "timeout-minutes": 1,
+          "run": "python3 - <<'PY_CLOCK'\nimport time\nstarted=time.monotonic()\nimport json,os,re\nfrom pathlib import Path\ndef require(value):\n    if not value: raise ValueError('Invalid original targeted Vision clock binding')\njob=os.environ['GITHUB_JOB']\nscopes={'photos':('visionos_photos',2700,450),'privacy':('visionos_privacy',1500,330)}\nrequire(job in scopes)\nscope,ceiling,reserve=scopes[job]\nrequire(os.environ['GITHUB_REPOSITORY']=='100mango/QRCatcher')\nrequire(os.environ['GITHUB_REF']=='refs/heads/codex/vision-targeted-completion')\nrequire(os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA'])\nrequire(re.fullmatch('[0-9a-f]{40}',os.environ['GITHUB_SHA']))\nrequire(all(re.fullmatch('[1-9][0-9]{0,19}',os.environ[k]) for k in ['GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT']))\nrequire(os.environ['EVIDENCE_SCOPE']==scope)\nfolder=Path(os.environ['RUNNER_TEMP']);require(folder.is_absolute() and folder.resolve(strict=True)==folder)\npath=folder/('qr-vision-'+os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']+'-'+job+'.json')\nvalue={'schema':1,'repository':os.environ['GITHUB_REPOSITORY'],'ref':os.environ['GITHUB_REF'],'source':os.environ['GITHUB_SHA'],'workflow_sha':os.environ['GITHUB_WORKFLOW_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'job':job,'scope':scope,'ceiling_seconds':ceiling,'reserve_seconds':reserve,'started_monotonic':started}\nfd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\nwith os.fdopen(fd,'w') as out: json.dump(value,out);out.flush();os.fsync(out.fileno())\nwith open(os.environ['GITHUB_ENV'],'a') as out: out.write('QRCATCHER_VISION_TARGETED_CLOCK='+str(path)+'\\n')\nrequire(time.monotonic()-started<25)\nPY_CLOCK"
+        },
+        {
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "timeout-minutes": 1,
+          "with": {
+            "ref": "${{ github.sha }}",
+            "fetch-depth": 2,
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Targeted prepare",
+          "id": "prepare",
+          "timeout-minutes": 4,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py prepare"
+        },
+        {
+          "name": "Targeted build",
+          "id": "build",
+          "timeout-minutes": 8,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py build | tee vision-test-build.log"
+        },
+        {
+          "name": "Targeted probe",
+          "id": "probe",
+          "timeout-minutes": 12,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py probe"
+        },
+        {
+          "name": "Targeted install",
+          "id": "install",
+          "timeout-minutes": 3,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py install"
+        },
+        {
+          "name": "Targeted ui",
+          "id": "ui",
+          "timeout-minutes": 7,
+          "run": "set -euo pipefail\npython3 -u scripts/vision_targeted_job.py ui | tee vision-ui-test.log"
+        },
+        {
+          "name": "Targeted collect",
+          "id": "collect",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 2,
+          "run": "python3 -u scripts/vision_targeted_job.py collect"
+        },
+        {
+          "name": "Targeted shutdown",
+          "id": "shutdown",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 2,
+          "run": "python3 -u scripts/vision_targeted_job.py shutdown"
+        },
+        {
+          "name": "Targeted source_final",
+          "id": "source_final",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py source_final"
+        },
+        {
+          "name": "Targeted validate",
+          "id": "validate",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py validate"
+        },
+        {
+          "name": "Retain validated case evidence before final verdict",
+          "id": "upload",
+          "if": "${{ always() && steps.validate.outputs.eligible == 'true' }}",
+          "timeout-minutes": 1,
+          "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          "with": {
+            "name": "qrcatcher-visionos_privacy-targeted-evidence",
+            "path": "${{ steps.validate.outputs.artifact_path }}",
+            "retention-days": 1,
+            "compression-level": 9,
+            "if-no-files-found": "error"
+          }
+        },
+        {
+          "name": "Require complete case and source qualification",
+          "if": "${{ always() && steps.origin.outcome == 'success' }}",
+          "timeout-minutes": 1,
+          "run": "python3 -u scripts/vision_targeted_job.py verdict"
+        }
+      ]
+    }
+  }
+}

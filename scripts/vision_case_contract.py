@@ -39,16 +39,26 @@ CASES = (
 )
 SCOPES = frozenset(case.scope for case in CASES)
 
+# An explicit targeted-only case. The canonical four-row matrix, allocation,
+# historical results and actual system-size contract remain unchanged.
+TARGETED_CASES = (
+    Case('visionos_privacy', 'testChineseOfflinePolicyEndingAndReturn', 'VisionPrivacyUIResults.xcresult',
+         'privacy', 300, 180, 240, ('vision-privacy-end', 'vision-privacy-returned'),
+         False, False, False, False, 550000),
+)
+ALL_CASES = CASES + TARGETED_CASES
+ALL_SCOPES = frozenset(case.scope for case in ALL_CASES)
+
 
 def select_case(scope):
-    for case in CASES:
+    for case in ALL_CASES:
         if scope == case.scope:
             return case
     raise ValueError('Expected one exact Vision case scope; combined/default cases are forbidden')
 
 
 def case_identity(case, source_commit, device):
-    if case not in CASES or not isinstance(source_commit, str) or not re.fullmatch('[0-9a-f]{40}', source_commit):
+    if case not in ALL_CASES or not isinstance(source_commit, str) or not re.fullmatch('[0-9a-f]{40}', source_commit):
         raise ValueError('Unexpected case/source identity')
     if not isinstance(device, str) or str(uuid.UUID(device)).upper() != device:
         raise ValueError('Expected an exact uppercase device UUID')

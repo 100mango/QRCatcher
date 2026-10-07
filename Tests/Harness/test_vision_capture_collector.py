@@ -93,6 +93,8 @@ class VisionCollectorIntegrationTests(unittest.TestCase):
 
             def command(arguments, **kwargs):
                 commands.append(('command', arguments))
+                if (mode == 'screenshot-timeout' and arguments[:3] == ['xcrun', 'simctl', 'io']) or (mode == 'conversion-timeout' and arguments[0] == 'sips') or (mode == 'export-verifier-timeout' and arguments[:2] == ['xcrun', 'swift']):
+                    raise subprocess.TimeoutExpired(arguments, kwargs['timeout'])
                 if arguments[:3] == ['xcrun', 'simctl', 'io']: Path(arguments[-1]).write_bytes(b'raw-pixels')
                 elif arguments[0] == 'sips': Path(arguments[-1]).write_bytes(b'jpeg-pixels')
                 elif arguments[:2] == ['xcrun', 'swift']:

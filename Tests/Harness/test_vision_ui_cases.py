@@ -20,7 +20,7 @@ class VisionRoutingTests(unittest.TestCase):
         calls=[]
         def execute(command,seconds):
             calls.append((command,seconds));code=124 if failed and command[0]=='xcodebuild' else 0
-            detail={'exit':code,'timeout_seconds':seconds,'cleanup_confirmed':True}
+            detail={'exit':code,'timeout_seconds':seconds,'cleanup_confirmed':True,'state':'timed_out' if code==124 else 'completed'}
             if unknown_at==len(calls):
                 code=126;detail.update(exit=126,cleanup_confirmed=False)
                 if missing:detail.pop('cleanup_confirmed')
