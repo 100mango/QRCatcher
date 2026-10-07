@@ -6,7 +6,7 @@ from mac_store_io import read_file, require
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 
 def base_command():
-    return ['xcodebuild', '-quiet', '-project', 'QRCatcher.xcodeproj', '-scheme', 'QRCatcherMac',
+    return ['xcodebuild', '-project', 'QRCatcher.xcodeproj', '-scheme', 'QRCatcherMacSandbox',
         '-configuration', 'Debug', '-destination', 'platform=macOS,arch=arm64',
         '-derivedDataPath', 'build/mac-tests', 'ARCHS=arm64', 'CODE_SIGNING_ALLOWED=NO']
 

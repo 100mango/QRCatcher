@@ -41,6 +41,7 @@
   },
   "current_support_inputs": {
     ".gitignore": "659fedf01e54903a09d14038fdbdc26679653f37403dd693105d9c825a64a975",
+    "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMacSandbox.xcscheme": "0742284b07729e93fb68923d642a5a4d4f6b82be9b1dab226536a564657ee008",
     "Tests/Fixtures/ascii.png.base64": "082da4cee2edcd0705f112f15c753eac178f9e16217031ccd50946ba0472e115",
     "Tests/Fixtures/eci-latin1.png.base64": "399e710f2b6477a4779184c488b4b9411fffd37ee9a4d3c20bbcbbd55ea0cd76",
     "Tests/Fixtures/eci-mixed.png.base64": "630b36c333da2e53179042526aa74d1c0f3a5cb75e936b42aa9cb8266216a997",

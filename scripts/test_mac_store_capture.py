@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 import mac_store_capture as m
@@ -98,6 +99,20 @@ class PortableTests(unittest.TestCase):
 
 
 class SourceTests(PortableTests):
+    def test_capture_scheme_preserves_the_app_and_omits_only_hosted_tests(self):
+        command=m.base_command()
+        self.assertNotIn('-quiet',command)
+        self.assertEqual(command[command.index('-scheme')+1],'QRCatcherMacSandbox')
+        self.assertIn('CODE_SIGNING_ALLOWED=NO',command)
+        folder=CHECKOUT/'QRCatcher.xcodeproj/xcshareddata/xcschemes'
+        original=ET.parse(folder/'QRCatcherMac.xcscheme').getroot()
+        selected=ET.parse(folder/(command[command.index('-scheme')+1]+'.xcscheme')).getroot()
+        tests=original.find('TestAction/Testables')
+        hosted=[row for row in tests if row.find('BuildableReference').get('BlueprintName')=='QRCatcherMacTests']
+        self.assertEqual(len(hosted),1);tests.remove(hosted[0])
+        self.assertEqual([row.find('BuildableReference').get('BlueprintName') for row in selected.find('TestAction/Testables')],['QRCatcherMacUITests'])
+        self.assertEqual(ET.canonicalize(ET.tostring(original,encoding='unicode'),strip_text=True),
+            ET.canonicalize(ET.tostring(selected,encoding='unicode'),strip_text=True))
     def test_only_exact_debug_additions_and_new_test_are_removed(self):
         f=json.loads((CHECKOUT/'scripts/fixtures/mac-store-source-baseline.json').read_bytes())
         app=(CHECKOUT/'QRCatcherMac/QRCatcherMacApp.swift').read_text();ui=(CHECKOUT/'QRCatcherMacUITests/QRCatcherMacUITests.swift').read_text()
@@ -111,7 +126,7 @@ class SourceTests(PortableTests):
         for path,value in f['current_app_inputs'].items():self.assertEqual(hashlib.sha256((CHECKOUT/path).read_bytes()).hexdigest(),value,path)
     def test_existing_fixture_and_capture_support_inputs_remain_frozen(self):
         f=json.loads((CHECKOUT/'scripts/fixtures/mac-store-source-baseline.json').read_bytes())
-        self.assertEqual(len(f['current_support_inputs']),16)
+        self.assertEqual(len(f['current_support_inputs']),17)
         for path,value in f['current_support_inputs'].items():
             self.assertEqual(hashlib.sha256((CHECKOUT/path).read_bytes()).hexdigest(),value,path)
     def test_constructor_change_cannot_be_hidden_by_store_source_restoration(self):
@@ -303,6 +318,7 @@ class Pipeline(PortableTests):
         elif argv==m.base_command()+['build-for-testing']:
             if self.build_error=='stdout':raw=b'QRCatcherMac.swift:4:7: error: synthetic failed compilation\n'
             if self.build_error=='stderr':stderr=b'fatal error: synthetic failed compilation\n'
+            if self.build_error=='zero-wrapper':raw=b'error: the following command failed with exit code 0 but produced no further output\nSwiftCompile normal arm64 (in target \'QRCatcherMacTests\' from project \'QRCatcher\')\n'
         elif argv==m.test_command():
             if self.cleanup_unknown:raise m.CaptureStopped('unconfirmed owned capture',False)
             self.summary,self.files=exported(self.clock(),self.product,self.failed,self.scale)
@@ -401,6 +417,12 @@ class Pipeline(PortableTests):
         self.build_error='stderr';value=self.execute()
         self.assertFalse(value['qualified']);self.assertEqual(value['failure']['reason'],'build-reported-error')
         self.assertEqual(value['failure']['phase'],'build');self.assertEqual(len(self.calls),14)
+        self.assertNotIn(m.test_command(),self.calls);self.assertEqual(value['image_files'],{})
+    def test_observed_zero_exit_wrapper_error_still_stops_before_product_or_ui(self):
+        self.build_error='zero-wrapper';value=self.execute()
+        self.assertFalse(value['qualified']);self.assertEqual(value['failure']['reason'],'build-reported-error')
+        self.assertEqual(value['failure']['phase'],'build');self.assertEqual(len(self.calls),14)
+        m.product_identity.assert_not_called()
         self.assertNotIn(m.test_command(),self.calls);self.assertEqual(value['image_files'],{})
     def test_original_failed_case_stays_failed_and_no_export(self):
         self.failed=True;value=self.execute();self.assertFalse(value['qualified']);self.assertEqual(value['test_outcome'],'failed');self.assertEqual(value['image_files'],{})
