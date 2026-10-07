@@ -1,0 +1,330 @@
+{
+  "schema": 1,
+  "base": "7b1c3b048f46f939e1a861569ed5f80fe27df59f",
+  "base_tree": "81562d42563b159e8a1ace7d3af6d5e2542c5733",
+  "shipping_sources": [
+    "QRCatcherMac/MacLocalization.swift",
+    "QRCatcherTV/QRCatcherTVApp.swift",
+    "QRCatcherTV/TVHistory.swift",
+    "QRCatcherTV/TVMainView.swift",
+    "QRCatcherTV/TVPhotoLibrary.swift",
+    "QRCatcherTV/TVReadSession.swift",
+    "Shared/Domain/QRPayload.m",
+    "Shared/Image/QRImageCodec.m",
+    "Shared/Image/QRImageImportQueue.m",
+    "Shared/Services/QRDecodeWorker.swift",
+    "Shared/Services/QRHistoryLocations.swift",
+    "Shared/Services/QRPrivacyText.swift",
+    "Shared/Services/QRSelectionCoordinator.swift"
+  ],
+  "functional_evidence": {
+    "run": 37288404834,
+    "job": 111695534045,
+    "hosted": 4,
+    "ui": 3,
+    "sha": "7b1c3b048f46f939e1a861569ed5f80fe27df59f",
+    "scope": "unchanged executable source; only two Top Shelf 2x resources added; no new runtime or archive pass",
+    "historical_row_exit": 2,
+    "os_content_size": "unsupported; not OS-largest qualification"
+  },
+  "unchanged_inputs": {
+    "QRCatcher.xcodeproj/project.pbxproj": {
+      "bytes": 114333,
+      "sha256": "51d86760fbae2933f8989403b45bd0b54f993ebc08e603aca4636c2487a4a0d4"
+    },
+    "QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherTV.xcscheme": {
+      "bytes": 2627,
+      "sha256": "af5ba7c0872055ab6a1775efa63e60175394182bd3b3d2980722f36bb6a4a3ec"
+    },
+    "QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png": {
+      "bytes": 323530,
+      "sha256": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4"
+    },
+    "QRCatcherMac/MacLocalization.swift": {
+      "bytes": 231,
+      "sha256": "b15c734f2c7ed0d9044457571a6d222822748e652674f100a726e992fc543666"
+    },
+    "QRCatcherMac/zh-Hans.lproj/Localizable.strings": {
+      "bytes": 11559,
+      "sha256": "5f1a43e1b9c268d78e82cc568f2e2e1f52eef05b54d52fe49a2318f9fe698ecb"
+    },
+    "QRCatcherTV/Info.plist": {
+      "bytes": 1103,
+      "sha256": "eb208b45de12d2f2524bff75558a8a912d73894296e6bfdf96722a8d0cf95bb8"
+    },
+    "QRCatcherTV/PrivacyInfo.xcprivacy": {
+      "bytes": 598,
+      "sha256": "3e4a93cbe86acef7dd7e063a28c849992f556e7f52cadc5f37c1e8b0e1b54686"
+    },
+    "QRCatcherTV/QRCatcherTV-Bridging-Header.h": {
+      "bytes": 47,
+      "sha256": "cfdc5511f3527d0c01090069bfce1a6c8c11af100a413c52a2d1498808879c0a"
+    },
+    "QRCatcherTV/QRCatcherTVApp.swift": {
+      "bytes": 520,
+      "sha256": "c6ce797c2351f33f9561c55ac542d9e10ca870023a9b79215d8397a1275aa333"
+    },
+    "QRCatcherTV/TVHistory.swift": {
+      "bytes": 4284,
+      "sha256": "5b35d94ce9ea6b8caf9be0fd6d8f69bb8848a792c949c44d4925afc42f5a107b"
+    },
+    "QRCatcherTV/TVMainView.swift": {
+      "bytes": 11146,
+      "sha256": "4fb5835f6c1cae83b9dba753d620ab62876519b87485c10f8f287d20f9f75f47"
+    },
+    "QRCatcherTV/TVPhotoLibrary.swift": {
+      "bytes": 8124,
+      "sha256": "a0b079bdd6d62be941866e29ee588743c801abd5feeb337c23a839ee4fc95f73"
+    },
+    "QRCatcherTV/TVReadSession.swift": {
+      "bytes": 3805,
+      "sha256": "b1b6b933ed66ecb780e4b313b5f6ba308fb903abe94071e888f2701fa64b88af"
+    },
+    "QRCatcherTVTests/QRCatcherTVTests.swift": {
+      "bytes": 3954,
+      "sha256": "14d534ea6c520c049442f4380a3eb920928d2e4d0fb090d05e14107b04a86b4f"
+    },
+    "QRCatcherTVUITests/QRCatcherTVUITests.swift": {
+      "bytes": 43291,
+      "sha256": "dbdb363ebe8bf04e33f8f6f3c0148b0875873f6c1a5653a40db1722051648673"
+    },
+    "Shared/Domain/QRPayload.h": {
+      "bytes": 780,
+      "sha256": "091add214aa62110058334581623bb3d2bd0a0ef66200f48622faeaa53fae244"
+    },
+    "Shared/Domain/QRPayload.m": {
+      "bytes": 1470,
+      "sha256": "c4d6dc8481631fcb8a00eb160f5f86370069483f51c8a1768a41732efffc97cc"
+    },
+    "Shared/Image/QRBoundedImageFileReader.h": {
+      "bytes": 422,
+      "sha256": "f7454065aea882f36f48d8bde281eaf9fe0dcb9ee1b9a599a4f1d03483526b01"
+    },
+    "Shared/Image/QRImageCodec.h": {
+      "bytes": 715,
+      "sha256": "042caf2c633574c08d05b2515e24c12a158013a41a4790717f0e9ae6b6d2b4a3"
+    },
+    "Shared/Image/QRImageCodec.m": {
+      "bytes": 4832,
+      "sha256": "d7a42240835ea5ee7c83a583b8d696826c39b8bb372a6c2cff374c249f54468f"
+    },
+    "Shared/Image/QRImageImportQueue.h": {
+      "bytes": 390,
+      "sha256": "b8a7a905cbe4d8989cc296876b98c1b7c0a12f7a2a1894c61b52d5ec0f0db000"
+    },
+    "Shared/Image/QRImageImportQueue.m": {
+      "bytes": 1275,
+      "sha256": "f1c0f56753218e89a218661369cb8eddb7fe59abaae2048e901183d17224b590"
+    },
+    "Shared/PortableQR/QRPortableDecoder.h": {
+      "bytes": 672,
+      "sha256": "0fa8af912a43cc6a40f165302ba540922180de260bffef67fb6ea2aa599dd098"
+    },
+    "Shared/Services/QRDecodeWorker.swift": {
+      "bytes": 976,
+      "sha256": "1be93ed2917ed04a4b637130e55a9fc3ddac5b4dbae10e0f8a8fc95ee828aa45"
+    },
+    "Shared/Services/QRHistoryLocations.swift": {
+      "bytes": 6735,
+      "sha256": "437450c79c34bd30ac121eb61cfab64a5c8f5316b55e09e5557b0ce7d897044d"
+    },
+    "Shared/Services/QRPrivacyText.swift": {
+      "bytes": 1246,
+      "sha256": "975179af10b8dffc0e167944ee2038c4b863fb377891c8baaea0a90ac23b6c68"
+    },
+    "Shared/Services/QRSelectionCoordinator.swift": {
+      "bytes": 692,
+      "sha256": "1c115abc914e4d78a41d0fec88cfa7ff915aa655c455b7db8c1d22d32fa194e0"
+    },
+    "Tests/Fixtures/ascii.png.base64": {
+      "bytes": 1933,
+      "sha256": "082da4cee2edcd0705f112f15c753eac178f9e16217031ccd50946ba0472e115"
+    },
+    "Tests/Fixtures/eci-latin1.png.base64": {
+      "bytes": 861,
+      "sha256": "399e710f2b6477a4779184c488b4b9411fffd37ee9a4d3c20bbcbbd55ea0cd76"
+    },
+    "Tests/Fixtures/eci-mixed.png.base64": {
+      "bytes": 853,
+      "sha256": "630b36c333da2e53179042526aa74d1c0f3a5cb75e936b42aa9cb8266216a997"
+    },
+    "Tests/Fixtures/eci-shiftjis.png.base64": {
+      "bytes": 849,
+      "sha256": "23065a7a60fca62f058513f9bef3d1b863c05e198de586909f6e26c860f6485e"
+    },
+    "Tests/Fixtures/eci-utf8.png.base64": {
+      "bytes": 841,
+      "sha256": "de5447c8b05d9037936bfd34c23e18a298c005f65d8f103a4bd3927f3d391d96"
+    },
+    "Tests/Fixtures/invalid.png.base64": {
+      "bytes": 1013,
+      "sha256": "63a59fa56a004e8b433a96e9c1c5c243ef246e6f301708afc294d37920eb2f77"
+    },
+    "Tests/Fixtures/manifest.json": {
+      "bytes": 2314,
+      "sha256": "a8f42e81869445fa805b25db6d8fb73db5f1e8fb6394d0905764953692b9f78d"
+    },
+    "Tests/Fixtures/multiple.png.base64": {
+      "bytes": 3325,
+      "sha256": "e0131583a6a13156f603d259c79c579f1b911e168e251010bda8ee80170a2b9d"
+    },
+    "Tests/Fixtures/oversized-area.png.base64": {
+      "bytes": 19545,
+      "sha256": "debd0f4193388d1b3baf9a705472d77cbeb7415ab965a81862ec12ead40bd1c0"
+    },
+    "Tests/Fixtures/oversized-edge.png.base64": {
+      "bytes": 125,
+      "sha256": "4514253278a63c6da380855968bcbb20085cacecdffd1453ab4cff95caf35ef8"
+    },
+    "Tests/Fixtures/rotated.png.base64": {
+      "bytes": 1605,
+      "sha256": "023b282a77e548eb197e96c8e4977eb9259dc2ce53431719841c065e734e23b4"
+    },
+    "Tests/Fixtures/unicode.png.base64": {
+      "bytes": 1597,
+      "sha256": "d6bbb3cd75fe888a01b0ecb639d7ed37435b8c0a85683e792f4f551dbcb27bea"
+    },
+    "scripts/generate_project.py": {
+      "bytes": 29816,
+      "sha256": "de97759eb097057ec9310ddd080a253b370015526c98a5a91a4476955213f1e1"
+    },
+    "scripts/materialize_native_icons.swift": {
+      "bytes": 2824,
+      "sha256": "431fc1225f49fdb37ef63f9f510475d460d29dbcd115414b7164c6b5c8446872"
+    },
+    "scripts/run_tv_platform_tests.sh": {
+      "bytes": 4959,
+      "sha256": "f3203857ddbeb08b716217871a332dce693c0721f5577342a7ed7f71301d5063"
+    },
+    "scripts/verify_native_release.py": {
+      "bytes": 5624,
+      "sha256": "b8d2f057810b3f04922648699e421f4fc921054716cdcd786d8f00513eb864a7"
+    },
+    "scripts/owned_process_group.py": {
+      "bytes": 1099,
+      "sha256": "eb406d2fe4c928d6438875761d596e3415ab9330593fd1b5a678ae6f99cb535e"
+    }
+  },
+  "asset_catalog_files": {
+    "QRCatcherTV/Assets.xcassets/Contents.json": {
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Contents.json": {
+      "bytes": 610,
+      "sha256": "88a6a39da9844fc472df86e69e03d6bcef09d7251340a4e177c7de102b341bdd"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelf.imageset/Icon-2x.png": {
+      "bytes": 619954,
+      "sha256": "5e010849b1ad7c689ebe357e2875929eb878197dda1024b456b3d3a6705c56cd"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelf.imageset/Contents.json": {
+      "bytes": 249,
+      "sha256": "43b152c7e71dbf0af1137bb0c826de0dc22a459e6e382646774c7431f3830f89"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Contents.json": {
+      "bytes": 187,
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelfWide.imageset/Icon-2x.png": {
+      "bytes": 626890,
+      "sha256": "ad1c5de4c33c1101e3510561869a5491e84bb45a664f7d557ee6db2802968c09"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelfWide.imageset/Contents.json": {
+      "bytes": 249,
+      "sha256": "43b152c7e71dbf0af1137bb0c826de0dc22a459e6e382646774c7431f3830f89"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Contents.json": {
+      "bytes": 187,
+      "sha256": "a7bbc554a2b26028459867dba0d85453f1e2d3038203ca365229a30fd4054189"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Contents.json": {
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Contents.json": {
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Back.imagestacklayer/Content.imageset/Contents.json": {
+      "bytes": 252,
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Small.imagestack/Front.imagestacklayer/Content.imageset/Contents.json": {
+      "bytes": 252,
+      "sha256": "01f3a906d89e8a7b00a52cd08a8ab3b8b6d21bd8cb9e01df0c36b2bcd82208a7"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Contents.json": {
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Contents.json": {
+      "bytes": 60,
+      "sha256": "f5fb0e1f3a8142892ed092efb5955c1c2cc537003a89ad7bbdb9dade7fe8985f"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Back.imagestacklayer/Content.imageset/Contents.json": {
+      "bytes": 165,
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134"
+    },
+    "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/Large.imagestack/Front.imagestacklayer/Content.imageset/Contents.json": {
+      "bytes": 165,
+      "sha256": "159c32876fe9e5cff805c50897c543c15e5b23239720d5cf23f40d45ffa4c134"
+    }
+  },
+  "assets": {
+    "source": "QRCatcher/Images.xcassets/AppIcon.appiconset/marketing1024.png",
+    "source_sha256": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4",
+    "source_dimensions": [
+      1024,
+      1024
+    ],
+    "vector_source_available": false,
+    "method": "Pillow LANCZOS, centered 1440px square on RGB20 background",
+    "source_enlargement": 1.40625,
+    "new_detail_created": false,
+    "coregraphics_pixel_equivalence_claimed": false,
+    "existing_small_2x_or_1x_files_rewritten": false,
+    "assets": [
+      {
+        "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelf.imageset/Icon-2x.png",
+        "dimensions": [
+          3840,
+          1440
+        ],
+        "mode": "RGB",
+        "bytes": 619954,
+        "sha256": "5e010849b1ad7c689ebe357e2875929eb878197dda1024b456b3d3a6705c56cd",
+        "artwork_rectangle": [
+          1200,
+          0,
+          1440,
+          1440
+        ]
+      },
+      {
+        "path": "QRCatcherTV/Assets.xcassets/AppIcon.brandassets/TopShelfWide.imageset/Icon-2x.png",
+        "dimensions": [
+          4640,
+          1440
+        ],
+        "mode": "RGB",
+        "bytes": 626890,
+        "sha256": "ad1c5de4c33c1101e3510561869a5491e84bb45a664f7d557ee6db2802968c09",
+        "artwork_rectangle": [
+          1600,
+          0,
+          1440,
+          1440
+        ]
+      }
+    ]
+  },
+  "archive_product_resources": [
+    "Assets.car",
+    "Info.plist",
+    "PkgInfo",
+    "PrivacyInfo.xcprivacy",
+    "QRCatcherTV",
+    "zh-Hans.lproj/Localizable.strings"
+  ]
+}

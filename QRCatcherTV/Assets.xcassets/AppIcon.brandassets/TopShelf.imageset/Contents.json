@@ -4,6 +4,11 @@
       "filename": "Icon.png",
       "idiom": "tv",
       "scale": "1x"
+    },
+    {
+      "filename": "Icon-2x.png",
+      "idiom": "tv",
+      "scale": "2x"
     }
   ],
   "info": {
