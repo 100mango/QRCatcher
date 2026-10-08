@@ -18,12 +18,13 @@ from vision_case_contract import select_case
 from vision_store_evidence import inspect
 from watch_process import execute
 from run_vision_ui_cases import native_operation_unconfirmed
+from vision_archive_capture import capture, CaptureStopped
 
 BASE = '6675f0051fbb597ed7212819cd34fb0b1e42c7b5'
 BASE_TREE = 'f7cefb13a5ddf20b9564b67df094b52f2a37dce8'
-PARENT = 'af5f1bec0989bf0122d1db551fce0d5f429c5a75'
-PARENT_TREE = '39398fe750951b54febc797a58320b8aab937ee9'
-SUCCESSOR_PATHS = {'.github/workflows/vision-store-screenshot.yml',
+PARENT = 'fd1c37a25e952ef66baa9b6854b3ac67325d7ec3'
+PARENT_TREE = 'd45b4a06c6dbd92bfb490ddff7bf025d26167a20'
+SUCCESSOR_PATHS = {'scripts/run_vision_store_case.py',
                    'scripts/vision_store_job.py', 'Tests/Harness/test_vision_store_job.py'}
 BRANCH = 'refs/heads/vision-store-screenshot'
 WORKFLOW = '.github/workflows/vision-store-screenshot.yml'
@@ -115,14 +116,32 @@ def uncertain_operation(phase, code, operation, inner=None):
         if len(rows) != 1:
             return True
         row = rows[0]; command = row.get('operation', {})
-        termination = row.get('pre_case_app_termination', {})
         capture_exit = inner.get('capture_process_exit')
-        return (native_operation_unconfirmed(termination.get('exit'), termination)
-                or native_operation_unconfirmed(row.get('exit'), command)
+        return (native_operation_unconfirmed(row.get('exit'), command)
                 or type(capture_exit) is not int or capture_exit < 0 or capture_exit in (124, 125, 126)
                 or inner.get('capture_cleanup_confirmed') is not True
                 or inner.get('cleanup_unconfirmed') is True)
     return False
+
+
+def source_git_read(args, seconds):
+    allowed = {('git', 'rev-parse', 'HEAD'), ('git', 'rev-list', '--parents', '-n', '1', 'HEAD'),
+               ('git', 'diff', '--name-only', 'HEAD', '--'), ('git', 'rev-parse', PARENT + '^{tree}'),
+               ('git', 'diff', '--name-only', PARENT, 'HEAD', '--'), ('git', 'ls-files'),
+               ('git', 'rev-parse', 'HEAD^{tree}')}
+    require(tuple(args) in allowed, 'Only the fixed read-only source Git commands are permitted')
+    started = time.monotonic()
+    operation = {'command': args, 'timeout_seconds': seconds, 'host_read_only': True}
+    try:
+        result = capture(args, seconds=seconds, cap=256 * 1024, cleanup_grace=2)
+        raw = result.stdout + result.stderr
+        operation.update(state='completed', exit=result.returncode, cleanup_confirmed=True)
+    except CaptureStopped as error:
+        raw = getattr(error, 'stdout_prefix', b'') + getattr(error, 'stderr_capture', b'')
+        operation.update(state='capture_stopped', exit=126, cleanup_confirmed=error.cleanup_confirmed,
+                         reason=str(error), cancelled_signal=error.cancelled_signal)
+    operation.update(output_bytes=len(raw), elapsed_seconds=time.monotonic() - started)
+    return operation['exit'], raw.decode('utf-8', 'replace'), operation
 
 
 def source_snapshot(root, runner):
@@ -136,7 +155,7 @@ def source_snapshot(root, runner):
     require(git('diff', '--name-only', 'HEAD', '--') == '', 'Tracked source was modified')
     require(git('rev-parse', PARENT + '^{tree}') == PARENT_TREE, 'Published product parent tree differs')
     changed = set(git('diff', '--name-only', PARENT, 'HEAD', '--').splitlines())
-    require(changed == SUCCESSOR_PATHS, 'Unexpected source delta outside the branch rename')
+    require(changed == SUCCESSOR_PATHS, 'Unexpected source delta outside the Store runner correction')
     paths = git('ls-files').splitlines()
     require(paths and len(paths) == len(set(paths)), 'Invalid source inventory')
     rows = []
@@ -212,13 +231,19 @@ class Job:
         write_json(self.receipt, self.row, limit=128 * 1024)
 
     def run(self, args, seconds):
-        require(time.monotonic() + seconds + 3 <= self.deadline, 'Phase clock cannot admit the unchanged command cap')
+        host_source = self.phase == 'source_final'
+        require(time.monotonic() + seconds + (4 if host_source else 3) <= self.deadline,
+                'Phase clock cannot admit the unchanged command cap')
         if self.phase in NATIVE:
             require(not blocked(), 'Unresolved operation forbids another native command')
         self.row['operations'].append({'command': args, 'timeout_seconds': seconds, 'state': 'starting'})
         self.write()
         try:
-            code, output, operation = execute(args, seconds, output_limit=16 * 1024 * 1024, tail_limit=128 * 1024)
+            if host_source:
+                # This closed host-only route never clears the device barrier.
+                code, output, operation = source_git_read(args, seconds)
+            else:
+                code, output, operation = execute(args, seconds, output_limit=16 * 1024 * 1024, tail_limit=128 * 1024)
         except BaseException:
             if self.phase in NATIVE:
                 mark_unconfirmed({'state': 'store_controller_interrupted', 'exit': 126, 'cleanup_confirmed': False})

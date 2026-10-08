@@ -51,31 +51,26 @@ def main():
                                     udid, 'vision-ui-test.log', scope],
                                    stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            cleanup, _, cleanup_info = execute(['xcrun', 'simctl', 'terminate', udid, '100mango.QRCatcher'], 30)
-            row['pre_case_app_termination'] = cleanup_info
-            if native_operation_unconfirmed(cleanup, cleanup_info):
-                row['state'] = 'blocked_owned_process_cleanup_unconfirmed'
-                report['cleanup_unconfirmed'] = True
-                mark_unconfirmed(cleanup_info); failed = True
+            # This fresh single-case route has not launched QRCatcher.
+            # XCTest owns the first launch; no speculative simctl terminate.
+            print('VISION_CASE_START ' + json.dumps(row), flush=True)
+            if scope == 'visionos_largest':
+                code, size_report = run_case('vision', udid)
+                report['system_text_size_ui_exit'] = code
+                report['largest_text_ui'] = size_report['status']
+                row.update(state='finished', exit=code, system_text_size=size_report)
+                if code == 126 or size_report.get('cleanup_unconfirmed'):
+                    report['cleanup_unconfirmed'] = True
             else:
-                print('VISION_CASE_START ' + json.dumps(row), flush=True)
-                if scope == 'visionos_largest':
-                    code, size_report = run_case('vision', udid)
-                    report['system_text_size_ui_exit'] = code
-                    report['largest_text_ui'] = size_report['status']
-                    row.update(state='finished', exit=code, system_text_size=size_report)
-                    if code == 126 or size_report.get('cleanup_unconfirmed'):
-                        report['cleanup_unconfirmed'] = True
-                else:
-                    code, tail, operation = execute(common + [
-                        '-only-testing:QRCatcherVisionUITests/QRCatcherVisionUITests/' + case.name,
-                        '-resultBundlePath', case.result], case.seconds)
-                    (out / (case.label + '-ui-tail.log')).write_text(tail[-16 * 1024:])
-                    row.update(state='finished', exit=code, operation=operation)
-                    if native_operation_unconfirmed(code, operation):
-                        report['cleanup_unconfirmed'] = True; mark_unconfirmed(operation)
-                failed = code != 0 or bool(report.get('cleanup_unconfirmed'))
-                print('VISION_CASE_END ' + json.dumps(row), flush=True)
+                code, tail, operation = execute(common + [
+                    '-only-testing:QRCatcherVisionUITests/QRCatcherVisionUITests/' + case.name,
+                    '-resultBundlePath', case.result], case.seconds)
+                (out / (case.label + '-ui-tail.log')).write_text(tail[-16 * 1024:])
+                row.update(state='finished', exit=code, operation=operation)
+                if native_operation_unconfirmed(code, operation):
+                    report['cleanup_unconfirmed'] = True; mark_unconfirmed(operation)
+            failed = code != 0 or bool(report.get('cleanup_unconfirmed'))
+            print('VISION_CASE_END ' + json.dumps(row), flush=True)
             write_json(out / 'ui-cases.json', report)
         finally:
             marker.touch()
