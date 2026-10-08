@@ -13,7 +13,7 @@ class StoreContract(unittest.TestCase):
   e=self.environment();return dict(schema=1,repository=e['GITHUB_REPOSITORY'],ref=e['GITHUB_REF'],source=e['GITHUB_SHA'],workflow_sha=e['GITHUB_WORKFLOW_SHA'],run_id='123',attempt='1',job='store',scope='visionos_store',ceiling_seconds=2700,reserve_seconds=360,started_monotonic=100.)
  def test_clock_is_single_first_push_exact_workflow(self):
   self.assertEqual(job.inspect_clock(self.clock(),self.environment(),200.),('store','visionos_store',2600.))
-  for key,value in [('GITHUB_JOB','photos'),('GITHUB_REF','refs/heads/main'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_EVENT_NAME','workflow_dispatch'),('GITHUB_WORKFLOW_REF','other'),('GITHUB_SHA','b'*40),('EVIDENCE_SCOPE','visionos_photos')]:
+  for key,value in [('GITHUB_JOB','photos'),('GITHUB_REF','refs/heads/main'),('GITHUB_REF','refs/heads/codex/vision-store-screenshot'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_EVENT_NAME','workflow_dispatch'),('GITHUB_WORKFLOW_REF','other'),('GITHUB_SHA','b'*40),('EVIDENCE_SCOPE','visionos_photos')]:
    e=self.environment();e[key]=value
    with self.subTest(key=key),self.assertRaises(ValueError):job.inspect_clock(self.clock(),e,200.)
  def test_phase_caps_preserve_original_clock_and_finalization_reserve(self):
@@ -35,7 +35,7 @@ class StoreContract(unittest.TestCase):
   for forbidden in ['saveUsingSystemFileExporter','app.terminate','app.launch','vision.export','session.accept','launchEnvironment']:self.assertNotIn(forbidden,method)
   self.assertIn('captureScope != "visionos_store"',ui.split('override func tearDown()',1)[1].split('private func bindCaptureRunner',1)[0])
  def test_fixed_workflow_single_cohort_and_no_account_actions(self):
-  w=json.loads((ROOT/job.WORKFLOW).read_text());self.assertEqual(w['on'],{'push':{'branches':['codex/vision-store-screenshot']}});self.assertEqual(set(w['jobs']),{'store'});j=w['jobs']['store'];self.assertEqual(j['runs-on'],'xcode-27');self.assertEqual(j['timeout-minutes'],45);self.assertEqual(w['permissions'],{'contents':'read'});self.assertFalse(w['concurrency']['cancel-in-progress'])
+  w=json.loads((ROOT/job.WORKFLOW).read_text());self.assertEqual(w['on'],{'push':{'branches':['vision-store-screenshot']}});self.assertEqual(set(w['jobs']),{'store'});j=w['jobs']['store'];self.assertEqual(j['runs-on'],'xcode-27');self.assertEqual(j['timeout-minutes'],45);self.assertEqual(w['permissions'],{'contents':'read'});self.assertFalse(w['concurrency']['cancel-in-progress'])
   ids=[s.get('id') for s in j['steps']];self.assertTrue(all(p in ids for p in list(job.BUSINESS['store'])+list(job.FINAL)[:-1]));self.assertNotIn('hosted',ids)
   checkout=next(s for s in j['steps'] if s.get('uses','').startswith('actions/checkout@'));self.assertFalse(checkout['with']['persist-credentials']);self.assertEqual(checkout['with']['fetch-depth'],2)
   upload=next(s for s in j['steps'] if s.get('id')=='upload');self.assertEqual(upload['with']['retention-days'],1);self.assertIn("steps.validate.outputs.eligible == 'true'",upload['if'])
@@ -45,17 +45,21 @@ class StoreContract(unittest.TestCase):
   w=json.loads((ROOT/job.WORKFLOW).read_text());clock=w['jobs']['store']['steps'][0]['run'].split("PY_CLOCK'\n",1)[1].rsplit('\nPY_CLOCK',1)[0];ast.parse(clock)
   self.assertIn("scopes={'store':('visionos_store',2700,360)}",clock);self.assertIn("GITHUB_RUN_ATTEMPT']=='1'",clock);self.assertIn('QRCATCHER_VISION_STORE_CLOCK=',clock)
  def test_all_425_untouched_parent_inputs_match_bytes_modes(self):
-  f=json.loads((ROOT/'scripts/vision_store_source_inputs.json').read_text());self.assertEqual(f['base_commit'],job.PARENT);self.assertEqual(f['base_tree'],job.PARENT_TREE);self.assertEqual(len(f['unchanged_inputs']),425)
+  f=json.loads((ROOT/'scripts/vision_store_source_inputs.json').read_text());self.assertEqual(f['base_commit'],job.BASE);self.assertEqual(f['base_tree'],job.BASE_TREE);self.assertEqual(len(f['unchanged_inputs']),425)
   for row in f['unchanged_inputs']:
    p=ROOT/row['path'];raw=p.read_bytes();self.assertEqual(hashlib.sha256(raw).hexdigest(),row['sha256'],row['path']);self.assertEqual(len(raw),row['bytes']);self.assertEqual('100755' if p.stat().st_mode&0o111 else '100644',row['mode']);self.assertNotIn(row['path'],job.ALLOWED_CHANGED)
  def test_store_source_guard_positive_and_fail_closed_on_changed_product(self):
   fixture=json.loads((ROOT/'scripts/vision_store_source_inputs.json').read_text())
   paths=sorted({r['path'] for r in fixture['unchanged_inputs']}|job.ALLOWED_CHANGED)
+  changed_paths=set(job.SUCCESSOR_PATHS)
   def runner(args,seconds):
-   key=tuple(args[1:]); values={('rev-parse','HEAD'):'a'*40,('rev-list','--parents','-n','1','HEAD'):'a'*40+' '+job.PARENT,('diff','--name-only','HEAD','--'):'',('rev-parse',job.PARENT+'^{tree}'):job.PARENT_TREE,('diff','--name-only',job.PARENT,'HEAD','--'):'\n'.join(sorted(job.ALLOWED_CHANGED)),('ls-files',):'\n'.join(paths),('rev-parse','HEAD^{tree}'):'b'*40}
+   key=tuple(args[1:]); values={('rev-parse','HEAD'):'a'*40,('rev-list','--parents','-n','1','HEAD'):'a'*40+' '+job.PARENT,('diff','--name-only','HEAD','--'):'',('rev-parse',job.PARENT+'^{tree}'):job.PARENT_TREE,('diff','--name-only',job.PARENT,'HEAD','--'):'\n'.join(sorted(changed_paths)),('ls-files',):'\n'.join(paths),('rev-parse','HEAD^{tree}'):'b'*40}
    return 0,values[key],{'cleanup_confirmed':True}
   with patch.dict(os.environ,{'GITHUB_SHA':'a'*40}):
    result=job.source_snapshot(ROOT,runner);self.assertEqual(len(result['files']),442)
+   changed_paths.add('scripts/vision_store_image.py')
+   with self.assertRaisesRegex(ValueError,'source delta outside the branch rename'):job.source_snapshot(ROOT,runner)
+   changed_paths.remove('scripts/vision_store_image.py')
    original=job.load_regular
    def changed(path,limit=512*1024):
     raw=original(path,limit)

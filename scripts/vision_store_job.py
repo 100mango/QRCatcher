@@ -19,9 +19,13 @@ from vision_store_evidence import inspect
 from watch_process import execute
 from run_vision_ui_cases import native_operation_unconfirmed
 
-PARENT = '6675f0051fbb597ed7212819cd34fb0b1e42c7b5'
-PARENT_TREE = 'f7cefb13a5ddf20b9564b67df094b52f2a37dce8'
-BRANCH = 'refs/heads/codex/vision-store-screenshot'
+BASE = '6675f0051fbb597ed7212819cd34fb0b1e42c7b5'
+BASE_TREE = 'f7cefb13a5ddf20b9564b67df094b52f2a37dce8'
+PARENT = 'af5f1bec0989bf0122d1db551fce0d5f429c5a75'
+PARENT_TREE = '39398fe750951b54febc797a58320b8aab937ee9'
+SUCCESSOR_PATHS = {'.github/workflows/vision-store-screenshot.yml',
+                   'scripts/vision_store_job.py', 'Tests/Harness/test_vision_store_job.py'}
+BRANCH = 'refs/heads/vision-store-screenshot'
 WORKFLOW = '.github/workflows/vision-store-screenshot.yml'
 JOBS = {'store': ('visionos_store', 2700, 360)}
 COMMON = {'prepare': 180, 'build': 440, 'probe': 690, 'install': 120,
@@ -132,7 +136,7 @@ def source_snapshot(root, runner):
     require(git('diff', '--name-only', 'HEAD', '--') == '', 'Tracked source was modified')
     require(git('rev-parse', PARENT + '^{tree}') == PARENT_TREE, 'Published product parent tree differs')
     changed = set(git('diff', '--name-only', PARENT, 'HEAD', '--').splitlines())
-    require(changed == ALLOWED_CHANGED, 'Unexpected source delta outside the frozen store candidate')
+    require(changed == SUCCESSOR_PATHS, 'Unexpected source delta outside the branch rename')
     paths = git('ls-files').splitlines()
     require(paths and len(paths) == len(set(paths)), 'Invalid source inventory')
     rows = []
@@ -144,7 +148,7 @@ def source_snapshot(root, runner):
                      'mode': '100755' if path.stat().st_mode & 0o111 else '100644'})
     actual = {r['path']: r for r in rows}
     reference = read_json(root / 'scripts/vision_store_source_inputs.json')
-    require(reference.get('base_commit') == PARENT and reference.get('base_tree') == PARENT_TREE,
+    require(reference.get('base_commit') == BASE and reference.get('base_tree') == BASE_TREE,
             'Wrong published input reference')
     expected = reference.get('unchanged_inputs')
     require(isinstance(expected, list) and len(expected) == 425, 'Incomplete unchanged-input reference')
@@ -317,7 +321,7 @@ class Job:
                     'elapsed_seconds': time.monotonic() - self.clock['started_monotonic'],
                     'scope_limit_bytes': self.case.evidence_bytes, 'only_requested_case': self.case.name,
                     'files_rerun': False, 'full_photos_export_chain_rerun': False, 'system_size_modified': False,
-                    'product_commit': PARENT, 'store_upload_qualified': False, 'pixel_review_pending': True}
+                    'product_commit': BASE, 'store_upload_qualified': False, 'pixel_review_pending': True}
         if self.case.functional_only:
             terminal.update(qualification='functional-only', new_privacy_pixels=False, store_screenshots=False)
         try:
