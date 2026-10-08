@@ -94,19 +94,26 @@ def built_icons(app, car_rows, observation=None):
         if matches:referenced.update(matches)
         records.append({'references':matches,**record})
     require(referenced==set(refs), 'built iPad reference has no actual PNG')
-    for size in (152,167):
-        require(any(x['width']==x['height']==size and x['references'] for x in records),
-                'missing referenced actual '+str(size)+'x'+str(size)+' iPad icon')
+    require(any(x['width']==x['height']==152 and x['references'] for x in records),
+            'missing referenced actual 152x152 iPad icon')
     require(isinstance(car_rows,list) and len(car_rows)<=4096, 'invalid Assets.car inventory')
-    car_icons=[]
-    for row in car_rows:
-        if not isinstance(row,dict):continue
-        rendition=row.get('RenditionName',''); name=row.get('Name',''); idiom=str(row.get('Idiom','')).lower()
-        if rendition in IPAD or (isinstance(name,str) and name.startswith('AppIcon') and idiom in ('pad','ipad')):car_icons.append(row)
+    # iOS 11+ binds the primary icon through CFBundleIconName. Xcode 27 emits
+    # the iPad Pro variant in that catalog, without a separate loose 167 PNG.
+    # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+    car_icons=[row for row in car_rows if isinstance(row,dict)
+               and row.get('AssetType')=='Icon Image' and row.get('Name')==primary['CFBundleIconName']
+               and row.get('Idiom')=='pad']
+    pro_icons=[row for row in car_icons if row.get('RenditionName')=='ipad-83.5x83.5@2x.png'
+               and type(row.get('Scale')) is int and row['Scale']==2
+               and type(row.get('PixelWidth')) is int and row['PixelWidth']==167
+               and type(row.get('PixelHeight')) is int and row['PixelHeight']==167
+               and row.get('Opaque') is True and row.get('ColorModel')=='RGB']
+    require(pro_icons, 'missing exact named opaque AppIcon iPad 167x167 catalog rendition')
     observed={x['width'] for x in records if x['width']==x['height'] and x['references']}
     observed.update(x['PixelWidth'] for x in car_icons if type(x.get('PixelWidth')) is int and x.get('PixelHeight')==x['PixelWidth'])
     return {'bundle':'100mango.QRCatcher','version':'1.1','build':'3','device_family':[1,2],
             'ipad_primary_icon':primary,'loose_pngs':records,'car_ipad_icon_renditions':car_icons,
-            'observed_ipad_dimensions':sorted(observed),'required_referenced_png_dimensions':[152,167],
+            'observed_ipad_dimensions':sorted(observed),'required_referenced_png_dimensions':[152],
+            'required_named_catalog_dimensions':[167],'ipad_pro_catalog_renditions':pro_icons,
             'source_76_icon_checked_separately':True,
             'assets_car_sha256':observation['assets_car_sha256']}

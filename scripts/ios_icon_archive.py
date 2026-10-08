@@ -12,8 +12,9 @@ from verify_ios_icons import source_icons, built_icons, built_observation, read,
 from verify_ios_only_release import verify_package
 
 ROOT=Path(__file__).resolve().parents[1]
-PARENT='c23e09e14ab046fc6f61a3951a32d4335608f4f7'
-PARENT_TREE='bee21b86efa2cacaf50794ca0a70c7411e90afbb'
+PARENT='176b03855d16fbd5ccdb7e959ce3648d4546b0a5'
+PARENT_TREE='968a9cc0ad1ee3861dd2a4d401e0579ee497f435'
+SUCCESSOR_CHANGED={'scripts/verify_ios_icons.py','scripts/ios_icon_archive.py','Tests/Harness/test_ios_icon_fix.py'}
 BRANCH='refs/heads/ios-icon-fix'
 WORKFLOW='.github/workflows/ios-icon-fix.yml'
 ARCHIVE=Path('build/ios-icon-fix/QRCatcher.xcarchive')
@@ -22,7 +23,6 @@ PROOF=Path('build/ios-icon-proof/report.json')
 LOG_CAP=16*1024*1024
 RETAIN_LOG=512*1024
 MAX_REPORT=2*1024*1024
-ALLOWED_CHANGED=set(['.github/workflows/ios-icon-fix.yml', '.gitignore', 'QRCatcher-iOS-Only.xcodeproj/project.pbxproj', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-20x20@1x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-20x20@2x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-29x29@1x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-29x29@2x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-40x40@1x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-40x40@2x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-76x76@1x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-76x76@2x.png', 'QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-83.5x83.5@2x.png', 'Tests/Harness/test_ios_icon_fix.py', 'Tests/Harness/test_ios_only_project.py', 'Tests/Harness/test_ios_only_release_package.py', 'docs/NATIVE_APPLE_PLATFORMS.md', 'scripts/generate_project.py', 'scripts/ios_icon_archive.py', 'scripts/ios_icon_capture.py', 'scripts/ipad_icon_manifest.json', 'scripts/materialize_ipad_icons.py', 'scripts/verify_ios_icons.py', 'scripts/verify_ios_only_release.py'])
 
 def bounded_log(raw):
     if len(raw)<=RETAIN_LOG:return {'bytes':len(raw),'truncated':False,'text':raw.decode('utf-8','replace')}
@@ -54,9 +54,9 @@ def source_snapshot(root, run, identity):
     def git(*args):return run(['git',*args],5,256*1024).decode().strip()
     require(git('rev-parse','HEAD')==identity['GITHUB_SHA'],'wrong source HEAD')
     require(git('rev-list','--parents','-n','1','HEAD').split()==[identity['GITHUB_SHA'],PARENT],'wrong sole parent')
-    require(git('rev-parse',PARENT+'^{tree}')==PARENT_TREE,'wrong original iOS tree')
+    require(git('rev-parse',PARENT+'^{tree}')==PARENT_TREE,'wrong reviewed icon-fix parent tree')
     require(git('status','--porcelain','--untracked-files=all')=='','source not clean')
-    require(set(git('diff','--name-only',PARENT,'HEAD','--').splitlines())==ALLOWED_CHANGED,'unreviewed source delta')
+    require(set(git('diff','--name-only',PARENT,'HEAD','--').splitlines())==SUCCESSOR_CHANGED,'unreviewed successor delta')
     files=git('ls-files','-z').split('\0'); rows={}
     for name in files:
         if not name:continue
@@ -93,6 +93,7 @@ def execute(root=ROOT, env=None, clock=time.monotonic, runner=capture):
         require(result.returncode==0,'command failed: '+args[0])
         row['complete']=True
         return result.stdout
+    archive_returned=False
     try:
         require(not (root/'build').exists(),'expected fresh checkout output')
         report['source_before']=source_snapshot(root,run,identity)
@@ -103,6 +104,7 @@ def execute(root=ROOT, env=None, clock=time.monotonic, runner=capture):
         require(run(['xcodebuild','-version'],10,4096).decode().strip()=='Xcode 27.0\nBuild version 27A266a','unexpected Xcode')
         (root/'build/ios-icon-fix').mkdir(parents=True)
         output=run(archive_command(),720)
+        archive_returned=True
         require(b'** ARCHIVE SUCCEEDED **' in output,'missing actual archive success')
         require(not report['commands'][-1]['reported_error'],'archive reported error')
         report['built_observation']=built_observation(root/APP)
@@ -112,12 +114,19 @@ def execute(root=ROOT, env=None, clock=time.monotonic, runner=capture):
         car=json.loads(run(['xcrun','assetutil','--info',str(APP/'Assets.car')],30,4*1024*1024))
         report['asset_catalog']=car
         report['built_icons']=built_icons(root/APP,car,report['built_observation'])
-        report['source_after']=source_snapshot(root,run,identity)
-        require(report['source_before']==report['source_after'],'archive changed tested source inputs')
         require(clock()<deadline,'inspection exceeded original deadline')
-        report['qualified']=True
     except (Exception,KeyboardInterrupt) as error:
         report['failure']={'type':type(error).__name__,'reason':str(error)[:3000]}
+    # Only a known completed archive permits this host-only observation. It
+    # preserves an inspection failure and records source-check failure separately.
+    if archive_returned:
+        try:
+            report['source_after']=source_snapshot(root,run,identity)
+            require(report['source_before']==report['source_after'],'archive changed tested source inputs')
+        except (Exception,KeyboardInterrupt) as error:
+            report['source_after_failure']={'type':type(error).__name__,'reason':str(error)[:3000]}
+            if 'failure' not in report:report['failure']=report['source_after_failure']
+    report['qualified']=archive_returned and 'failure' not in report and 'source_after' in report
     report['clock']['finished']=clock();report['clock']['elapsed']=clock()-began
     return report
 
