@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 
 @interface QRCatchViewController : UIViewController
+- (void)setPrivacyPolicyPresented:(BOOL)presented;
 
 
 @end

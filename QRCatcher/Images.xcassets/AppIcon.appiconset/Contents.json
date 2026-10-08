@@ -1,44 +1,50 @@
 {
-  "images" : [
+  "images": [
     {
-      "size" : "29x29",
-      "idiom" : "iphone",
-      "filename" : "settings2x.png",
-      "scale" : "2x"
+      "size": "29x29",
+      "idiom": "iphone",
+      "filename": "settings2x.png",
+      "scale": "2x"
     },
     {
-      "size" : "29x29",
-      "idiom" : "iphone",
-      "filename" : "settings3x.png",
-      "scale" : "3x"
+      "size": "29x29",
+      "idiom": "iphone",
+      "filename": "settings3x.png",
+      "scale": "3x"
     },
     {
-      "size" : "40x40",
-      "idiom" : "iphone",
-      "filename" : "spotlight2x.png",
-      "scale" : "2x"
+      "size": "40x40",
+      "idiom": "iphone",
+      "filename": "spotlight2x.png",
+      "scale": "2x"
     },
     {
-      "size" : "40x40",
-      "idiom" : "iphone",
-      "filename" : "spotlight3x.png",
-      "scale" : "3x"
+      "size": "40x40",
+      "idiom": "iphone",
+      "filename": "spotlight3x.png",
+      "scale": "3x"
     },
     {
-      "size" : "60x60",
-      "idiom" : "iphone",
-      "filename" : "icon2X.png",
-      "scale" : "2x"
+      "size": "60x60",
+      "idiom": "iphone",
+      "filename": "icon2X.png",
+      "scale": "2x"
     },
     {
-      "size" : "60x60",
-      "idiom" : "iphone",
-      "filename" : "icon3X.png",
-      "scale" : "3x"
+      "size": "60x60",
+      "idiom": "iphone",
+      "filename": "icon3X.png",
+      "scale": "3x"
+    },
+    {
+      "size": "1024x1024",
+      "idiom": "ios-marketing",
+      "filename": "marketing1024.png",
+      "scale": "1x"
     }
   ],
-  "info" : {
-    "version" : 1,
-    "author" : "xcode"
+  "info": {
+    "version": 1,
+    "author": "xcode"
   }
 }
