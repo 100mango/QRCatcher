@@ -7,6 +7,7 @@
 //
 
 #import "NSString+Tools.h"
+#import "QRPayload.h"
 
 @implementation NSString (Tools)
 
@@ -66,28 +67,7 @@
     return [carTest evaluateWithObject:self];
 }
 
-- (BOOL)isURL
-{
-    NSURL *url = [NSURL URLWithString:self];
-    if (url && url.host) {
-        return YES;
-    }
-    else
-    {
-        return NO;
-    }
-}
+- (BOOL)isURL { return [NSString HTTPURLFromString:self] != nil; }
 
-+(NSURL *)HTTPURLFromString:(NSString *)string
-{
-    NSString *searchString = @"http";
-    NSRange prefixRange = [string rangeOfString:searchString options:(NSCaseInsensitiveSearch | NSAnchoredSearch)];
-    
-    if (prefixRange.length == 4) {
-        return [NSURL URLWithString:string];
-    }
-    return [NSURL URLWithString:[NSString stringWithFormat:@"http://%@", string]];
-    
-}
-
++ (NSURL *)HTTPURLFromString:(NSString *)string { return [QRPayload safeWebURL:string]; }
 @end

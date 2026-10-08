@@ -27,3 +27,18 @@ DerivedData
 # http://guides.cocoapods.org/using/using-cocoapods.html#should-i-ignore-the-pods-directory-in-source-control
 #
 Pods/
+# Local tooling and test output
+__pycache__/
+*.pyc
+*.xcresult/
+test.log
+
+Tests/Fixtures/*.png
+
+QRCatcherMac/Assets.xcassets/AppIcon.appiconset/*.png
+
+QRCatcher/Images.xcassets/AppIcon.appiconset/ipad-*.png
+
+QRCatcherWatch/Assets.xcassets/**/*.png
+QRCatcherVision/Assets.xcassets/**/*.png
+QRCatcherTV/Assets.xcassets/**/*.png

@@ -1,0 +1,88 @@
+[
+  {
+    "name": "ascii.png",
+    "sha256": "0e1c65d966d3ef0401ccbf884b1bae75aed32f08b84d06f389b232b1a183b126",
+    "payloads": [
+      "https://example.com/qrcatcher?source=golden"
+    ]
+  },
+  {
+    "name": "unicode.png",
+    "sha256": "da5f0c2d31e60cc7e135b1b9c13a96e190425e74066b6e4d618864c96637ef24",
+    "payloads": [
+      "QRCatcher 你好 🌈 123"
+    ]
+  },
+  {
+    "name": "rotated.png",
+    "sha256": "acf1d5f35b70fda1e4374895c282016b02db1557dfe00f218d1503673b55b8d8",
+    "payloads": [
+      "QRCatcher 你好 🌈 123"
+    ]
+  },
+  {
+    "name": "invalid.png",
+    "sha256": "13c0915d226521fb56bba264c92a227dbdebcf9a4add3a4957fd9c810582dbe8",
+    "payloads": []
+  },
+  {
+    "name": "multiple.png",
+    "sha256": "df573b70c5cc492b08409a5d76ce052fb31566bff7859721384aaca59dd381d0",
+    "payloads": [
+      "https://example.com/qrcatcher?source=golden",
+      "QRCatcher 你好 🌈 123"
+    ]
+  },
+  {
+    "name": "oversized-edge.png",
+    "sha256": "7c5fad423c8d22b93c654e914f44ca888023f594247a4467ea5699dba1b141ed",
+    "payloads": [],
+    "source_dimensions": [
+      100000,
+      1
+    ],
+    "expected_error": "source_dimensions_limit"
+  },
+  {
+    "name": "oversized-area.png",
+    "sha256": "1840b0493101b6e8d6306c2e33ccc0cb5d9063ee155f753bc5c46ac73bc586fb",
+    "payloads": [],
+    "source_dimensions": [
+      20000,
+      6000
+    ],
+    "expected_error": "source_dimensions_limit"
+  },
+  {
+    "name": "eci-utf8.png",
+    "sha256": "9c3d86ff77dec452d5a1a77510c77f9a7d72dc85e8f8406f8aac505426523366",
+    "payloads": [
+      "你好 🌈"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-latin1.png",
+    "sha256": "30c8f5ad52fa69f3660c38f432423dfad0c7f95ac086cffae74ad1c8efbe2cb6",
+    "payloads": [
+      "Café"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-shiftjis.png",
+    "sha256": "806a3faa2faab080bcb422c5430ac89019d7960099ab994afc47cbc6a6caa089",
+    "payloads": [
+      "日本語"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  },
+  {
+    "name": "eci-mixed.png",
+    "sha256": "e7ad12b5f04accdbf6c0316b1c604541c1a5375c27bc3b0e6f36cbba0feea830",
+    "payloads": [
+      "Café 你好"
+    ],
+    "producer": "Independent ReportLab QR ECI/byte segments"
+  }
+]

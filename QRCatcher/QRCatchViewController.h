@@ -9,6 +9,9 @@
 #import <UIKit/UIKit.h>
 
 @interface QRCatchViewController : UIViewController
+- (void)setPrivacyPolicyPresented:(BOOL)presented;
+- (void)showSavedPayload:(NSString *)payload;
++ (CGFloat)previewRotationForOrientation:(UIInterfaceOrientation)orientation;
 
 
 @end

@@ -1,0 +1,818 @@
+{
+  "repository": "https://github.com/zxing-cpp/zxing-cpp",
+  "tag": "v3.1.1",
+  "commit": "287c85df6f961c8efbfb5ffd736cd9457b8b890e",
+  "cpp_sources": [
+    "src/Barcode.cpp",
+    "src/BarcodeFormat.cpp",
+    "src/BinaryBitmap.cpp",
+    "src/BitArray.cpp",
+    "src/BitMatrix.cpp",
+    "src/BitMatrixIO.cpp",
+    "src/BitSource.cpp",
+    "src/CharacterSet.cpp",
+    "src/ConcentricFinder.cpp",
+    "src/Content.cpp",
+    "src/CreateBarcode.cpp",
+    "src/ECI.cpp",
+    "src/Error.cpp",
+    "src/GTIN.cpp",
+    "src/GlobalHistogramBinarizer.cpp",
+    "src/GridSampler.cpp",
+    "src/HRI.cpp",
+    "src/HybridBinarizer.cpp",
+    "src/JSON.cpp",
+    "src/LocalGrid.cpp",
+    "src/MultiFormatReader.cpp",
+    "src/PerspectiveTransform.cpp",
+    "src/ReadBarcode.cpp",
+    "src/ReedSolomon.cpp",
+    "src/ResultPoint.cpp",
+    "src/TextDecoder.cpp",
+    "src/Utf.cpp",
+    "src/WhiteRectDetector.cpp",
+    "src/WriteBarcode.cpp",
+    "src/ZXingCpp.cpp",
+    "src/qrcode/QRBitMatrixParser.cpp",
+    "src/qrcode/QRCodecMode.cpp",
+    "src/qrcode/QRDataBlock.cpp",
+    "src/qrcode/QRDecoder.cpp",
+    "src/qrcode/QRDetector.cpp",
+    "src/qrcode/QRErrorCorrectionLevel.cpp",
+    "src/qrcode/QRFormatInformation.cpp",
+    "src/qrcode/QRReader.cpp",
+    "src/qrcode/QRVersion.cpp"
+  ],
+  "c_sources": [
+    "src/libzueci/zueci.c"
+  ],
+  "writers": false,
+  "formats": [
+    "QRCode"
+  ],
+  "files": [
+    {
+      "path": "src/Barcode.cpp",
+      "bytes": 6672,
+      "sha256": "5889d8d5144f2036774a8e6a1c8c9f9b37c461ccf0e1bc1af6246e315af0e6d4",
+      "upstream_path": "core/src/Barcode.cpp"
+    },
+    {
+      "path": "src/Barcode.h",
+      "bytes": 7513,
+      "sha256": "8916a74f1aa8af164162080c770843b022d51f577af2744e309d9f358db8e103",
+      "upstream_path": "core/src/Barcode.h"
+    },
+    {
+      "path": "src/BarcodeData.h",
+      "bytes": 3132,
+      "sha256": "cf699d2efddc168be67cbc9eff0c149c2d0b485622b805902bae1f71ef40248d",
+      "upstream_path": "core/src/BarcodeData.h"
+    },
+    {
+      "path": "src/BarcodeFormat.cpp",
+      "bytes": 7744,
+      "sha256": "eb063fe97ffb46995b61613c864ff2cdb515ebfbbc40aad2c528fc59010c26eb",
+      "upstream_path": "core/src/BarcodeFormat.cpp"
+    },
+    {
+      "path": "src/BarcodeFormat.h",
+      "bytes": 12165,
+      "sha256": "24885f95c22b5828e948e99e97a9cee604cf69b5f73d3bf48630762c539ef647",
+      "upstream_path": "core/src/BarcodeFormat.h"
+    },
+    {
+      "path": "src/BinaryBitmap.cpp",
+      "bytes": 2975,
+      "sha256": "e767145caced3aa67ed2911dc69b3142e69b79a88d239eb56ad6ef0bae09ea43",
+      "upstream_path": "core/src/BinaryBitmap.cpp"
+    },
+    {
+      "path": "src/BinaryBitmap.h",
+      "bytes": 1446,
+      "sha256": "f5c47f0e7c2fe2e8d2256f4fc38d80e92c3ef017f9695f2192f0be6c71e4bb8d",
+      "upstream_path": "core/src/BinaryBitmap.h"
+    },
+    {
+      "path": "src/BitArray.cpp",
+      "bytes": 888,
+      "sha256": "0a850051db3b4a82d9db7a258cf3959675ff390779bdc6ea0b00f8cdc447951e",
+      "upstream_path": "core/src/BitArray.cpp"
+    },
+    {
+      "path": "src/BitArray.h",
+      "bytes": 4594,
+      "sha256": "20b139ddf6c5a19eb668042f50e719245294a1c3b51359fb50710915c0e0f6f7",
+      "upstream_path": "core/src/BitArray.h"
+    },
+    {
+      "path": "src/BitMatrix.cpp",
+      "bytes": 4324,
+      "sha256": "d009bac5522e5b82d36e54af5f6dc6fb2deb1845d0d6232740e20ceb824a707f",
+      "upstream_path": "core/src/BitMatrix.cpp"
+    },
+    {
+      "path": "src/BitMatrix.h",
+      "bytes": 5583,
+      "sha256": "efb519f41f3f045e39836887067f0a9bbe31a608ce40cb1efb00b0bee0dcf4c4",
+      "upstream_path": "core/src/BitMatrix.h"
+    },
+    {
+      "path": "src/BitMatrixCursor.h",
+      "bytes": 6541,
+      "sha256": "c437866f1986eb631af8bf0b6349c2b1044f7b11bcdae5a8079045548682bfdc",
+      "upstream_path": "core/src/BitMatrixCursor.h"
+    },
+    {
+      "path": "src/BitMatrixIO.cpp",
+      "bytes": 2713,
+      "sha256": "1e4ad4333f4843386680958d345529391557cf8e02cf6f11f6c0f7fcb0ad27aa",
+      "upstream_path": "core/src/BitMatrixIO.cpp"
+    },
+    {
+      "path": "src/BitMatrixIO.h",
+      "bytes": 623,
+      "sha256": "bc6af4e9dd29f1da356c85da80351f26ef688b896f22bc8f7a1f67989dc80541",
+      "upstream_path": "core/src/BitMatrixIO.h"
+    },
+    {
+      "path": "src/BitSource.cpp",
+      "bytes": 1753,
+      "sha256": "4119652bdc7c33fb1d644f55663753ab83f33c0d0c7d66faa574414f7a97f797",
+      "upstream_path": "core/src/BitSource.cpp"
+    },
+    {
+      "path": "src/BitSource.h",
+      "bytes": 1876,
+      "sha256": "966a8b8bc9d6d057ce151b72489fd493a0342fd803fa9d762ccab6a6c9b8622e",
+      "upstream_path": "core/src/BitSource.h"
+    },
+    {
+      "path": "src/ByteArray.h",
+      "bytes": 1075,
+      "sha256": "defb8570859b5059d6deb95bdb0f01ff406442d0b03d8a20784f2d6c727f3e51",
+      "upstream_path": "core/src/ByteArray.h"
+    },
+    {
+      "path": "src/CharacterSet.cpp",
+      "bytes": 2422,
+      "sha256": "faf3682702be01cdcce8a881c7c1850a2fe1d670ffb843ac85be267919b0cba3",
+      "upstream_path": "core/src/CharacterSet.cpp"
+    },
+    {
+      "path": "src/CharacterSet.h",
+      "bytes": 685,
+      "sha256": "bae98d565f072aed5ea3683e01473f400f056f2ec904d5dbff921008a5c04985",
+      "upstream_path": "core/src/CharacterSet.h"
+    },
+    {
+      "path": "src/ConcentricFinder.cpp",
+      "bytes": 11089,
+      "sha256": "9fa1bd889ddb8c62171f1c60037b1dbf89fcbf008e79b03928b07ee97cc3e5c5",
+      "upstream_path": "core/src/ConcentricFinder.cpp"
+    },
+    {
+      "path": "src/ConcentricFinder.h",
+      "bytes": 4618,
+      "sha256": "8fe845c10f7d3975a883fef7a551247596beaf849e47fe79de594ca61557f642",
+      "upstream_path": "core/src/ConcentricFinder.h"
+    },
+    {
+      "path": "src/Content.cpp",
+      "bytes": 12975,
+      "sha256": "d4acd0734b7f9cb156ebe241542a2082dd8c9a9742ed4f284fb93fd16c62b8d8",
+      "upstream_path": "core/src/Content.cpp"
+    },
+    {
+      "path": "src/Content.h",
+      "bytes": 2145,
+      "sha256": "c57a1c91fa4411281737f85f97ca64250d0853c16046719b63f698de759e1bd1",
+      "upstream_path": "core/src/Content.h"
+    },
+    {
+      "path": "src/ContentType.h",
+      "bytes": 373,
+      "sha256": "3810d441db8cafe44454a6f710553fbb43078c7a861aae3845b0f1154ca4653d",
+      "upstream_path": "core/src/ContentType.h"
+    },
+    {
+      "path": "src/CreateBarcode.cpp",
+      "bytes": 16317,
+      "sha256": "bf05467eb6d58d69774875d36d813297f9b38af998b36a247575c191cc6dc5c6",
+      "upstream_path": "core/src/CreateBarcode.cpp"
+    },
+    {
+      "path": "src/CreateBarcode.h",
+      "bytes": 3971,
+      "sha256": "ba686c710324b2b03f042d340b46633cdd7bd37a0f52eb6ae811a7993c7cddd7",
+      "upstream_path": "core/src/CreateBarcode.h"
+    },
+    {
+      "path": "src/DecoderResult.h",
+      "bytes": 3009,
+      "sha256": "114abf6ebca9dd08977228f5226e0c8c8ed24d1739e4357aba79c58a73f2fc41",
+      "upstream_path": "core/src/DecoderResult.h"
+    },
+    {
+      "path": "src/DetectorResult.h",
+      "bytes": 1168,
+      "sha256": "596243d0174cc0dd883b1165b60c58ca95dcb719f3f4698aceb4258111c9f3d6",
+      "upstream_path": "core/src/DetectorResult.h"
+    },
+    {
+      "path": "src/ECI.cpp",
+      "bytes": 2406,
+      "sha256": "c14487e66504a17874753e05371e8ff5f5241be4fdc96c20558bb669d81f9b00",
+      "upstream_path": "core/src/ECI.cpp"
+    },
+    {
+      "path": "src/ECI.h",
+      "bytes": 1404,
+      "sha256": "9d3ef62a6d1ffb252802191253e117ba81f4b1e84a36215f7b271bae3c50e9aa",
+      "upstream_path": "core/src/ECI.h"
+    },
+    {
+      "path": "src/Error.cpp",
+      "bytes": 621,
+      "sha256": "8446e0b0544162d779758dc942566d0acfd7ed5b717066aa4b79c919a11395a4",
+      "upstream_path": "core/src/Error.cpp"
+    },
+    {
+      "path": "src/Error.h",
+      "bytes": 3033,
+      "sha256": "946dd7acb4d71b632e9577337c2cdb1f656fe063640097ab743beff891bd064d",
+      "upstream_path": "core/src/Error.h"
+    },
+    {
+      "path": "src/Flags.h",
+      "bytes": 5262,
+      "sha256": "a6a6c3521a4d9cdeebc46ef9c8cd4a622a353439720473a1528abd0d8ca9a95b",
+      "upstream_path": "core/src/Flags.h"
+    },
+    {
+      "path": "src/GTIN.cpp",
+      "bytes": 7815,
+      "sha256": "bacc84fc2eceadaa7d20205646b1cbffd79882450d38090944b7f1f53daac67e",
+      "upstream_path": "core/src/GTIN.cpp"
+    },
+    {
+      "path": "src/GTIN.h",
+      "bytes": 1507,
+      "sha256": "f5508d046247ced2a4fce30ffd00eb699ca1792ce3b59132c5e3b7ebd2b322ef",
+      "upstream_path": "core/src/GTIN.h"
+    },
+    {
+      "path": "src/GlobalHistogramBinarizer.cpp",
+      "bytes": 6349,
+      "sha256": "f92ec3aef8bc0970172b6ed620dad67e1ae660385e2bc7c03c4baedce8e1a46b",
+      "upstream_path": "core/src/GlobalHistogramBinarizer.cpp"
+    },
+    {
+      "path": "src/GlobalHistogramBinarizer.h",
+      "bytes": 966,
+      "sha256": "2bd8becc4349d458a609cc8b5ffe6cf89b3def4fa2ad430b3eedae04453c0cc3",
+      "upstream_path": "core/src/GlobalHistogramBinarizer.h"
+    },
+    {
+      "path": "src/GridSampler.cpp",
+      "bytes": 4188,
+      "sha256": "184d09ed1eb591479a723c5a07ad6f0fd9086bbade298218b546b78c38997dda",
+      "upstream_path": "core/src/GridSampler.cpp"
+    },
+    {
+      "path": "src/GridSampler.h",
+      "bytes": 1793,
+      "sha256": "9de93e81ba9ca81fee1bc9611fbbcb1e1f3cff00a75df9d08eca1fa78c62f053",
+      "upstream_path": "core/src/GridSampler.h"
+    },
+    {
+      "path": "src/HRI.cpp",
+      "bytes": 6565,
+      "sha256": "cd9a8647c0f10bfee609d84bad0b5314c1d5d8528f148bd158f73cea96766a10",
+      "upstream_path": "core/src/HRI.cpp"
+    },
+    {
+      "path": "src/HRI.h",
+      "bytes": 278,
+      "sha256": "ebcf247d44cb7606f826fc1d84119e8c1017e88dca756e4b17c89825a4925ddc",
+      "upstream_path": "core/src/HRI.h"
+    },
+    {
+      "path": "src/HybridBinarizer.cpp",
+      "bytes": 10665,
+      "sha256": "fc626a1b201e6b6438fcd6e6d436098dfac32c8317345eee0b95dc64b65ef228",
+      "upstream_path": "core/src/HybridBinarizer.cpp"
+    },
+    {
+      "path": "src/HybridBinarizer.h",
+      "bytes": 1486,
+      "sha256": "3c96c7f700b4298487e5ac62953b0b0f3d3c3a20feb43bd47df7cdf05b252e27",
+      "upstream_path": "core/src/HybridBinarizer.h"
+    },
+    {
+      "path": "src/ImageView.h",
+      "bytes": 6039,
+      "sha256": "b5c63ad64174bb5175283bccd31eea691fadf3cd3ebe76e414a28555236b875c",
+      "upstream_path": "core/src/ImageView.h"
+    },
+    {
+      "path": "src/JSON.cpp",
+      "bytes": 4138,
+      "sha256": "658cdf0c2c7bc66239ebf559b8b3c0cecd6d11b3f13fb4375c221e82a06f7abf",
+      "upstream_path": "core/src/JSON.cpp"
+    },
+    {
+      "path": "src/JSON.h",
+      "bytes": 2181,
+      "sha256": "41b6d77465eccc85f109eb676e1cb641854d9ad22bf51aa47fa86c50e8578871",
+      "upstream_path": "core/src/JSON.h"
+    },
+    {
+      "path": "src/LocalGrid.cpp",
+      "bytes": 8198,
+      "sha256": "88ccba00ee5d11873e015497ccb9bc76d720473507951e8d2d9799f0f8b5ab77",
+      "upstream_path": "core/src/LocalGrid.cpp"
+    },
+    {
+      "path": "src/LocalGrid.h",
+      "bytes": 3577,
+      "sha256": "32167127e7ca21baa8ca8bb3f83fa390820ce1c5f60081c6cf790c9ce292417d",
+      "upstream_path": "core/src/LocalGrid.h"
+    },
+    {
+      "path": "src/LogMatrix.h",
+      "bytes": 2269,
+      "sha256": "478a23dcde69077755e074202bcbef63badc11bb12621c46fdf3edb080cbd6a6",
+      "upstream_path": "core/src/LogMatrix.h"
+    },
+    {
+      "path": "src/Matrix.h",
+      "bytes": 2370,
+      "sha256": "41dd7ef04072476fefecc2e1c9a855190254e4f53adbd19c26daa14c52909933",
+      "upstream_path": "core/src/Matrix.h"
+    },
+    {
+      "path": "src/MultiFormatReader.cpp",
+      "bytes": 2691,
+      "sha256": "207b7287dcfaecd47ff13fd657e728e633a22c3942b171f6843caadaa027e879",
+      "upstream_path": "core/src/MultiFormatReader.cpp"
+    },
+    {
+      "path": "src/MultiFormatReader.h",
+      "bytes": 603,
+      "sha256": "a0496ff7583dabdc6297739f52e87ce328f444a0330eeac2be392043a6acd4dc",
+      "upstream_path": "core/src/MultiFormatReader.h"
+    },
+    {
+      "path": "src/MultiFormatWriter.h",
+      "bytes": 1358,
+      "sha256": "3654ca27a75a9246f1852e06c5b191f14ede5d670b348c34e86df40f4e2b392f",
+      "upstream_path": "core/src/MultiFormatWriter.h"
+    },
+    {
+      "path": "src/Pattern.h",
+      "bytes": 13625,
+      "sha256": "3fcdec686ff17123cbbb45237415f60922329807ba94ebfb681e1dc90fa14764",
+      "upstream_path": "core/src/Pattern.h"
+    },
+    {
+      "path": "src/PerspectiveTransform.cpp",
+      "bytes": 2305,
+      "sha256": "9118262c97b28acd038643b58e457c98ec297c3f29e7dec7bca88b780f87f098",
+      "upstream_path": "core/src/PerspectiveTransform.cpp"
+    },
+    {
+      "path": "src/PerspectiveTransform.h",
+      "bytes": 1434,
+      "sha256": "2246fbbc55e505e580c75518ec40b89e76efb68e5101f3b87a49b998ffc02f12",
+      "upstream_path": "core/src/PerspectiveTransform.h"
+    },
+    {
+      "path": "src/Point.h",
+      "bytes": 3654,
+      "sha256": "2c943cade7cde38d9a74505657f92deda4fe04d4cb43eb29daacad9576c49ab2",
+      "upstream_path": "core/src/Point.h"
+    },
+    {
+      "path": "src/Quadrilateral.h",
+      "bytes": 6636,
+      "sha256": "6b91915c958a12adb5a53722ebd3efd45556a011198a98672d6c407e6d6a8fc5",
+      "upstream_path": "core/src/Quadrilateral.h"
+    },
+    {
+      "path": "src/Range.h",
+      "bytes": 3682,
+      "sha256": "736b2b85c608ce76e8c11ade6cbc543d0feeceb50be98789f292ad1a7430a409",
+      "upstream_path": "core/src/Range.h"
+    },
+    {
+      "path": "src/ReadBarcode.cpp",
+      "bytes": 11710,
+      "sha256": "3ebcb0d930512323dd9558653346d267c869c2acd255d922384529e6b9b852b6",
+      "upstream_path": "core/src/ReadBarcode.cpp"
+    },
+    {
+      "path": "src/ReadBarcode.h",
+      "bytes": 906,
+      "sha256": "6462e3bf5bd5925ec0d8f12b0273330f1507dfa6fb0b92c505663f0e33039cd9",
+      "upstream_path": "core/src/ReadBarcode.h"
+    },
+    {
+      "path": "src/Reader.h",
+      "bytes": 638,
+      "sha256": "802958bd4cf16896e11927ecb0b2961f6bb9a0de28c74c2489d6fc1808ca0980",
+      "upstream_path": "core/src/Reader.h"
+    },
+    {
+      "path": "src/ReaderOptions.h",
+      "bytes": 9141,
+      "sha256": "b02f422ace401fcde9ffaabf4aefdc9532b7b61a846cc92705e55a89431d609e",
+      "upstream_path": "core/src/ReaderOptions.h"
+    },
+    {
+      "path": "src/ReedSolomon.cpp",
+      "bytes": 3004,
+      "sha256": "0b2272203b71da553ea0c41d665c90f475fae01f9a9d642e893d345d4d27f05e",
+      "upstream_path": "core/src/ReedSolomon.cpp"
+    },
+    {
+      "path": "src/ReedSolomon.h",
+      "bytes": 2042,
+      "sha256": "7e928326110c484bb932ee2e807f0d3857ce13559f270cb49edc9f2a2177dc1e",
+      "upstream_path": "core/src/ReedSolomon.h"
+    },
+    {
+      "path": "src/RegressionLine.h",
+      "bytes": 4607,
+      "sha256": "83831678f2147a9fdbb98047aec668cb4db58c100645178dce16824f0f5cf399",
+      "upstream_path": "core/src/RegressionLine.h"
+    },
+    {
+      "path": "src/ResultPoint.cpp",
+      "bytes": 364,
+      "sha256": "e5438cf75727f5668044daefae5af9752de647c6de88858a6691a3a7dae31a26",
+      "upstream_path": "core/src/ResultPoint.cpp"
+    },
+    {
+      "path": "src/ResultPoint.h",
+      "bytes": 841,
+      "sha256": "c9b2aa66d849fe3aadc275eee8c0d76b3b7a0d20cf8e34b8a7b7dc544262cb67",
+      "upstream_path": "core/src/ResultPoint.h"
+    },
+    {
+      "path": "src/StdGenerator.h",
+      "bytes": 2240,
+      "sha256": "34c8d5d71ff9ff48916b7a633a567141b453227e5ef2d0779bd093182c9deb2d",
+      "upstream_path": "core/src/StdGenerator.h"
+    },
+    {
+      "path": "src/StdPrint.h",
+      "bytes": 675,
+      "sha256": "f7bfc4ffbe0d59c2679fc4aad512ecf8142aaa8f0acc60a8cdd4a791ac456003",
+      "upstream_path": "core/src/StdPrint.h"
+    },
+    {
+      "path": "src/StdScope.h",
+      "bytes": 1273,
+      "sha256": "7529fc93b4d3881ade4b86921bbe8d1495ddd327072bee10e68664b33d5832bd",
+      "upstream_path": "core/src/StdScope.h"
+    },
+    {
+      "path": "src/StructuredAppend.h",
+      "bytes": 230,
+      "sha256": "01eb512c3eeca00f7538455fc51e27c0c60794fc071e155b395d27d4195bbc2f",
+      "upstream_path": "core/src/StructuredAppend.h"
+    },
+    {
+      "path": "src/SymbologyIdentifier.h",
+      "bytes": 618,
+      "sha256": "15b8a924ae3e5daa8d1302582f84c93ca2c6669c36874d3c3f384d792c0edc76",
+      "upstream_path": "core/src/SymbologyIdentifier.h"
+    },
+    {
+      "path": "src/TextDecoder.cpp",
+      "bytes": 1376,
+      "sha256": "b4b001cb334ce93d4cc18b063002d32cfe3aba9be22ca6f3943c89949aea6547",
+      "upstream_path": "core/src/TextDecoder.cpp"
+    },
+    {
+      "path": "src/TextDecoder.h",
+      "bytes": 367,
+      "sha256": "cfd64c09e600dda8ba345e21b9593723e719a66461425051234f5d5c507ac7fa",
+      "upstream_path": "core/src/TextDecoder.h"
+    },
+    {
+      "path": "src/TextEncoder.h",
+      "bytes": 660,
+      "sha256": "774cef2fead5bd07e9738910bf008884974767462ee2cec632ba0fc53c9b5ccb",
+      "upstream_path": "core/src/TextEncoder.h"
+    },
+    {
+      "path": "src/ThresholdBinarizer.h",
+      "bytes": 1357,
+      "sha256": "253e0e3c04e1110a61cc9115b022ce75b8f9d50e8431be7846f4ba464d773d94",
+      "upstream_path": "core/src/ThresholdBinarizer.h"
+    },
+    {
+      "path": "src/TritMatrix.h",
+      "bytes": 528,
+      "sha256": "147dae578b479c1e3da563d3f37af501b2579843121c5e774320ecce943ac41e",
+      "upstream_path": "core/src/TritMatrix.h"
+    },
+    {
+      "path": "src/Utf.cpp",
+      "bytes": 7681,
+      "sha256": "4fec257e836269803c38a2dffc5dc81b1f00e82d6edec51b4f00d089a4cf1941",
+      "upstream_path": "core/src/Utf.cpp"
+    },
+    {
+      "path": "src/Utf.h",
+      "bytes": 515,
+      "sha256": "90c83f8ae0f93ccd6289808f77e081140e2923ff9868e239f8e5933781594306",
+      "upstream_path": "core/src/Utf.h"
+    },
+    {
+      "path": "src/WhiteRectDetector.cpp",
+      "bytes": 6798,
+      "sha256": "598b57de7dff4598948330878c074bcefdace3b4c71fdaab5c99a0de5a0909f3",
+      "upstream_path": "core/src/WhiteRectDetector.cpp"
+    },
+    {
+      "path": "src/WhiteRectDetector.h",
+      "bytes": 1264,
+      "sha256": "aa65ad3939e03074d3bc0c0ef6d98bfb1af093248010c292534768178075d820",
+      "upstream_path": "core/src/WhiteRectDetector.h"
+    },
+    {
+      "path": "src/WriteBarcode.cpp",
+      "bytes": 6401,
+      "sha256": "1e820cbdd08306ad1892ff49b1d0dfc8b926638157be288f0bd50b007bbeabb6",
+      "upstream_path": "core/src/WriteBarcode.cpp"
+    },
+    {
+      "path": "src/WriteBarcode.h",
+      "bytes": 1869,
+      "sha256": "8e6716da9d72a342f84c386dfd560d696c8a807bf6b8dc2ea358561e0ee640ab",
+      "upstream_path": "core/src/WriteBarcode.h"
+    },
+    {
+      "path": "src/ZXAlgorithms.h",
+      "bytes": 9613,
+      "sha256": "b87f474b65d9e2008ca05a8d5c15fbbf6bf2a31337161df565493407652f41a9",
+      "upstream_path": "core/src/ZXAlgorithms.h"
+    },
+    {
+      "path": "src/ZXConfig.h",
+      "bytes": 1011,
+      "sha256": "bac5941a128fc4fb0d5d656860019cae2f20bf279de232a380bf8889e56e3539",
+      "upstream_path": "core/src/ZXConfig.h"
+    },
+    {
+      "path": "src/ZXTestSupport.h",
+      "bytes": 184,
+      "sha256": "94490d6d447733bc05a07ec58e75cc5624dccf85845d528ba83caf98455178ba",
+      "upstream_path": "core/src/ZXTestSupport.h"
+    },
+    {
+      "path": "src/ZXVersion.h",
+      "bytes": 323,
+      "sha256": "3fe35610e086da8c85d7bc4271e9d3eca3999e29f7f0cb849c11905aafab2f49",
+      "upstream_path": "core/src/ZXVersion.h"
+    },
+    {
+      "path": "src/ZXingC.h",
+      "bytes": 11401,
+      "sha256": "921c43e4df2d20a43dbf055a82fcb06ff24b0e8df59a0e04b22967c2c880b0cd",
+      "upstream_path": "core/src/ZXingC.h"
+    },
+    {
+      "path": "src/ZXingCpp.cpp",
+      "bytes": 259,
+      "sha256": "d76c6373b73f81a4fa031d308a8b64c0ea6950f396df350b580afcaabbe64529",
+      "upstream_path": "core/src/ZXingCpp.cpp"
+    },
+    {
+      "path": "src/ZXingCpp.h",
+      "bytes": 2117,
+      "sha256": "2904fca89efda71d4e67f3ba6b60162f236cb8a2ed33453957b3272a0114e6b9",
+      "upstream_path": "core/src/ZXingCpp.h"
+    },
+    {
+      "path": "src/ZXingQt.h",
+      "bytes": 18994,
+      "sha256": "6fdf0cf1dda0a0782dda3c791a16e02fe46b97d6b810088824c73dd40433109b",
+      "upstream_path": "core/src/ZXingQt.h"
+    },
+    {
+      "path": "src/librscpp/decode.h",
+      "bytes": 9030,
+      "sha256": "fe31fbb1d5acef3e38096f4cc5b11450f7e097ededc8e93a6579437ec2112552",
+      "upstream_path": "core/src/librscpp/decode.h"
+    },
+    {
+      "path": "src/librscpp/encode.h",
+      "bytes": 4381,
+      "sha256": "d12183522c02d24e5bf15f889d0f6a6c01241eb8b2108720919a25e2df858e55",
+      "upstream_path": "core/src/librscpp/encode.h"
+    },
+    {
+      "path": "src/librscpp/field.h",
+      "bytes": 5050,
+      "sha256": "c54b47efb4b1a1d382489aa671db51187dc2af6d1d59d79fa49152a1e02988f7",
+      "upstream_path": "core/src/librscpp/field.h"
+    },
+    {
+      "path": "src/librscpp/poly.h",
+      "bytes": 5371,
+      "sha256": "2a06bb4da7ef5183232322d3f5d4db91c7287661f54e8087c4a11a8c67cde6b2",
+      "upstream_path": "core/src/librscpp/poly.h"
+    },
+    {
+      "path": "src/libzueci/zueci.c",
+      "bytes": 56583,
+      "sha256": "55871f5d8f1fedf2422912515f01223b404833bcd9c7cbaedfd890fc05aedd12",
+      "upstream_path": "core/src/libzueci/zueci.c"
+    },
+    {
+      "path": "src/libzueci/zueci.h",
+      "bytes": 7758,
+      "sha256": "1239d7c775caf1b2ad707633d7908fcfdb5b4ddeb2ad83e48ebed27154733cfd",
+      "upstream_path": "core/src/libzueci/zueci.h"
+    },
+    {
+      "path": "src/libzueci/zueci_big5.h",
+      "bytes": 261105,
+      "sha256": "08d2a1473479a5984427b22b64008167c9444433e7b07d0a709088fad1c221ac",
+      "upstream_path": "core/src/libzueci/zueci_big5.h"
+    },
+    {
+      "path": "src/libzueci/zueci_common.h",
+      "bytes": 1037,
+      "sha256": "9c386b54cef02a9e8ab22c464ec75f0b9e9c453ac1c5184a8f2de1afb8c24924",
+      "upstream_path": "core/src/libzueci/zueci_common.h"
+    },
+    {
+      "path": "src/libzueci/zueci_gb18030.h",
+      "bytes": 16519,
+      "sha256": "aefe7ea3579280e86917e6cd739de4928d5f0f20df87b91739620417f0be6795",
+      "upstream_path": "core/src/libzueci/zueci_gb18030.h"
+    },
+    {
+      "path": "src/libzueci/zueci_gb2312.h",
+      "bytes": 158530,
+      "sha256": "552d8c7233a9c07d364ff26605ab83ae368ffa944316ff21d7ff544bf13c261d",
+      "upstream_path": "core/src/libzueci/zueci_gb2312.h"
+    },
+    {
+      "path": "src/libzueci/zueci_gbk.h",
+      "bytes": 271655,
+      "sha256": "287ec92bc9ee140ea373c33147a179dd95cc8f51def276ba02b74e68a1aa564e",
+      "upstream_path": "core/src/libzueci/zueci_gbk.h"
+    },
+    {
+      "path": "src/libzueci/zueci_ksx1001.h",
+      "bytes": 195926,
+      "sha256": "459a61917026b003d08506a56a5f04213c79932991a8d4fb3db6c551e7e53c76",
+      "upstream_path": "core/src/libzueci/zueci_ksx1001.h"
+    },
+    {
+      "path": "src/libzueci/zueci_sb.h",
+      "bytes": 57278,
+      "sha256": "44c9a6dfaf49acf37386d05b372f238d682771b1bc9579f1bce0611ac3e79cde",
+      "upstream_path": "core/src/libzueci/zueci_sb.h"
+    },
+    {
+      "path": "src/libzueci/zueci_sjis.h",
+      "bytes": 152478,
+      "sha256": "2fe418441588c051b51f04accce7d88188c7376bbaaadea92493741dfd2ff6e7",
+      "upstream_path": "core/src/libzueci/zueci_sjis.h"
+    },
+    {
+      "path": "src/qrcode/QRBitMatrixParser.cpp",
+      "bytes": 10072,
+      "sha256": "468e8cce0b15d07b8cc2c65b256f1baee48051e5c603693093d8a18318bf0132",
+      "upstream_path": "core/src/qrcode/QRBitMatrixParser.cpp"
+    },
+    {
+      "path": "src/qrcode/QRBitMatrixParser.h",
+      "bytes": 1174,
+      "sha256": "222e74a44490b5c9dc6408ded0a94a8b3725edc6d68fd6bf3b66204300ab37ab",
+      "upstream_path": "core/src/qrcode/QRBitMatrixParser.h"
+    },
+    {
+      "path": "src/qrcode/QRCodecMode.cpp",
+      "bytes": 3197,
+      "sha256": "408d36a267e47acc6a118b4531ee65aac769c5bc9fb186473d30f1da18785124",
+      "upstream_path": "core/src/qrcode/QRCodecMode.cpp"
+    },
+    {
+      "path": "src/qrcode/QRCodecMode.h",
+      "bytes": 1652,
+      "sha256": "b3c27148ff4391f092b16d2e6754e980bdbeda9a328b24340005efeab0c2363d",
+      "upstream_path": "core/src/qrcode/QRCodecMode.h"
+    },
+    {
+      "path": "src/qrcode/QRDataBlock.cpp",
+      "bytes": 3251,
+      "sha256": "08842f9055653fcfbacd8dab4a9e23fef00389d3721ac357b83522824d9a9ca8",
+      "upstream_path": "core/src/qrcode/QRDataBlock.cpp"
+    },
+    {
+      "path": "src/qrcode/QRDataBlock.h",
+      "bytes": 1434,
+      "sha256": "9fbaa644ae7d43af2dd17a2b640c0998615eff32bc12e0974eeeb83c5abdb42b",
+      "upstream_path": "core/src/qrcode/QRDataBlock.h"
+    },
+    {
+      "path": "src/qrcode/QRDataMask.h",
+      "bytes": 1392,
+      "sha256": "c21108e571113373894a64fa82b77871c9d7c65fd552f44204ac4f6cd35a23db",
+      "upstream_path": "core/src/qrcode/QRDataMask.h"
+    },
+    {
+      "path": "src/qrcode/QRDecoder.cpp",
+      "bytes": 11996,
+      "sha256": "cfad57b89f75bcfa7ccfcd3a1712a63575c9f5d949964dde9de8401862633960",
+      "upstream_path": "core/src/qrcode/QRDecoder.cpp"
+    },
+    {
+      "path": "src/qrcode/QRDecoder.h",
+      "bytes": 268,
+      "sha256": "041d2fcad9f07e1b27e90c8d1f6f35112cbdaa940c874ddddf8ba0172d482b42",
+      "upstream_path": "core/src/qrcode/QRDecoder.h"
+    },
+    {
+      "path": "src/qrcode/QRDetector.cpp",
+      "bytes": 33618,
+      "sha256": "9c88563c8cf831cdef8006e86eaa71c098b051f1e9ce30961c8e517812f3813e",
+      "upstream_path": "core/src/qrcode/QRDetector.cpp"
+    },
+    {
+      "path": "src/qrcode/QRDetector.h",
+      "bytes": 1142,
+      "sha256": "bfef855fb2aee3cbdfbc7b4e2adef1dff2719017892cb5469035a95ebea4286d",
+      "upstream_path": "core/src/qrcode/QRDetector.h"
+    },
+    {
+      "path": "src/qrcode/QRECB.h",
+      "bytes": 1361,
+      "sha256": "82d1ce15c3f9b54640b2136c9a0954cdd14097acd9455a28270a312ba6e7cf52",
+      "upstream_path": "core/src/qrcode/QRECB.h"
+    },
+    {
+      "path": "src/qrcode/QRErrorCorrectionLevel.cpp",
+      "bytes": 1550,
+      "sha256": "4b41ba643e3b341f020273242d57946c3138a54c5a7f18f84905dde9f264d207",
+      "upstream_path": "core/src/qrcode/QRErrorCorrectionLevel.cpp"
+    },
+    {
+      "path": "src/qrcode/QRErrorCorrectionLevel.h",
+      "bytes": 823,
+      "sha256": "25e76c47e9894f37ea76a2a68303d6479534b83253b1d1c5505e6ca13c447ff3",
+      "upstream_path": "core/src/qrcode/QRErrorCorrectionLevel.h"
+    },
+    {
+      "path": "src/qrcode/QRFormatInformation.cpp",
+      "bytes": 6665,
+      "sha256": "ec2f2047b1356a6585607d63a97c9031bbf2a02640ac20c193f852f59f3b345e",
+      "upstream_path": "core/src/qrcode/QRFormatInformation.cpp"
+    },
+    {
+      "path": "src/qrcode/QRFormatInformation.h",
+      "bytes": 1801,
+      "sha256": "0684b3f2fcce8f4e3046f104460f7b66b292e64d1f368ef4e02af10e182d794e",
+      "upstream_path": "core/src/qrcode/QRFormatInformation.h"
+    },
+    {
+      "path": "src/qrcode/QRReader.cpp",
+      "bytes": 4512,
+      "sha256": "fd546ef3f46d218e8010846d755b914f6ff47fd8cb6bb3285b870581f3930045",
+      "upstream_path": "core/src/qrcode/QRReader.cpp"
+    },
+    {
+      "path": "src/qrcode/QRReader.h",
+      "bytes": 357,
+      "sha256": "e269f370978ca123bc75fb1138efc5ec653292c2dd0367f4a3595303f85529a8",
+      "upstream_path": "core/src/qrcode/QRReader.h"
+    },
+    {
+      "path": "src/qrcode/QRVersion.cpp",
+      "bytes": 17345,
+      "sha256": "91db28908925a96ea3286d9cb2d5b7f722cc4efc34604ca35f92f9fef0cc20aa",
+      "upstream_path": "core/src/qrcode/QRVersion.cpp"
+    },
+    {
+      "path": "src/qrcode/QRVersion.h",
+      "bytes": 4009,
+      "sha256": "db72389749ddfb43caa089595831e19718d61c12990e0399e76dcb1a17fb83ae",
+      "upstream_path": "core/src/qrcode/QRVersion.h"
+    }
+  ],
+  "source_bytes": 1670814,
+  "configuration": {
+    "path": "Config/Version.h",
+    "derived_from": "core/Version.h.in",
+    "sha256": "0b9398c5dadaa5fc04dc5f53e4cc4e345053e42bc3c6aaeba95e809cf5402414",
+    "options": "QR readers only; no writers, other formats, experimental API, zint or external build dependencies"
+  }
+}
