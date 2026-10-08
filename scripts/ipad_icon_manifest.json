@@ -1,0 +1,81 @@
+{
+  "byte_equivalence_to_previous_sips": false,
+  "color_profile": "sRGB intent 0",
+  "metadata": "sRGB only; source artwork unchanged",
+  "new_detail_or_branding": false,
+  "outputs": [
+    {
+      "bytes": 1079,
+      "filename": "ipad-20x20@1x.png",
+      "pixels": 20,
+      "rgb_sha256": "362bcd57442d50d550f3cc4ebde1814a79eb56db3031039763e8d232821847bd",
+      "sha256": "2080f4ba6f19a3d2f80c8ce7ed6efe43e72eed953ea0f202cf4f994755512594"
+    },
+    {
+      "bytes": 3237,
+      "filename": "ipad-20x20@2x.png",
+      "pixels": 40,
+      "rgb_sha256": "e3dd3a0ffd3ff92366b042fde8585c88a90e89d0bd7b9ba9823cd51f3fed04cf",
+      "sha256": "09a25b48912b5c8770040191465330867cd9ae217d9d2a2c65021da53c3157a2"
+    },
+    {
+      "bytes": 1944,
+      "filename": "ipad-29x29@1x.png",
+      "pixels": 29,
+      "rgb_sha256": "cfe9b5815b8c9603814f0d40e35ef6f0fe1197c7b558d48332afbcd8c8859e30",
+      "sha256": "0e970b1554dc82414ca2900855fbea6e525a107a916a1e6d525f590f6c966b30"
+    },
+    {
+      "bytes": 5670,
+      "filename": "ipad-29x29@2x.png",
+      "pixels": 58,
+      "rgb_sha256": "6e624f6cfa68b119a81e9154b4344f3fa22b1bb8864926ad3afea9752c952d01",
+      "sha256": "b34bf471d3b4c6cc95804f6560384242dc92e2c7bf14482f89ce750779014587"
+    },
+    {
+      "bytes": 3237,
+      "filename": "ipad-40x40@1x.png",
+      "pixels": 40,
+      "rgb_sha256": "e3dd3a0ffd3ff92366b042fde8585c88a90e89d0bd7b9ba9823cd51f3fed04cf",
+      "sha256": "09a25b48912b5c8770040191465330867cd9ae217d9d2a2c65021da53c3157a2"
+    },
+    {
+      "bytes": 8826,
+      "filename": "ipad-40x40@2x.png",
+      "pixels": 80,
+      "rgb_sha256": "3ed292e39fd8a27796c84d685d87d4f119bcfa240d5311a88769a048c7dc8831",
+      "sha256": "d32753f3b8a472652fda894056471abb8698f3468a1dfa3970b251cba3cdd673"
+    },
+    {
+      "bytes": 8152,
+      "filename": "ipad-76x76@1x.png",
+      "pixels": 76,
+      "rgb_sha256": "67a94fb1bc192fcba31ca5aeff46900b81092fea91ef9b5e1ff2d521b7f7cf62",
+      "sha256": "f0896838311d63256a42340b5517174f0d7d1b8fa2c55736d1c05c94659980ef"
+    },
+    {
+      "bytes": 19838,
+      "filename": "ipad-76x76@2x.png",
+      "pixels": 152,
+      "rgb_sha256": "5312f2ef78bd86a085245342d7723fca3f5ebad5b35d625f8a21777991c9b041",
+      "sha256": "f4217d95e21a3801f11476fe645e42f341bbe77151ddba9eba724cfe1a251b9b"
+    },
+    {
+      "bytes": 22498,
+      "filename": "ipad-83.5x83.5@2x.png",
+      "pixels": 167,
+      "rgb_sha256": "8577e66882876fc827daeb66ba191cb9461835f90479bcfae7d017639781a7e7",
+      "sha256": "0316a668ea6cfe2d7c98b4497f910c74fc0975afca9618e4fcd542a6a0e143b0"
+    }
+  ],
+  "pillow_version": "12.3.0",
+  "png_compress_level": 9,
+  "png_optimize": false,
+  "resampling": "LANCZOS",
+  "source_dimensions": [
+    1024,
+    1024
+  ],
+  "source_mode": "RGB",
+  "source_sha256": "dc2c12171d08a7d5cc51a66dc212601deccca7ab0d8d6d3c315d0da2ffa403d4"
+}

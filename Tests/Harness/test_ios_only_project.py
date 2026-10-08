@@ -243,6 +243,7 @@ class IOSOnlyProjectTests(unittest.TestCase):
                 expected = dict(original)
                 if name == 'QRCatcher':
                     expected['GCC_PREPROCESSOR_DEFINITIONS'] = original.get('GCC_PREPROCESSOR_DEFINITIONS', ['$(inherited)']) + ['QRCATCHER_IOS_ONLY_RELEASE=1']
+                    expected['CURRENT_PROJECT_VERSION'] = '3'
                 self.assertEqual(self.ios['objects'][key]['buildSettings'], expected)
 
     def test_only_ios_app_debug_and_release_configs_receive_flag(self):

@@ -212,7 +212,7 @@ class IOSOnlyPackageTests(unittest.TestCase):
         self.info = {
             'CFBundleIdentifier': gate.BUNDLE_ID, 'CFBundleExecutable': 'QRCatcher',
             'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '1.1',
-            'CFBundleVersion': '2', 'MinimumOSVersion': '15.0',
+            'CFBundleVersion': '3', 'MinimumOSVersion': '15.0',
             'UIDeviceFamily': [1, 2], 'CFBundleSupportedPlatforms': ['iPhoneOS'],
             'NSCameraUsageDescription': 'QRCatcher uses the camera to scan QR codes. Camera images are not stored or uploaded.',
             'CFBundleIcons': {'CFBundlePrimaryIcon': {'CFBundleIconName': 'AppIcon', 'CFBundleIconFiles': ['AppIcon60x60']}},
@@ -259,7 +259,7 @@ class IOSOnlyPackageTests(unittest.TestCase):
         self.app = destination
         props = {'ApplicationPath': 'Applications/' + self.app.name,
                  'CFBundleIdentifier': gate.BUNDLE_ID,
-                 'CFBundleShortVersionString': '1.1', 'CFBundleVersion': '2'}
+                 'CFBundleShortVersionString': '1.1', 'CFBundleVersion': '3'}
         (archive / 'Info.plist').write_bytes(plistlib.dumps({'ApplicationProperties': props}))
         return archive
 
@@ -1542,7 +1542,7 @@ class IOSOnlyPackageTests(unittest.TestCase):
         defects = {'CFBundleIdentifier': ['example.Changed'],
                    'CFBundleExecutable': ['Other', '../QRCatcher', 'nested/QRCatcher', '..'],
                    'CFBundlePackageType': ['BNDL'], 'CFBundleShortVersionString': ['2.0'],
-                   'CFBundleVersion': [2, '3'], 'MinimumOSVersion': ['17.0'],
+                   'CFBundleVersion': [3, '2'], 'MinimumOSVersion': ['17.0'],
                    'UIDeviceFamily': [[1], [2], [1, 2, 4], [True, 2], [1, 2, 2]],
                    'CFBundleSupportedPlatforms': [['WatchOS'], ['iPhoneOS', 'WatchOS'], ['iPhoneSimulator'], []]}
         for key, values in defects.items():

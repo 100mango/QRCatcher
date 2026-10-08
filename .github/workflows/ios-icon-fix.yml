@@ -1,0 +1,48 @@
+name: Verify corrected iPad icons in one unsigned iOS archive
+on:
+  push:
+    branches: [ios-icon-fix]
+permissions:
+  contents: read
+concurrency:
+  group: qrcatcher-ios-icon-fix
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+    steps:
+      - name: Record original job clock
+        timeout-minutes: 1
+        run: |
+          python3 - <<'PY'
+          import os,time
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              output.write('QR_ICON_JOB_STARTED='+str(time.monotonic())+'\n')
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate source and archive the fixed iOS-only app once
+        id: proof
+        timeout-minutes: 17
+        run: python3 scripts/ios_icon_archive.py
+      - name: Retain bounded JSON proof only
+        if: ${{ always() && steps.proof.outputs.evidence_ready == 'true' }}
+        timeout-minutes: 1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qrcatcher-ios-icon-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/ios-icon-proof/report.json
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
+      - name: Verify original retention clock
+        if: ${{ always() && steps.proof.outputs.evidence_ready == 'true' }}
+        timeout-minutes: 1
+        run: python3 scripts/ios_icon_archive.py finish

@@ -38,7 +38,7 @@ The original iOS target now includes device family 2 and all iPad orientations, 
 
 Fresh standard VMs run the existing phone UI class on Pro Max and SE3, plus the separate iPad UI class on 13-inch Pro and mini, one row at a time. Its real photo-import test consumes an independent QR PNG added to the simulator Photos library with the supported simctl addmedia command. It does not replace the production PHPicker or decoder. Each device row has a 2,000,000-byte evidence allocation for one day, enforced before upload within the whole-run allocation, with actual sizes and omissions recorded. No full result archive, signed app, credential or personal library asset is uploaded.
 
-Before building the iPad target, also run `python3 scripts/materialize_ipad_icons.py` on macOS to derive the required iPad icon sizes from the unchanged retained artwork.
+The nine iPad icon PNGs are checked in and derived mechanically from the unchanged original artwork. `python3 scripts/materialize_ipad_icons.py` now verifies their declared sizes and pinned bytes without rewriting them; no pre-archive generation step is required.
 
 ## App-owned legacy data locations and a separate Store-upgrade gate
 

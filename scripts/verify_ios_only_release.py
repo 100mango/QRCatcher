@@ -1253,7 +1253,7 @@ def _verify_package(package, platform, configuration, limits, xctestrun, symbol_
     if check(isinstance(info, dict), 'missing_bundle_info', 'shipping Info.plist'):
         check(info.get('CFBundleIdentifier') == BUNDLE_ID, 'bundle_identity', 'original bundle ID must be retained')
         check(info.get('CFBundlePackageType') == 'APPL', 'bundle_package_type', 'shipping package must be APPL')
-        check(info.get('CFBundleShortVersionString') == '1.1' and info.get('CFBundleVersion') == '2', 'bundle_version', 'expected version 1.1/build 2')
+        check(info.get('CFBundleShortVersionString') == '1.1' and info.get('CFBundleVersion') == '3', 'bundle_version', 'expected version 1.1/build 3')
         check(info.get('MinimumOSVersion') == '15.0', 'bundle_minimum_os', 'expected original iOS 15.0 floor')
         families = info.get('UIDeviceFamily')
         check(isinstance(families, list) and all(type(value) is int for value in families)
