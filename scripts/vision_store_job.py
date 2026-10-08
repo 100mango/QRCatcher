@@ -22,10 +22,9 @@ from vision_archive_capture import capture, CaptureStopped
 
 BASE = '6675f0051fbb597ed7212819cd34fb0b1e42c7b5'
 BASE_TREE = 'f7cefb13a5ddf20b9564b67df094b52f2a37dce8'
-PARENT = 'fd1c37a25e952ef66baa9b6854b3ac67325d7ec3'
-PARENT_TREE = 'd45b4a06c6dbd92bfb490ddff7bf025d26167a20'
-SUCCESSOR_PATHS = {'scripts/run_vision_store_case.py',
-                   'scripts/vision_store_job.py', 'Tests/Harness/test_vision_store_job.py'}
+PARENT = 'f7009c0e4bbd594a2bdee37c60ba2afb77780df3'
+PARENT_TREE = '2bbee558315fe43ff2699de43b1ccbacc0189c48'
+SUCCESSOR_PATHS = {'scripts/vision_store_job.py'}
 BRANCH = 'refs/heads/vision-store-screenshot'
 WORKFLOW = '.github/workflows/vision-store-screenshot.yml'
 JOBS = {'store': ('visionos_store', 2700, 360)}
