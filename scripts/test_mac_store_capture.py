@@ -308,7 +308,7 @@ class Pipeline(PortableTests):
     def setUp(self):
         super().setUp()
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.old=Path.cwd();os.chdir(self.root)
-        self.clock=Clock();self.calls=[];self.failed=False;self.zero=False;self.late=False;self.mutate=None;self.late_summary=False;self.cleanup_unknown=False;self.scale=1;self.build_error=None
+        self.clock=Clock();self.calls=[];self.failed=False;self.zero=False;self.late=False;self.mutate=None;self.late_summary=False;self.cleanup_unknown=False;self.scale=1;self.build_error=None;self.toolchain_replies={};self.summary_device={'osVersion':'27.0','osBuildNumber':'26A428'}
         app=self.root/'build/mac-tests/Build/Products/Debug/QRCatcherMac.app'
         self.product={'applicationPath':str(app),'executable':str(app/'Contents/MacOS/QRCatcherMac'),'executableSHA256':'c'*64,'logicSHA256':'d'*64}
         source=m.source_identity
@@ -336,6 +336,7 @@ class Pipeline(PortableTests):
         elif argv==m.test_command():
             if self.cleanup_unknown:raise m.CaptureStopped('unconfirmed owned capture',False)
             self.summary,self.files=exported(self.clock(),self.product,self.failed,self.scale)
+            self.summary['devicesAndConfigurations'][0]['device'].update(self.summary_device)
             if self.zero:self.summary.update(totalTestCount=0,passedTests=0,failedTests=0)
             if self.late_summary:self.summary['finishTime']+=300
             self.clock.advance(301 if self.late else 2);code=65 if self.failed else 0
@@ -345,6 +346,7 @@ class Pipeline(PortableTests):
             if self.mutate:self.mutate(self.files)
             for name,data in self.files.items():(folder/name).write_bytes(data)
         else:self.assertIn('unittest',argv)
+        raw=self.toolchain_replies.get(tuple(argv),raw)
         self.clock.advance(.1);return subprocess.CompletedProcess(argv,code,raw,stderr)
     def execute(self):return m.execute(env=env(),root=self.root,clock=self.clock,wall=self.clock,runner=self.runner)
     def retained(self):
@@ -356,6 +358,65 @@ class Pipeline(PortableTests):
         value,marker=self.retained();self.assertEqual(len(value['commands']),23);self.assertEqual(set(value['image_files']),set(m.IMAGE_NAMES))
         self.assertFalse(value['store_qualified']);self.assertEqual(value['visual_acceptance'],'pending-human-review');self.assertEqual(marker.read_text(),'evidence_ready=true\n')
         self.assertEqual(self.calls.count(m.base_command()+['build-for-testing']),1);self.assertEqual(self.calls.count(m.test_command()),1)
+    def test_observed_26a434_same_xcode_arm64_pair_retains_complete_capture(self):
+        self.toolchain_replies[('sw_vers','-buildVersion')]=b'26A434\n'
+        self.summary_device={'osVersion':'27.0.1','osBuildNumber':'26A434'}
+        value,_=self.retained()
+        self.assertEqual(value['test_summary']['devicesAndConfigurations'][0]['device']['osVersion'],'27.0.1')
+        self.assertEqual(value['toolchain'],{'os':'26A434','architecture':'arm64','xcode':'Xcode 27.0\nBuild version 27A266a'})
+        self.assertEqual(set(value['image_files']),set(m.IMAGE_NAMES))
+        self.assertFalse(value['store_qualified']);self.assertEqual(len(value['commands']),23)
+    def test_unknown_os_xcode_arch_and_spoofed_pair_stop_before_preflight_or_build(self):
+        cases=[{('sw_vers','-buildVersion'):b'26A435\n'},
+            {('sw_vers','-buildVersion'):b'26A434 extra\n'},
+            {('sw_vers','-buildVersion'):b'26A434\n',('xcodebuild','-version'):b'Xcode 27.0\nBuild version 27A266b\n'},
+            {('sw_vers','-buildVersion'):b'26A434\n',('xcodebuild','-version'):b'Xcode 27.1\nBuild version 27A266a\n'},
+            {('sw_vers','-buildVersion'):b'26A434\n',('uname','-m'):b'x86_64\n'},
+            {('sw_vers','-buildVersion'):b'26A428\n',('xcodebuild','-version'):b'Xcode 27.1\nBuild version 27A266a\n'}]
+        for replies in cases:
+            with self.subTest(replies=replies),tempfile.TemporaryDirectory() as folder:
+                self.toolchain_replies=replies;self.calls=[]
+                value=m.execute(env=env(),root=Path(folder),clock=self.clock,wall=self.clock,runner=self.runner)
+                self.assertEqual(value['failure']['phase'],'prepare');self.assertEqual(value['failure']['reason'],'toolchain-mismatch')
+                self.assertFalse(value['qualified']);self.assertEqual(value['image_files'],{})
+                self.assertEqual(len(self.calls),9);m.product_identity.assert_not_called()
+                self.assertFalse(any('unittest' in row or 'build-for-testing' in row or 'test-without-building' in row for row in self.calls))
+    def test_host_summary_cross_pairs_missing_build_and_wrong_versions_stop_before_export(self):
+        cases=[('26A434','27.0','26A428'),('26A428','27.0.1','26A434'),
+            ('26A434','27.0.1','26A428'),('26A428','27.0','26A434'),
+            ('26A434','27.0.2','26A434'),('26A434','27.0.1',None)]
+        for host,version,build in cases:
+            with self.subTest(host=host,version=version,build=build),tempfile.TemporaryDirectory() as folder:
+                self.toolchain_replies={('sw_vers','-buildVersion'):(host+'\n').encode()}
+                self.summary_device={'osVersion':version,'osBuildNumber':build};self.calls=[]
+                value=m.execute(env=env(),root=Path(folder),clock=self.clock,wall=self.clock,runner=self.runner)
+                self.assertEqual(value['failure']['reason'],'capture-destination')
+                self.assertEqual(value['failure']['phase'],'proof');self.assertFalse(value['qualified'])
+                self.assertEqual(value['image_files'],{});self.assertEqual(len(self.calls),16)
+                self.assertFalse(any('export' in row for row in self.calls))
+    def test_explicit_missing_or_unknown_host_never_uses_legacy_summary_default(self):
+        summary,_=exported(100,self.product);command={'returncode':0,'started_epoch':100,'finished_epoch':102}
+        for host in (None,{},'26A434',{'os':'26A434'},
+                {'os':'26A434','architecture':'arm64','xcode':'Xcode 27.1\nBuild version 27A266a'}):
+            with self.subTest(host=host),self.assertRaisesRegex(ValueError,'toolchain-mismatch'):
+                contract.summary_admission(encoded(summary),command,toolchain=host)
+            with self.subTest(capture_host=host),self.assertRaisesRegex(ValueError,'toolchain-mismatch'):
+                contract.validate_capture(Path('/unread'),encoded(summary),self.product,command,toolchain=host,
+                    read=lambda *args:self.fail('attachments read before host admission'))
+    def test_offline_replay_binds_host_metadata_to_original_command_receipts_and_summary(self):
+        self.toolchain_replies[('sw_vers','-buildVersion')]=b'26A434\n'
+        self.summary_device={'osVersion':'27.0.1','osBuildNumber':'26A434'}
+        self.retained();path=self.root/m.OUTPUT/'report.json';original=json.loads(path.read_bytes())
+        changes=[('missing',None),('metadata-only','26A428'),('command-only','26A428'),
+            ('both-crossed','26A428'),('both-unknown','26A435')]
+        for kind,build in changes:
+            value=copy.deepcopy(original)
+            if kind=='missing':value.pop('toolchain')
+            if kind in ('metadata-only','both-crossed','both-unknown'):value['toolchain']['os']=build
+            if kind in ('command-only','both-crossed','both-unknown'):value['commands'][6]['stdout']=build+'\n'
+            path.write_bytes(m.report_bytes(value))
+            with self.subTest(kind=kind),self.assertRaises(ValueError):
+                m.validate_packet(self.root/m.OUTPUT,sha=SHA,tree=TREE,run_id=123,source_root=CHECKOUT)
     def test_fixed_preparation_and_original_clock_cover_all_twenty_three_commands(self):
         value,_=self.retained();commands=value['commands']
         self.assertEqual([row['command'] for row in commands[11:13]],

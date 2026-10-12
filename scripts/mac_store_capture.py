@@ -14,15 +14,15 @@ import time
 from mac_archive_capture import capture, CaptureStopped
 from mac_store_io import read_file, strict_json
 from mac_store_product import base_command, product_identity
-from mac_store_contract import CASE, MAX_PACKET, summary_admission, validate_capture
+from mac_store_contract import CASE, MAX_PACKET, summary_admission, summary_host, validate_capture
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'bf726e9637fcdd469048ed157b8ea73953ccb4fb'
 BASE_TREE = '37d33f2f3b5b1d9bde222f9481c49e9997ca49fc'
-# Recover the two previously accepted images from one exact successful parent.
-PARENT = 'ef8f4b6057e3e4a3fecf095dcb1eb22e2d29233c'
-PARENT_TREE = 'a5b44dc49514d2bc29c94c7c2391e24b31b09216'
-SUCCESSOR_PATHS = ('.github/workflows/mac-store-display.yml','scripts/mac_store_capture.py')
+# Preserve the first recovery failure; accept only the one observed host update.
+PARENT = '625b5c603447e3855f410d82b570a6aaf19991e8'
+PARENT_TREE = 'ac1d8f76b53c57911c3eab2f8d51f61a0fbe07ab'
+SUCCESSOR_PATHS = ('scripts/mac_store_capture.py','scripts/mac_store_contract.py','scripts/test_mac_store_capture.py')
 BRANCH = 'refs/heads/qrcatcher-mac-store-recovery-20261012'
 WORKFLOW = '.github/workflows/mac-store-display.yml'
 RESULT = Path('build/mac-store-capture/capture.xcresult')
@@ -240,7 +240,7 @@ def execute(*, env=None, root=ROOT, clock=time.monotonic, wall=time.time, runner
         report['toolchain']={'os':run(['sw_vers','-buildVersion'],seconds=5,cap=4096).decode().strip(),
             'architecture':run(['uname','-m'],seconds=5,cap=4096).decode().strip(),
             'xcode':run(['xcodebuild','-version'],seconds=10,cap=4096).decode().strip()}
-        need(report['toolchain']=={'os':'26A428','architecture':'arm64','xcode':'Xcode 27.0\nBuild version 27A266a'},'toolchain-mismatch')
+        summary_host(report['toolchain'])
         for optimize in ([],['-O']):
             run([sys.executable,*optimize,'-m','unittest','discover','-s','scripts','-p','test_mac_store*.py'],seconds=40,cap=65536)
         run([sys.executable,'scripts/materialize_mac_icons.py'],seconds=60,cap=16384)
@@ -256,10 +256,10 @@ def execute(*, env=None, root=ROOT, clock=time.monotonic, wall=time.time, runner
         phase='proof';deadline=min(began+PHASE_END[phase],clock()+180)
         summary=run(['xcrun','xcresulttool','get','test-results','summary','--path',str(RESULT)],seconds=20,cleanup=10,cap=512*1024)
         report['test_summary']=strict_json(summary)
-        admitted=summary_admission(summary,test)
+        admitted=summary_admission(summary,test,toolchain=report['toolchain'])
         need(admitted['passedTests']==1,'capture-case-failed')
         run(['xcrun','xcresulttool','export','attachments','--path',str(RESULT),'--output-path',str(EXPORT)],seconds=20,cleanup=10,cap=512*1024)
-        proof,images=validate_capture(root/EXPORT,summary,report['product'],test,tick=lambda:timely(deadline,clock))
+        proof,images=validate_capture(root/EXPORT,summary,report['product'],test,tick=lambda:timely(deadline,clock),toolchain=report['toolchain'])
         need({'native-result.png','native-history.png'}<=set(images)<=set(IMAGE_NAMES),'capture-image-list')
         need(product_identity()==report['product'],'product-changed-during-capture')
         (root/PREPARED).mkdir()
@@ -327,6 +327,9 @@ def validate_packet(output, *, sha, tree, run_id, source_root=ROOT):
         ['xcrun','xcresulttool','get','test-results','summary','--path',str(RESULT)],
         ['xcrun','xcresulttool','export','attachments','--path',str(RESULT),'--output-path',str(EXPORT)]]
     need([x['command'] for x in commands]==prefix+middle+prefix,'capture-command-plan')
+    observed_host = {key:commands[index]['stdout'].strip() for key,index in (('os',6),('architecture',7),('xcode',8))}
+    need(report.get('toolchain')==observed_host,'retained-toolchain-mismatch')
+    summary_host(observed_host)
     expected_output=[sha+'\n',PARENT_TREE+'\n',sha+' '+PARENT+'\n','',
         '\n'.join(sorted(['M\t'+x for x in SUCCESSOR_PATHS]))+'\n',tree+'\n']
     for offset in (0,17):
@@ -354,7 +357,7 @@ def validate_packet(output, *, sha, tree, run_id, source_root=ROOT):
         files[virtual/row['imageAttachment']['exportedFileName']]=read_file(output/('native-'+state+'.png'),3*1024*1024)
     def read(path,limit):
         need(path in files and len(files[path])<=limit,'retained-attachment-missing-or-large');return files[path]
-    reproduced,_=validate_capture(virtual,summary_raw,report['product'],commands[14],read=read)
+    reproduced,_=validate_capture(virtual,summary_raw,report['product'],commands[14],read=read,toolchain=observed_host)
     from mac_store_png import decode
     for state,row in reproduced['states'].items():
         original=proof['states'][state]

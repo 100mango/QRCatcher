@@ -15,6 +15,7 @@ ARGS = ['-AppleLanguages','(en)','-AppleLocale','en_US','--ui-test-store-capture
 STATES = {'result': {'payload':'https://example.com/qrcatcher?source=golden','historyCount':1,'selectedHistoryPayload':None},
           'history': {'payload':'QRCatcher 你好 🌈 123','historyCount':2,'selectedHistoryPayload':'QRCatcher 你好 🌈 123'}}
 MAX_PACKET = 14 * 1024 * 1024
+_LEGACY_HOST = object()
 
 
 def need(ok, reason):
@@ -25,14 +26,25 @@ def digest(raw): return hashlib.sha256(raw).hexdigest()
 def number(value): return type(value) in (int, float) and math.isfinite(value)
 
 
-def summary_admission(raw, command):
+def summary_host(toolchain):
+    for build, version in (('26A428', '27.0'), ('26A434', '27.0.1')):
+        if toolchain == {'os':build, 'architecture':'arm64', 'xcode':'Xcode 27.0\nBuild version 27A266a'}:
+            return {'platform':'macOS', 'architecture':'arm64', 'osVersion':version, 'osBuildNumber':build}
+    raise ValueError('toolchain-mismatch')
+
+
+def summary_admission(raw, command, *, toolchain=_LEGACY_HOST):
+    # Legacy direct fixtures keep their original default. Controller calls must
+    # explicitly bind both the observed host and XCTest destination, including build.
+    destination = ({'platform':'macOS', 'architecture':'arm64', 'osVersion':'27.0'}
+        if toolchain is _LEGACY_HOST else summary_host(toolchain))
     admit_summary(raw, {'exit':command['returncode'], 'startedEpoch':command['started_epoch'],
                         'finishedEpoch':command['finished_epoch']})
     summary = strict_json(raw)
     configs = summary.get('devicesAndConfigurations')
     need(isinstance(configs, list) and len(configs) == 1, 'capture-destination-count')
     config = configs[0]; device = config.get('device', {})
-    need(all(device.get(k) == v for k, v in {'platform':'macOS', 'architecture':'arm64', 'osVersion':'27.0'}.items()) and
+    need(all(device.get(k) == v for k, v in destination.items()) and
         isinstance(device.get('deviceId'), str) and 0 < len(device['deviceId']) <= 256 and
         config.get('testPlanConfiguration', {}).get('configurationName') == 'Test Scheme Action', 'capture-destination')
     need(all(type(config.get(k)) is int and config[k] == summary[k]
@@ -46,8 +58,8 @@ def summary_admission(raw, command):
     return summary
 
 
-def validate_capture(root, summary_raw, product, test, *, tick=lambda: None, read=read_file):
-    summary = summary_admission(summary_raw, test)
+def validate_capture(root, summary_raw, product, test, *, tick=lambda: None, read=read_file, toolchain=_LEGACY_HOST):
+    summary = summary_admission(summary_raw, test, toolchain=toolchain)
     need(summary['passedTests'] == 1 and test['returncode'] == 0, 'capture-case-failed')
     manifest_raw = read(root/'manifest.json', 512*1024); groups = strict_json(manifest_raw)
     need(isinstance(groups, list) and len(groups) == 1, 'capture-not-one-exported-case')
