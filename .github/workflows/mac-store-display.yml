@@ -1,7 +1,7 @@
 name: Two Mac Store views on a supported temporary display mode
 on:
   push:
-    branches: [codex/mac-store-display]
+    branches: [qrcatcher-mac-store-recovery-20261012]
 permissions:
   contents: read
 concurrency:

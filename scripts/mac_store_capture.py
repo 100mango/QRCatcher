@@ -19,12 +19,11 @@ from mac_store_contract import CASE, MAX_PACKET, summary_admission, validate_cap
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'bf726e9637fcdd469048ed157b8ea73953ccb4fb'
 BASE_TREE = '37d33f2f3b5b1d9bde222f9481c49e9997ca49fc'
-# Keep the approved source fixture baseline; this repair has one exact parent.
-PARENT = 'ebd6cc9cce3eb2339ee102bbc727e1c5d24a7697'
-PARENT_TREE = '75ea66124a6f5183f8b337318438d6e5ae477621'
-SUCCESSOR_PATHS = ('scripts/mac_store_capture.py','scripts/test_mac_store_capture.py',
-    'scripts/test_mac_store_source_helpers.py','QRCatcherMacUITests/QRCatcherMacUITests.swift')
-BRANCH = 'refs/heads/codex/mac-store-display'
+# Recover the two previously accepted images from one exact successful parent.
+PARENT = 'ef8f4b6057e3e4a3fecf095dcb1eb22e2d29233c'
+PARENT_TREE = 'a5b44dc49514d2bc29c94c7c2391e24b31b09216'
+SUCCESSOR_PATHS = ('.github/workflows/mac-store-display.yml','scripts/mac_store_capture.py')
+BRANCH = 'refs/heads/qrcatcher-mac-store-recovery-20261012'
 WORKFLOW = '.github/workflows/mac-store-display.yml'
 RESULT = Path('build/mac-store-capture/capture.xcresult')
 EXPORT = Path('build/mac-store-capture/attachments')
