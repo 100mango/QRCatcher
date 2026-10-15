@@ -23,12 +23,17 @@ from mac_archive_capture import capture, CaptureStopped
 from required_reason_symbols import file_metadata_symbols
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = 'd2d63d5c6cfe50139f623d81e1848e67b26bf5a3'
-BASE_TREE = '1808d1e0753b4bebe042b5fd9d9448d5e80f63a5'
-BRANCH = 'refs/heads/codex/mac-unsigned-archive'
-WORKFLOW = '.github/workflows/mac-unsigned-archive.yml'
-NEW_PATHS = (WORKFLOW,'scripts/mac_unsigned_archive.py','scripts/test_mac_unsigned_archive.py',
-    'scripts/mac_archive_macho.py','scripts/mac_archive_capture.py','scripts/fixtures/mac-archive-inputs.json','MAC-UNSIGNED-ARCHIVE.md')
+BASE = 'bf726e9637fcdd469048ed157b8ea73953ccb4fb'
+INPUT_BASE = 'd2d63d5c6cfe50139f623d81e1848e67b26bf5a3'
+BASE_TREE = '37d33f2f3b5b1d9bde222f9481c49e9997ca49fc'
+INPUT_BASE_TREE = '1808d1e0753b4bebe042b5fd9d9448d5e80f63a5'
+BRANCH = 'refs/heads/mac-model-metadata-diagnostic-20261015'
+WORKFLOW = '.github/workflows/mac-model-metadata-diagnostic.yml'
+NEW_PATHS = (WORKFLOW, 'scripts/mac_unsigned_archive.py', 'scripts/test_mac_unsigned_archive.py')
+EXPECTED_DIFF = ('A\t' + WORKFLOW, 'M\tscripts/mac_unsigned_archive.py',
+                 'M\tscripts/test_mac_unsigned_archive.py')
+WINDOW_START = '2026-10-15T03:35:00+00:00'
+WINDOW_END = '2026-10-15T04:20:00+00:00'
 ARCHIVE = Path('build/QRCatcherMac.xcarchive')
 APP = 'Products/Applications/QRCatcherMac.app'
 DSYM = 'dSYMs/QRCatcherMac.app.dSYM'
@@ -37,6 +42,9 @@ EXECUTABLE = APP + '/Contents/MacOS/QRCatcherMac'
 MAX_ENTRIES, MAX_BYTES, SCAN_SECONDS = 2048, 1024 ** 3, 30
 MAX_INVENTORY = 1024 ** 2
 MAX_REPORT = 2 * 1024 ** 2
+MODEL_ROOT = APP + '/Contents/Resources/QR.momd'
+MODEL_VERSION_INFO = MODEL_ROOT + '/VersionInfo.plist'
+MODEL_METADATA_MAX = 64 * 1024
 ARCHIVE_COMMAND = ['xcodebuild','-project','QRCatcher.xcodeproj','-scheme','QRCatcherMac',
     '-configuration','Release','-sdk','macosx','-destination','generic/platform=macOS','-archivePath',str(ARCHIVE),
     '-derivedDataPath','build/MacArchiveDerived','ARCHS=arm64 x86_64','ONLY_ACTIVE_ARCH=NO',
@@ -90,10 +98,21 @@ def command(argv, *, deadline, seconds, cap, receipts, clock=time.monotonic,
     return result.stdout
 
 
+def authorization_window(*, now=None, reserve=0):
+    now = time.time() if now is None else now
+    start = datetime.datetime.fromisoformat(WINDOW_START).timestamp()
+    end = datetime.datetime.fromisoformat(WINDOW_END).timestamp()
+    need(0 < end - start <= 45 * 60 and math.isfinite(now) and
+         start <= now and now + reserve < end, 'authorization-window-mismatch')
+    return {'start_utc': WINDOW_START, 'end_utc': WINDOW_END,
+            'launch_reserve_seconds': reserve}
+
+
 def environment(env):
+    authorization_window()
     expected = {'GITHUB_REPOSITORY': '100mango/QRCatcher', 'GITHUB_REF': BRANCH,
         'GITHUB_WORKFLOW_REF': '100mango/QRCatcher/' + WORKFLOW + '@' + BRANCH,
-        'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_JOB': 'archive',
+        'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_RUN_NUMBER': '1', 'GITHUB_JOB': 'archive',
         'DEVELOPER_DIR': '/Applications/Xcode_27.app/Contents/Developer'}
     need(all(env.get(k) == v for k, v in expected.items()), 'job-identity-mismatch')
     need(env.get('GITHUB_EVENT_NAME') == 'push', 'event-mismatch')
@@ -116,10 +135,10 @@ def source_identity(env, run, root=ROOT):
     identity['parents'] = lineage[1:]
     need(git('status', '--porcelain', '--untracked-files=all') == '', 'source-not-clean')
     differences = git('diff', '--name-status', BASE, 'HEAD', '--').splitlines()
-    need(sorted(differences) == sorted('A\t' + p for p in NEW_PATHS), 'source-scope-mismatch')
+    need(sorted(differences) == sorted(EXPECTED_DIFF), 'source-scope-mismatch')
     identity.update(tree=git('rev-parse', 'HEAD^{tree}'), base=BASE, base_tree=BASE_TREE)
     fixture=json.loads((root/'scripts/fixtures/mac-archive-inputs.json').read_bytes())
-    need(fixture['parent']==BASE and fixture['parent_tree']==BASE_TREE,'input-fixture-base-mismatch')
+    need(fixture['parent']==INPUT_BASE and fixture['parent_tree']==INPUT_BASE_TREE,'input-fixture-base-mismatch')
     for path,expected in fixture['app_inputs'].items():
         need(hashlib.sha256((root/path).read_bytes()).hexdigest()==expected,'app-input-changed: '+path)
     scheme=root/'QRCatcher.xcodeproj/xcshareddata/xcschemes/QRCatcherMac.xcscheme'
@@ -237,6 +256,73 @@ def read_metadata(path, deadline, clock):
     return result
 
 
+def observe_core_data_metadata(archive, catalogue, deadline, clock, report):
+    """Observe exact compiler bytes; never substitute for release validation."""
+    paths = catalogue['paths']
+    report['core_data_resource_observation'] = {
+        key: value for key, value in paths.items()
+        if key == MODEL_ROOT or key.startswith(MODEL_ROOT + '/')}
+    row = report['core_data_metadata_diagnostic'] = {
+        'path': MODEL_VERSION_INFO, 'present': MODEL_VERSION_INFO in paths,
+        'observation_only': True, 'private_validator_expected_current_version': 'QR',
+        'compiled_model_files': sorted(key for key in paths
+            if key.startswith(MODEL_ROOT + '/') and key.endswith(('.mom', '.omo'))),
+        'complete': False}
+    if MODEL_VERSION_INFO not in paths:
+        row.update(complete=True, comparison='VersionInfo.plist-missing')
+        return
+    handles = []
+    try:
+        timely(deadline, clock)
+        # Descriptor-relative, no-follow traversal binds every ancestor and the
+        # final regular file to the already captured archive snapshot.
+        fd = os.open(archive, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        handles.append(fd)
+        need(file_identity(os.fstat(fd)) == paths['.']['identity'], 'model-root-changed')
+        parts = MODEL_VERSION_INFO.split('/')
+        for index, part in enumerate(parts):
+            key = '/'.join(parts[:index + 1]); item = paths.get(key, {})
+            last = index == len(parts) - 1
+            need(item.get('type') == ('file' if last else 'directory'), 'model-path-not-regular')
+            flags = os.O_RDONLY | os.O_NOFOLLOW | (os.O_NONBLOCK if last else os.O_DIRECTORY)
+            fd = os.open(part, flags, dir_fd=fd); handles.append(fd)
+            need(file_identity(os.fstat(fd)) == item['identity'], 'model-file-changed')
+        size = os.fstat(fd).st_size
+        need(size <= MODEL_METADATA_MAX, 'model-metadata-byte-limit')
+        raw = bytearray()
+        while True:
+            timely(deadline, clock)
+            chunk = os.read(fd, min(8192, MODEL_METADATA_MAX + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+            need(len(raw) <= MODEL_METADATA_MAX, 'model-metadata-byte-limit')
+        need(len(raw) == size and file_identity(os.fstat(fd)) == paths[MODEL_VERSION_INFO]['identity'],
+             'model-file-changed')
+        raw = bytes(raw); digest = hashlib.sha256(raw).hexdigest()
+        need(digest == paths[MODEL_VERSION_INFO]['sha256'], 'model-snapshot-hash-mismatch')
+        # Retain exact bytes before decoding, including malformed bounded input.
+        row.update(bytes=len(raw), sha256=digest, raw_hex=raw.hex())
+        value = plistlib.loads(raw)
+        need(isinstance(value, dict), 'model-metadata-not-dictionary')
+        # The existing lossless bytes/date representation is also used for
+        # nested plist data. Non-JSON values fail with exact raw bytes retained.
+        row['metadata'] = json.loads(json.dumps(value, default=json_value, allow_nan=False))
+        key = 'NSManagedObjectModel_CurrentVersionName'
+        row['current_version_key_present'] = key in value
+        row['comparison'] = ('current-version-key-missing' if key not in value else
+            'matches-private-validator' if type(value[key]) is str and value[key] == 'QR'
+            else 'differs-from-private-validator')
+        timely(deadline, clock)
+        row['complete'] = True
+    except Exception as error:
+        row['read_error'] = {'type': type(error).__name__, 'reason': str(error)[:4096]}
+        raise
+    finally:
+        for fd in reversed(handles):
+            os.close(fd)
+
+
 def observe_archive_files(archive, deadline, *, root=ROOT, clock=time.monotonic, report=None):
     report={} if report is None else report
     catalogue=report.setdefault('archive_inventory',{})
@@ -258,6 +344,10 @@ def observe_archive_files(archive, deadline, *, root=ROOT, clock=time.monotonic,
         except Exception as error:
             observations[key]={'read_error':{'type':type(error).__name__,'reason':str(error)[:4096]}}
             read_errors.append((key,error))
+    try:
+        observe_core_data_metadata(archive, before, deadline, clock, report)
+    except Exception as error:
+        read_errors.append((MODEL_VERSION_INFO, error))
     if read_errors:
         report['current_proof_path'],error=read_errors[0]
         raise error
@@ -305,7 +395,6 @@ def verify_archive(archive, run, deadline, *, root=ROOT, clock=time.monotonic, r
         path=resources/name
         need_path(before['paths'].get(str(path.relative_to(archive)),{}).get('type')=='file' and path.stat().st_size>0,'required-compiled-resource-missing',path)
     need_path(info.get('CFBundleIconFile') in ('AppIcon','AppIcon.icns'),'compiled-icon-identity-mismatch',app/'Contents/Info.plist')
-    report['core_data_resource_observation']={key:value for key,value in before['paths'].items() if key.startswith(APP+'/Contents/Resources/QR.momd/')}
     binaries={}
     for key,item in before['paths'].items():
         if item['type']!='file' or bytes.fromhex(item.get('prefix_hex','')) not in MACH_MAGICS:continue
@@ -359,7 +448,7 @@ def report_bytes(report):
         # Keep the bounded catalogue/plist observations/source/clock on overflow.
         keep=('schema','scope','signing_qualified','store_qualified','older_os_qualified','ui_qualification_separate',
             'source_before','clock','archive_inventory','archive_metadata_diagnostics',
-            'owned_output','binary_handoff','upload_qualified','archive_file_observation_scope','archive_file_observation_error','core_data_resource_observation')
+            'owned_output','binary_handoff','upload_qualified','archive_file_observation_scope','archive_file_observation_error','core_data_resource_observation','core_data_metadata_diagnostic','authorization_window')
         compact={k:report[k] for k in keep if k in report}
         compact.update(qualified=False,failure={'type':'Rejected','reason':'report-byte-limit','original_failure':report.get('failure')})
         raw=(json.dumps(compact,sort_keys=True,default=json_value,allow_nan=False,separators=(',',':'))+'\n').encode()
@@ -381,6 +470,7 @@ def execute(*, env=None, root=ROOT, clock=time.monotonic, runner=capture):
         return command(argv, deadline=phase_deadline, receipts=receipts,
                        clock=clock, runner=runner, **kwargs)
     try:
+        report['authorization_window'] = authorization_window(reserve=20 * 60)
         need(not (root / 'build').exists() and not (root / 'build').is_symlink(), 'output-not-fresh')
         (root / 'build').mkdir()
         report['owned_output'] = file_identity((root / 'build').lstat())[:2]

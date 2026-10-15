@@ -54,6 +54,8 @@ def native_output(argv,a):
 
 class PortableTestCase(unittest.TestCase):
  def setUp(self):
+  wall=patch.object(m.time,'time',return_value=datetime.datetime.fromisoformat(m.WINDOW_START).timestamp()+1)
+  wall.start();self.addCleanup(wall.stop)
   guard=patch.object(subprocess,'Popen',side_effect=AssertionError('Portable archive tests must not spawn a process'))
   guard.start();self.addCleanup(guard.stop)
 
@@ -221,7 +223,7 @@ class ExecuteAndRetention(PortableTestCase):
  def setUp(self):
   super().setUp()
   self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.clock=Clock();self.calls=[];self.fail_archive=False
-  self.identity={'GITHUB_REPOSITORY':'100mango/QRCatcher','GITHUB_REF':m.BRANCH,'GITHUB_WORKFLOW_REF':'100mango/QRCatcher/'+m.WORKFLOW+'@'+m.BRANCH,'GITHUB_RUN_ATTEMPT':'1','GITHUB_JOB':'archive','DEVELOPER_DIR':'/Applications/Xcode_27.app/Contents/Developer','GITHUB_EVENT_NAME':'push','GITHUB_SHA':'a'*40,'GITHUB_WORKFLOW_SHA':'a'*40,'GITHUB_RUN_ID':'1'}
+  self.identity={'GITHUB_REPOSITORY':'100mango/QRCatcher','GITHUB_REF':m.BRANCH,'GITHUB_WORKFLOW_REF':'100mango/QRCatcher/'+m.WORKFLOW+'@'+m.BRANCH,'GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_NUMBER':'1','GITHUB_JOB':'archive','DEVELOPER_DIR':'/Applications/Xcode_27.app/Contents/Developer','GITHUB_EVENT_NAME':'push','GITHUB_SHA':'a'*40,'GITHUB_WORKFLOW_SHA':'a'*40,'GITHUB_RUN_ID':'1'}
  def tearDown(self):self.temp.cleanup()
  def runner(self,argv,**kwargs):
   self.calls.append(argv);raw=b'';code=0
@@ -316,7 +318,122 @@ class ExecuteAndRetention(PortableTestCase):
   r=self.execute();r['upload_observation']=m.admit_upload(r,clock=self.clock);self.clock.advance(61);self.assertFalse(m.finish_upload(r,'success',clock=self.clock)['upload_qualified'])
  def test_retry_and_dispatch_identity_rejected(self):
   self.assertEqual(m.environment(self.identity),self.identity)
-  for key,value in [('GITHUB_RUN_ATTEMPT','2'),('GITHUB_EVENT_NAME','workflow_dispatch'),('GITHUB_REF','refs/heads/main')]:
+  for key,value in [('GITHUB_RUN_ATTEMPT','2'),('GITHUB_RUN_NUMBER','2'),('GITHUB_EVENT_NAME','workflow_dispatch'),('GITHUB_REF','refs/heads/main')]:
    with self.subTest(key=key),self.assertRaises(m.Rejected):m.environment(self.identity|{key:value})
+
+class ModelMetadataDiagnostic(PortableTestCase):
+ def setUp(self):
+  super().setUp();self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+  self.root=Path(self.temp.name);self.a=fixture(self.root);self.clock=Clock();self.report={}
+  self.path=self.a/m.MODEL_VERSION_INFO
+ def write(self,value,fmt=plistlib.FMT_BINARY):
+  raw=plistlib.dumps(value,fmt=fmt);self.path.write_bytes(raw);return raw
+ def observe(self):
+  return m.observe_archive_files(self.a,1000,root=self.root,clock=self.clock,report=self.report)
+ def test_exact_binary_bytes_hash_decoded_data_and_inventory(self):
+  value={'NSManagedObjectModel_CurrentVersionName':'QR','NSManagedObjectModel_VersionHashes':{'QR':{'URLEntity':b'\x00\xff\x10'}},'Date':datetime.datetime(2026,10,15)}
+  raw=self.write(value);self.observe();r=self.report['core_data_metadata_diagnostic']
+  self.assertTrue(r['complete']);self.assertEqual(bytes.fromhex(r['raw_hex']),raw);self.assertEqual(r['sha256'],hashlib.sha256(raw).hexdigest());self.assertEqual(r['bytes'],len(raw))
+  self.assertEqual(r['metadata']['NSManagedObjectModel_VersionHashes']['QR']['URLEntity'],{'plist_data_hex':'00ff10'})
+  self.assertEqual(r['metadata']['Date'],{'plist_date':'2026-10-15T00:00:00'})
+  self.assertEqual(r['comparison'],'matches-private-validator');self.assertEqual(r['compiled_model_files'],[m.MODEL_ROOT+'/QR.mom'])
+  self.assertIn(m.MODEL_VERSION_INFO,self.report['core_data_resource_observation'])
+  retained=json.loads(m.report_bytes(self.report));self.assertEqual(retained['core_data_metadata_diagnostic'],r)
+ def test_xml_metadata_exact_bytes(self):
+  raw=self.write({'NSManagedObjectModel_CurrentVersionName':'QR'},plistlib.FMT_XML);self.observe()
+  self.assertEqual(bytes.fromhex(self.report['core_data_metadata_diagnostic']['raw_hex']),raw)
+ def test_missing_optional_version_info_is_an_explicit_observation(self):
+  self.observe();r=self.report['core_data_metadata_diagnostic'];self.assertTrue(r['complete']);self.assertFalse(r['present']);self.assertEqual(r['comparison'],'VersionInfo.plist-missing');self.assertNotIn('metadata',r)
+ def test_missing_current_version_key_is_not_invented(self):
+  self.write({'NSManagedObjectModel_VersionHashes':{'QR':{'URLEntity':b'\xff'}}});self.observe();r=self.report['core_data_metadata_diagnostic']
+  self.assertEqual(r['comparison'],'current-version-key-missing');self.assertFalse(r['current_version_key_present']);self.assertNotIn('NSManagedObjectModel_CurrentVersionName',r['metadata'])
+ def test_other_version_and_type_preserved_not_coerced_or_qualified(self):
+  for value in ['Other',7,b'QR',False]:
+   with self.subTest(value=value):
+    self.write({'NSManagedObjectModel_CurrentVersionName':value});self.observe();r=self.report['core_data_metadata_diagnostic'];self.assertEqual(r['comparison'],'differs-from-private-validator');self.assertTrue(r['observation_only']);self.assertNotIn('release_qualified',r)
+ def test_observation_does_not_rewrite_existing_semantic_contract(self):
+  self.write({'NSManagedObjectModel_CurrentVersionName':'Other'})
+  proof=m.verify_archive(self.a,lambda argv,**kw:native_output(argv,self.a),1000,root=self.root,clock=self.clock,report=self.report)
+  self.assertEqual(proof['application_metadata']['CFBundleIdentifier'],'100mango.QRCatcher');self.assertEqual(self.report['core_data_metadata_diagnostic']['comparison'],'differs-from-private-validator')
+ def test_original_semantic_rejection_still_preserves_exact_metadata(self):
+  raw=self.write({'NSManagedObjectModel_VersionHashes':{'QR':{}}});p=self.a/'Info.plist';v=plistlib.loads(p.read_bytes());v['ArchiveVersion']=999;p.write_bytes(plistlib.dumps(v))
+  with self.assertRaisesRegex(m.Rejected,'archive-metadata-mismatch'):
+   m.verify_archive(self.a,lambda *a,**kw:(_ for _ in ()).throw(AssertionError('No native proof after rejection')),1000,root=self.root,clock=self.clock,report=self.report)
+  self.assertEqual(bytes.fromhex(self.report['core_data_metadata_diagnostic']['raw_hex']),raw)
+ def test_other_plist_parse_failure_still_captures_model(self):
+  self.write({'NSManagedObjectModel_CurrentVersionName':'QR'});(self.a/'Info.plist').write_bytes(b'invalid')
+  with self.assertRaises(plistlib.InvalidFileException):self.observe()
+  self.assertTrue(self.report['core_data_metadata_diagnostic']['complete']);self.assertEqual(self.report['current_proof_path'],'Info.plist')
+ def test_malformed_plist_retains_raw_bytes_and_stops_before_native(self):
+  raw=b'not-a-plist\x00';self.path.write_bytes(raw)
+  with self.assertRaises(plistlib.InvalidFileException):self.observe()
+  r=self.report['core_data_metadata_diagnostic'];self.assertFalse(r['complete']);self.assertEqual(bytes.fromhex(r['raw_hex']),raw);self.assertIn('read_error',r);self.assertEqual(self.report['current_proof_path'],m.MODEL_VERSION_INFO)
+  self.assertEqual(len(self.report['archive_metadata_diagnostics']),3)
+ def test_non_dictionary_fails_with_exact_raw_retained(self):
+  raw=self.write(['QR'])
+  with self.assertRaisesRegex(m.Rejected,'model-metadata-not-dictionary'):self.observe()
+  self.assertEqual(bytes.fromhex(self.report['core_data_metadata_diagnostic']['raw_hex']),raw)
+ def test_non_json_float_retains_raw_and_explicit_error(self):
+  raw=self.write({'unexpected':float('nan')})
+  with self.assertRaises(ValueError):self.observe()
+  r=self.report['core_data_metadata_diagnostic'];self.assertEqual(bytes.fromhex(r['raw_hex']),raw);self.assertNotIn('metadata',r);json.loads(m.report_bytes(self.report))
+ def test_metadata_oversize_rejected_before_content_read(self):
+  self.path.write_bytes(b'x'*(m.MODEL_METADATA_MAX+1))
+  with patch.object(m.os,'read',side_effect=AssertionError('Oversized metadata must not be read')):
+   with self.assertRaisesRegex(m.Rejected,'model-metadata-byte-limit'):self.observe()
+  r=self.report['core_data_metadata_diagnostic'];self.assertFalse(r['complete']);self.assertNotIn('raw_hex',r)
+ def test_exact_byte_limit_does_not_silently_truncate(self):
+  self.path.write_bytes(b'x'*m.MODEL_METADATA_MAX)
+  with self.assertRaises(plistlib.InvalidFileException):self.observe()
+  self.assertEqual(self.report['core_data_metadata_diagnostic']['bytes'],m.MODEL_METADATA_MAX)
+ def test_symlink_version_info_is_never_followed(self):
+  self.path.symlink_to('QR.mom')
+  with self.assertRaisesRegex(m.Rejected,'model-path-not-regular'):self.observe()
+  self.assertNotIn('raw_hex',self.report['core_data_metadata_diagnostic'])
+ def test_model_parent_symlink_is_never_followed(self):
+  original=self.path.parent;original.rename(original.with_name('Elsewhere.momd'));original.symlink_to('Elsewhere.momd')
+  catalogue=m.scan(self.a,1000,clock=self.clock)
+  # Even a forged expected child cannot bypass the known linked parent.
+  catalogue['paths'][m.MODEL_VERSION_INFO]={'type':'file','identity':[]}
+  with self.assertRaisesRegex(m.Rejected,'model-path-not-regular'):
+   m.observe_core_data_metadata(self.a,catalogue,1000,self.clock,self.report)
+ def test_snapshot_hash_mismatch_is_rejected(self):
+  self.write({});catalogue=m.scan(self.a,1000,clock=self.clock);catalogue['paths'][m.MODEL_VERSION_INFO]['sha256']='0'*64
+  with self.assertRaisesRegex(m.Rejected,'model-snapshot-hash-mismatch'):m.observe_core_data_metadata(self.a,catalogue,1000,self.clock,self.report)
+ def test_file_replaced_after_snapshot_is_rejected(self):
+  self.write({});catalogue=m.scan(self.a,1000,clock=self.clock);self.path.unlink();self.write({'changed':True})
+  with self.assertRaisesRegex(m.Rejected,'model-file-changed'):m.observe_core_data_metadata(self.a,catalogue,1000,self.clock,self.report)
+ def test_expired_clock_stops_capture(self):
+  self.write({});catalogue=m.scan(self.a,1000,clock=self.clock)
+  with self.assertRaisesRegex(m.Rejected,'deadline-exceeded'):m.observe_core_data_metadata(self.a,catalogue,99,self.clock,self.report)
+ def test_overflow_keeps_model_inventory_raw_and_decoded_fields(self):
+  self.write({'hash':b'\x01\x02'});self.observe();r=json.loads(m.report_bytes(self.report|{'commands':['x'*(m.MAX_REPORT+1)]}))
+  self.assertEqual(r['core_data_metadata_diagnostic'],self.report['core_data_metadata_diagnostic']);self.assertEqual(r['core_data_resource_observation'],self.report['core_data_resource_observation']);self.assertFalse(r['qualified'])
+
+class OneShotDiagnosticScope(PortableTestCase):
+ def identity(self):
+  return {'GITHUB_REPOSITORY':'100mango/QRCatcher','GITHUB_REF':m.BRANCH,'GITHUB_WORKFLOW_REF':'100mango/QRCatcher/'+m.WORKFLOW+'@'+m.BRANCH,'GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_NUMBER':'1','GITHUB_JOB':'archive','DEVELOPER_DIR':'/Applications/Xcode_27.app/Contents/Developer','GITHUB_EVENT_NAME':'push','GITHUB_SHA':'a'*40,'GITHUB_WORKFLOW_SHA':'a'*40,'GITHUB_RUN_ID':'1'}
+ def test_window_is_fixed_45_minutes_and_full_job_admitted(self):
+  start=datetime.datetime.fromisoformat(m.WINDOW_START).timestamp();end=datetime.datetime.fromisoformat(m.WINDOW_END).timestamp()
+  self.assertEqual(end-start,2700);m.authorization_window(now=start,reserve=1200);m.authorization_window(now=end-1200-1,reserve=1200)
+  for when,reserve in [(start-1,0),(end,0),(end-1200,1200),(float('nan'),0),(float('inf'),0)]:
+   with self.subTest(when=when),self.assertRaises(m.Rejected):m.authorization_window(now=when,reserve=reserve)
+ def test_new_workflow_one_run_attempt_branch_and_no_credentials(self):
+  self.assertEqual(m.BRANCH,'refs/heads/mac-model-metadata-diagnostic-20261015');self.assertEqual(m.WORKFLOW,'.github/workflows/mac-model-metadata-diagnostic.yml')
+  w=(ROOT/m.WORKFLOW).read_text();self.assertIn('github.run_attempt == 1 && github.run_number == 1',w);self.assertIn('persist-credentials: false',w);self.assertIn('contents: read',w);self.assertIn('timeout-minutes: 20',w)
+  for forbidden in ['secrets.','workflow_dispatch','schedule:','matrix:','codesign','exportArchive','allowProvisioning']:
+   self.assertNotIn(forbidden,w)
+  for key,value in [('GITHUB_RUN_NUMBER','2'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_REF','refs/heads/codex/mac-unsigned-archive'),('GITHUB_WORKFLOW_REF','100mango/QRCatcher/.github/workflows/mac-unsigned-archive.yml@'+m.BRANCH),('GITHUB_WORKFLOW_SHA','b'*40)]:
+   with self.subTest(key=key),self.assertRaises(m.Rejected):m.environment(self.identity()|{key:value})
+ def git(self,changes=None,parent=None):
+  values={('rev-parse','HEAD'):'a'*40,('rev-parse',m.BASE+'^{tree}'):m.BASE_TREE,('rev-list','--parents','-n','1','HEAD'):'a'*40+' '+(m.BASE if parent is None else parent),('status','--porcelain','--untracked-files=all'):'',('diff','--name-status',m.BASE,'HEAD','--'):'\n'.join(m.EXPECTED_DIFF if changes is None else changes),('rev-parse','HEAD^{tree}'):'c'*40}
+  return lambda argv,**kw:values[tuple(argv[1:])].encode()
+ def test_exact_pinned_source_and_three_file_scope(self):
+  result=m.source_identity(self.identity(),self.git(),ROOT)
+  self.assertEqual(result['base'],'bf726e9637fcdd469048ed157b8ea73953ccb4fb');self.assertEqual(result['app_input_count'],46);self.assertEqual(result['parents'],[m.BASE])
+ def test_product_change_wrong_parent_or_extra_workflow_rejected(self):
+  cases=[self.git(changes=(*m.EXPECTED_DIFF,'M\tQRCatcher.xcodeproj/project.pbxproj')),self.git(changes=(*m.EXPECTED_DIFF,'A\t.github/workflows/other.yml')),self.git(parent='b'*40),self.git(changes=tuple(x for x in m.EXPECTED_DIFF if not x.startswith('A\t')))]
+  for runner in cases:
+   with self.assertRaises(m.Rejected):m.source_identity(self.identity(),runner,ROOT)
 
 if __name__=='__main__':unittest.main()
